@@ -1,15 +1,21 @@
 use std::collections::{HashMap, HashSet};
 
 use proc_macro2::{Ident, Span, TokenStream, TokenTree};
-use proc_macro_error::{abort, abort_call_site};
+use proc_macro_error::{abort, abort_call_site, proc_macro_error};
 use quote::ToTokens;
 use syn::spanned::Spanned as _;
 use syn::{
-    Block, Expr, ExprField, ExprLit, ExprRange, GenericArgument, LitInt, Macro, Pat, Path,
-    PathArguments, PathSegment, PredicateType, QSelf, Stmt, Type, TypeParamBound, TypePath,
-    TypeTuple, WherePredicate,
+    Block, Expr, ExprField, ExprLit, ExprPath, ExprRange, ExprTuple, GenericArgument, LitInt,
+    Macro, Pat, Path, PathArguments, PathSegment, PredicateType, QSelf, Stmt, Type, TypeParamBound,
+    TypePath, TypeTuple, WherePredicate,
 };
 
+#[proc_macro]
+pub fn typle_identity(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    item
+}
+
+#[proc_macro_error]
 #[proc_macro_attribute]
 pub fn typle(
     args: proc_macro::TokenStream,
@@ -45,11 +51,11 @@ fn parse_args(args: TokenStream) -> IterationTrait {
     let Some(TokenTree::Ident(trait_ident)) = args_iter.next() else {
         abort_call_site!("expected an ident");
     };
-    let Some(TokenTree::Ident(for_ident)) = args_iter.next() else {
-        abort_call_site!("expected 'for'");
-    };
-    if for_ident != "for" {
-        abort_call_site!("expected 'for'");
+    match args_iter.next() {
+        Some(TokenTree::Ident(for_ident)) if for_ident == "for" => {}
+        _ => {
+            abort_call_site!("expected 'for'");
+        }
     }
     let rest = args_iter.collect();
     let range = syn::parse2::<ExprRange>(rest).expect("expect range");
@@ -96,6 +102,7 @@ impl IterationTrait {
                         let mut specific = SpecificContext {
                             trait_ident: &self.ident,
                             count,
+                            mode: SpecificMode::Tuple,
                             constants: HashMap::new(),
                             tuples: HashMap::new(),
                         };
@@ -115,6 +122,7 @@ impl IterationTrait {
                         let mut specific = SpecificContext {
                             trait_ident: &self.ident,
                             count,
+                            mode: SpecificMode::Tuple,
                             constants: HashMap::new(),
                             tuples: HashMap::new(),
                         };
@@ -161,29 +169,19 @@ impl IterationTrait {
     }
 }
 
-// Returns a type if it contains no path segments and has the form `Ident<..>``
-fn get_simple_type(r#type: &Type) -> Option<&syn::PathSegment> {
-    let Type::Path(type_path) = r#type else {
-        return None;
-    };
-    if type_path.qself.is_some() {
-        return None;
-    }
-    let path = &type_path.path;
-    if path.leading_colon.is_some() {
-        return None;
-    }
-    let segments = &path.segments;
-    if segments.len() != 1 {
-        return None;
-    }
-    segments.first()
+#[derive(Clone)]
+enum SpecificMode {
+    // T expands to (T0, T1,...)
+    Tuple,
+    // T expands to specific index, e.g T3
+    Index(usize),
 }
 
 #[derive(Clone)]
 struct SpecificContext<'a> {
     trait_ident: &'a Ident,
     count: usize,
+    mode: SpecificMode,
     constants: HashMap<Ident, usize>,
     tuples: HashMap<Ident, Vec<String>>,
 }
@@ -216,13 +214,7 @@ impl<'a> SpecificContext<'a> {
         if !self.tuples.is_empty() {
             // Replace types in type
             // S<T> -> S<(T0, T1>)
-            let Type::Path(ty) = &mut *item.self_ty else {
-                abort!(item.self_ty, "expected identifier");
-            };
-            let Some(segment) = ty.path.segments.last_mut() else {
-                abort!(item.self_ty, "expected identifier");
-            };
-            self.replace_path_arguments(&mut segment.arguments);
+            self.replace_type(&mut *item.self_ty);
             // Replace types in functions
             for subitem in &mut item.items {
                 match subitem {
@@ -387,7 +379,7 @@ impl<'a> SpecificContext<'a> {
             }
             Expr::Path(path) => {
                 if let Some(qself) = &mut path.qself {
-                    // <T>::default()
+                    // <T as Default>::default()
                     self.replace_type(&mut qself.ty);
                 }
                 let mut iter = path.path.segments.iter();
@@ -406,6 +398,7 @@ impl<'a> SpecificContext<'a> {
                             }
                             Some(second) => {
                                 // T::clone(&t) -> <(T0, T1)>::clone(&t)
+                                // todo: T::<0>::default() -> T0::default()
                                 let tuple_type = Box::new(Type::Tuple(TypeTuple {
                                     paren_token: syn::token::Paren::default(),
                                     elems: element_type_idents
@@ -436,7 +429,33 @@ impl<'a> SpecificContext<'a> {
                                 };
                             }
                             None => {
-                                abort!(path, "type in expression position");
+                                match self.mode {
+                                    SpecificMode::Tuple => {
+                                        // T -> (T0, T1,...)
+                                        let span = path.span();
+                                        *expr = Expr::Tuple(ExprTuple {
+                                            attrs: Vec::new(),
+                                            paren_token: syn::token::Paren::default(),
+                                            elems: element_type_idents
+                                                .iter()
+                                                .map(|name| {
+                                                    Expr::Path(ExprPath {
+                                                        attrs: Vec::new(),
+                                                        qself: None,
+                                                        path: element_type_to_path(name, span),
+                                                    })
+                                                })
+                                                .collect(),
+                                        });
+                                    }
+                                    SpecificMode::Index(index) => {
+                                        // T -> T0
+                                        path.path = element_type_to_path(
+                                            &element_type_idents[index],
+                                            first.span(),
+                                        );
+                                    }
+                                }
                             }
                         }
                     } else if let Some(value) = self.constants.get(&first.ident) {
@@ -513,8 +532,46 @@ impl<'a> SpecificContext<'a> {
         }
     }
 
-    fn replace_macro(&self, _macro: &mut Macro) {
-        // todo
+    fn replace_macro(&self, r#macro: &mut Macro) {
+        // typle_expand!(Option<T>) -> (Option<T0>, Option<T1>)
+        // typle_expand!(T::default()) -> (T0::default(), T1::default())
+        // as opposed to
+        // Option<T> -> Option<(T0, T1)>
+        // T::default() -> <(T0, T1)>::default()
+        // typle_expand!((T, T::<0>)) -> ((T0, T0), (T1, T0))
+        if let Some(macro_name) = r#macro.path.get_ident() {
+            if macro_name == "typle_expand" {
+                let default_span = macro_name.span();
+                r#macro.path = Path {
+                    leading_colon: None,
+                    segments: std::module_path!()
+                        .split("::")
+                        .chain(std::iter::once("typle_identity"))
+                        .map(|name| PathSegment {
+                            ident: Ident::new(name, macro_name.span()),
+                            arguments: PathArguments::None,
+                        })
+                        .collect(),
+                };
+                let Ok(r#type) = syn::parse2::<Type>(std::mem::take(&mut r#macro.tokens)) else {
+                    abort!(default_span, "expected expression");
+                };
+                let mut tuple = TypeTuple {
+                    paren_token: syn::token::Paren::default(),
+                    elems: syn::punctuated::Punctuated::new(),
+                };
+                for index in 0..self.count {
+                    let context = SpecificContext {
+                        mode: SpecificMode::Index(index),
+                        ..self.clone()
+                    };
+                    let mut element = r#type.clone();
+                    context.replace_type(&mut element);
+                    tuple.elems.push(element);
+                }
+                r#macro.tokens = tuple.into_token_stream();
+            }
+        }
     }
 
     fn replace_pat(&self, pat: &mut Pat) {
@@ -569,20 +626,31 @@ impl<'a> SpecificContext<'a> {
                 if let Some(element_type_idents) = self.tuples.get(&path_segment.ident) {
                     match &mut path_segment.arguments {
                         syn::PathArguments::None => {
-                            // T -> (T0, T1,...)
-                            let span = path_segment.ident.span();
-                            *ty = Type::Tuple(TypeTuple {
-                                paren_token: syn::token::Paren::default(),
-                                elems: element_type_idents
-                                    .iter()
-                                    .map(|name| {
-                                        Type::Path(TypePath {
-                                            qself: None,
-                                            path: element_type_to_path(name, span),
-                                        })
-                                    })
-                                    .collect(),
-                            });
+                            match self.mode {
+                                SpecificMode::Tuple => {
+                                    // T -> (T0, T1,...)
+                                    let span = path_segment.ident.span();
+                                    *ty = Type::Tuple(TypeTuple {
+                                        paren_token: syn::token::Paren::default(),
+                                        elems: element_type_idents
+                                            .iter()
+                                            .map(|name| {
+                                                Type::Path(TypePath {
+                                                    qself: None,
+                                                    path: element_type_to_path(name, span),
+                                                })
+                                            })
+                                            .collect(),
+                                    });
+                                }
+                                SpecificMode::Index(index) => {
+                                    // T -> T0
+                                    path.path = element_type_to_path(
+                                        &element_type_idents[index],
+                                        path_segment.span(),
+                                    );
+                                }
+                            }
                         }
                         syn::PathArguments::AngleBracketed(args) => {
                             // T<3> or T<i> where i comes from constants
@@ -748,7 +816,7 @@ impl<'a> SpecificContext<'a> {
                             tuples_with_generic_bounds.insert(tuple_type_ident.clone());
                         }
                         Type::Path(type_path) => {
-                            // T: Tuple<u8>
+                            // T: Tuple<u8> - todo: support T: Tuple<Option<u8>>
                             let mut element_type_idents = Vec::with_capacity(self.count);
                             let type_ident = type_path.path.get_ident().expect("single ident");
                             for _ in 0..self.count {
@@ -817,34 +885,9 @@ impl<'a> SpecificContext<'a> {
     ) {
         for arg in std::mem::take(args) {
             match arg {
-                syn::GenericArgument::Type(generic_type) => {
-                    let Some(path_segment) = get_simple_type(&generic_type) else {
-                        args.push(syn::GenericArgument::Type(generic_type));
-                        continue;
-                    };
-                    match self.tuples.get(&path_segment.ident) {
-                        Some(element_type_idents) => {
-                            let replacement_type = Type::Tuple(TypeTuple {
-                                paren_token: syn::token::Paren::default(),
-                                elems: element_type_idents
-                                    .iter()
-                                    .map(|name| {
-                                        Type::Path(TypePath {
-                                            qself: None,
-                                            path: element_type_to_path(
-                                                name,
-                                                path_segment.ident.span(),
-                                            ),
-                                        })
-                                    })
-                                    .collect(),
-                            });
-                            args.push(syn::GenericArgument::Type(replacement_type));
-                        }
-                        None => {
-                            args.push(syn::GenericArgument::Type(generic_type));
-                        }
-                    }
+                syn::GenericArgument::Type(mut generic_type) => {
+                    self.replace_type(&mut generic_type);
+                    args.push(syn::GenericArgument::Type(generic_type));
                 }
                 p => {
                     args.push(p);
