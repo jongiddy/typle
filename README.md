@@ -30,7 +30,7 @@ where
 
     fn sum(&self) -> u32 {
         let mut sum = 0;
-        for i in 0..S::LEN {
+        for typle_const!(i) in 0..S::LEN {
             sum += self.s[[i]];
         }
         sum

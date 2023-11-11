@@ -5,9 +5,9 @@ use proc_macro_error::{abort, abort_call_site, proc_macro_error};
 use quote::ToTokens;
 use syn::spanned::Spanned as _;
 use syn::{
-    Block, Expr, ExprBlock, ExprField, ExprForLoop, ExprLit, ExprPath, ExprRange, ExprTuple,
-    Fields, FieldsNamed, FieldsUnnamed, GenericArgument, Item, ItemImpl, ItemStruct, LitInt, Macro,
-    Pat, Path, PathArguments, PathSegment, PredicateType, QSelf, RangeLimits, Stmt, Type,
+    Block, Expr, ExprBlock, ExprField, ExprLit, ExprPath, ExprRange, ExprTuple, Fields,
+    FieldsNamed, FieldsUnnamed, GenericArgument, Item, ItemImpl, ItemStruct, LitInt, Macro, Pat,
+    Path, PathArguments, PathSegment, PredicateType, QSelf, RangeLimits, Stmt, Type,
     TypeParamBound, TypePath, TypeTuple, WherePredicate,
 };
 
@@ -261,30 +261,6 @@ impl<'a> SpecificContext<'a> {
         }
     }
 
-    fn extract_ident_range(&self, for_loop: &ExprForLoop) -> Option<(Ident, usize, usize)> {
-        if let Pat::Ident(pat_ident) = &*for_loop.pat {
-            if let Expr::Range(expr_range) = &*for_loop.expr {
-                let (Some(start_expr), Some(end_expr)) = (&expr_range.start, &expr_range.end)
-                else {
-                    return None;
-                };
-                let Some(start) = evaluate_usize(start_expr) else {
-                    return None;
-                };
-                let Some(mut end) = evaluate_usize(end_expr) else {
-                    return None;
-                };
-                if let RangeLimits::Closed(_) = expr_range.limits {
-                    end += 1;
-                }
-                if start <= end && end <= self.count {
-                    return Some((pat_ident.ident.clone(), start, end));
-                }
-            }
-        }
-        None
-    }
-
     fn replace_expr(&self, expr: &mut Expr) {
         match expr {
             Expr::Array(array) => {
@@ -341,39 +317,76 @@ impl<'a> SpecificContext<'a> {
                 self.replace_expr(&mut field.base);
             }
             Expr::ForLoop(for_loop) => {
-                self.replace_pat(&mut for_loop.pat);
                 self.replace_expr(&mut for_loop.expr);
-                match self.extract_ident_range(for_loop) {
-                    Some((ident, start, end)) => {
-                        let mut context = self.clone();
-                        let mut stmts = Vec::new();
-                        context.constants.insert(ident.clone(), 0);
-                        for index in start..end {
-                            context.constants.get_mut(&ident).map(|v| *v = index);
-                            let mut block = for_loop.body.clone();
-                            context.replace_block(&mut block);
-                            stmts.push(Stmt::Expr(
-                                Expr::Block(ExprBlock {
-                                    attrs: Vec::new(),
-                                    label: None,
-                                    block,
-                                }),
-                                None,
-                            ));
+                // Check for typle_const!(i)
+                if let Pat::Macro(pat_macro) = &mut *for_loop.pat {
+                    if let Some(macro_ident) = pat_macro.mac.path.get_ident() {
+                        if macro_ident == "typle_const" {
+                            let span = pat_macro.mac.tokens.span();
+                            let mut tokens = std::mem::take(&mut pat_macro.mac.tokens).into_iter();
+                            let Some(TokenTree::Ident(pat_ident)) = tokens.next() else {
+                                abort!(span, "unexpected token in typle_const");
+                            };
+                            if let Some(tt) = tokens.next() {
+                                abort!(tt.span(), "unexpected token in typle_const");
+                            };
+                            let Expr::Range(expr_range) = &*for_loop.expr else {
+                                abort!(for_loop.expr.span(), "expected range");
+                            };
+                            let (Some(start_expr), Some(end_expr)) =
+                                (&expr_range.start, &expr_range.end)
+                            else {
+                                abort!(for_loop.expr.span(), "expected explicit bounds");
+                            };
+                            let Some(start) = evaluate_usize(start_expr) else {
+                                abort!(
+                                    for_loop.expr.span(),
+                                    "cannot evaluate lower bound in constant context"
+                                );
+                            };
+                            let Some(mut end) = evaluate_usize(end_expr) else {
+                                abort!(
+                                    for_loop.expr.span(),
+                                    "cannot evaluate upper bound in constant context"
+                                );
+                            };
+                            if let RangeLimits::Closed(_) = expr_range.limits {
+                                end += 1;
+                            }
+                            if start > end || end > self.count {
+                                abort!(for_loop.expr.span(), "expected sub-range of tuple size");
+                            }
+                            let mut context = self.clone();
+                            let mut stmts = Vec::new();
+                            context.constants.insert(pat_ident.clone(), 0);
+                            for index in start..end {
+                                context.constants.get_mut(&pat_ident).map(|v| *v = index);
+                                let mut block = for_loop.body.clone();
+                                context.replace_block(&mut block);
+                                stmts.push(Stmt::Expr(
+                                    Expr::Block(ExprBlock {
+                                        attrs: Vec::new(),
+                                        label: None,
+                                        block,
+                                    }),
+                                    None,
+                                ));
+                            }
+                            *expr = Expr::Block(ExprBlock {
+                                attrs: std::mem::take(&mut for_loop.attrs),
+                                label: for_loop.label.take(),
+                                block: Block {
+                                    brace_token: syn::token::Brace::default(),
+                                    stmts,
+                                },
+                            });
+                            return;
                         }
-                        *expr = Expr::Block(ExprBlock {
-                            attrs: std::mem::take(&mut for_loop.attrs),
-                            label: for_loop.label.take(),
-                            block: Block {
-                                brace_token: syn::token::Brace::default(),
-                                stmts,
-                            },
-                        });
-                    }
-                    None => {
-                        self.replace_block(&mut for_loop.body);
                     }
                 }
+                // Otherwise it is a standard for loop
+                self.replace_pat(&mut for_loop.pat);
+                self.replace_block(&mut for_loop.body);
             }
             Expr::Group(group) => {
                 self.replace_expr(&mut group.expr);
@@ -776,10 +789,8 @@ impl<'a> SpecificContext<'a> {
                                 }
                                 SpecificMode::Index(index) => {
                                     // T -> T0, T::State -> T0::State
-                                    path_segment.ident = Ident::new(
-                                        &element_type_names[index],
-                                        path_segment.span(),
-                                    );
+                                    path_segment.ident =
+                                        Ident::new(&element_type_names[index], path_segment.span());
                                 }
                             }
                         }
