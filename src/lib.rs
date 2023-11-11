@@ -6,9 +6,9 @@ use quote::ToTokens;
 use syn::spanned::Spanned as _;
 use syn::{
     Block, Expr, ExprBlock, ExprField, ExprLit, ExprPath, ExprRange, ExprTuple, Fields,
-    FieldsNamed, FieldsUnnamed, GenericArgument, Item, ItemImpl, ItemStruct, LitInt, Macro, Pat,
-    Path, PathArguments, PathSegment, PredicateType, QSelf, RangeLimits, Stmt, Type,
-    TypeParamBound, TypePath, TypeTuple, WherePredicate,
+    FieldsNamed, FieldsUnnamed, GenericArgument, Item, ItemEnum, ItemImpl, ItemStruct, LitInt,
+    Macro, Pat, Path, PathArguments, PathSegment, PredicateType, QSelf, RangeLimits, Stmt, Type,
+    TypeParamBound, TypePath, TypeTuple, Variant, WherePredicate,
 };
 
 #[proc_macro]
@@ -93,7 +93,23 @@ impl IterationTrait {
         let mut output = Vec::new();
         match input {
             Item::Const(_) => abort!(input, "Const unsupported"),
-            Item::Enum(_) => abort!(input, "Enum unsupported"),
+            Item::Enum(item) => {
+                if self.generics_contain_trait(&item.generics) {
+                    for count in self.min..=self.max {
+                        let mut specific = SpecificContext {
+                            trait_ident: &self.ident,
+                            count,
+                            mode: SpecificMode::Tuple,
+                            constants: HashMap::new(),
+                            tuples: HashMap::new(),
+                        };
+                        let item_struct = specific.process_enum(&item);
+                        output.push(Item::Enum(item_struct));
+                    }
+                } else {
+                    output.push(Item::Enum(item));
+                }
+            }
             Item::ExternCrate(_) => abort!(input, "ExternCrate unsupported"),
             Item::Fn(_) => abort!(input, "Fn unsupported"),
             Item::ForeignMod(_) => abort!(input, "ForeignMod unsupported"),
@@ -188,6 +204,68 @@ struct SpecificContext<'a> {
 }
 
 impl<'a> SpecificContext<'a> {
+    fn process_enum(&mut self, item: &ItemEnum) -> ItemEnum {
+        let mut item = item.clone();
+        self.tuples = self.process_where_clause(&mut item.generics);
+        if !self.tuples.is_empty() {
+            let item_name = format!("{}{}", item.ident, self.count);
+            item.ident = Ident::new(&item_name, item.ident.span());
+            for mut variant in std::mem::take(&mut item.variants) {
+                if let Some((_, discriminant)) = &mut variant.discriminant {
+                    if let Expr::Macro(r#macro) = discriminant {
+                        if let Some(ident) = r#macro.mac.path.get_ident() {
+                            if ident == "typle_variants" {
+                                for index in 0..self.count {
+                                    let context = SpecificContext {
+                                        mode: SpecificMode::Index(index),
+                                        ..self.clone()
+                                    };
+                                    let mut fields = variant.fields.clone();
+                                    match &mut fields {
+                                        Fields::Named(FieldsNamed { named: fields, .. })
+                                        | Fields::Unnamed(FieldsUnnamed {
+                                            unnamed: fields, ..
+                                        }) => {
+                                            for field in fields {
+                                                context.replace_type(&mut field.ty);
+                                            }
+                                        }
+                                        Fields::Unit => {}
+                                    }
+                                    let element = Variant {
+                                        attrs: variant.attrs.clone(),
+                                        ident: Ident::new(
+                                            &format!("{}{}", &variant.ident, index),
+                                            variant.ident.span(),
+                                        ),
+                                        fields,
+                                        discriminant: None,
+                                    };
+                                    item.variants.push(element);
+                                }
+                                continue;
+                            }
+                        }
+                    }
+                    self.replace_expr(discriminant);
+                }
+                match &mut variant.fields {
+                    Fields::Named(FieldsNamed { named: fields, .. })
+                    | Fields::Unnamed(FieldsUnnamed {
+                        unnamed: fields, ..
+                    }) => {
+                        for field in fields {
+                            self.replace_type(&mut field.ty);
+                        }
+                    }
+                    Fields::Unit => {}
+                }
+                item.variants.push(variant);
+            }
+        }
+        item
+    }
+
     fn process_struct(&mut self, item: &ItemStruct) -> ItemStruct {
         let mut item = item.clone();
         self.tuples = self.process_where_clause(&mut item.generics);
