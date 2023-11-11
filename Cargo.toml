@@ -2,6 +2,10 @@
 name = "typle"
 version = "0.1.0"
 edition = "2021"
+description = "A macro to create items for different sized tuples"
+license = "MIT"
+keywords = ["tuple"]
+repository = "https://github.com/jongiddy/typle"
 
 [lib]
 proc-macro = true
