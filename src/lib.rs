@@ -476,6 +476,23 @@ impl<'a> SpecificContext<'a> {
                                     )),
                                 });
                             }
+                            Some(second) if second.ident == "INDEX" => {
+                                // T::INDEX
+                                match self.mode {
+                                    SpecificMode::Tuple => {
+                                        abort!(second.span(), "INDEX not valid in this context");
+                                    }
+                                    SpecificMode::Index(index) => {
+                                        *expr = Expr::Lit(ExprLit {
+                                            attrs: std::mem::take(&mut path.attrs),
+                                            lit: syn::Lit::Int(LitInt::new(
+                                                &index.to_string(),
+                                                path.span(),
+                                            )),
+                                        });
+                                    }
+                                }
+                            }
                             Some(second) => {
                                 // T::clone(&t) -> <(T0, T1)>::clone(&t)
                                 // todo: T::<0>::default() -> T0::default()
@@ -702,10 +719,13 @@ impl<'a> SpecificContext<'a> {
                         elems: syn::punctuated::Punctuated::new(),
                     };
                     for index in 0..self.count {
-                        let context = SpecificContext {
+                        let mut context = SpecificContext {
                             mode: SpecificMode::Index(index),
                             ..self.clone()
                         };
+                        context
+                            .constants
+                            .insert(Ident::new("_", r#type.span()), index);
                         let mut element = r#type.clone();
                         context.replace_type(&mut element);
                         tuple.elems.push(element);
