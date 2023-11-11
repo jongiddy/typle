@@ -5,9 +5,10 @@ use proc_macro_error::{abort, abort_call_site, proc_macro_error};
 use quote::ToTokens;
 use syn::spanned::Spanned as _;
 use syn::{
-    Block, Expr, ExprField, ExprLit, ExprPath, ExprRange, ExprTuple, GenericArgument, LitInt,
-    Macro, Pat, Path, PathArguments, PathSegment, PredicateType, QSelf, Stmt, Type, TypeParamBound,
-    TypePath, TypeTuple, WherePredicate,
+    Block, Expr, ExprBlock, ExprField, ExprForLoop, ExprLit, ExprPath, ExprRange, ExprTuple,
+    Fields, FieldsNamed, FieldsUnnamed, GenericArgument, Item, ItemImpl, ItemStruct, LitInt, Macro,
+    Pat, Path, PathArguments, PathSegment, PredicateType, QSelf, RangeLimits, Stmt, Type,
+    TypeParamBound, TypePath, TypeTuple, WherePredicate,
 };
 
 #[proc_macro]
@@ -23,7 +24,7 @@ pub fn typle(
 ) -> proc_macro::TokenStream {
     let iteration_trait = parse_args(TokenStream::from(args));
 
-    let Ok(item) = syn::parse::<syn::Item>(item) else {
+    let Ok(item) = syn::parse::<Item>(item) else {
         abort_call_site!("unsupported tokens");
     };
 
@@ -33,7 +34,7 @@ pub fn typle(
 
     output
         .into_iter()
-        .map(syn::Item::into_token_stream)
+        .map(Item::into_token_stream)
         .collect::<TokenStream>()
         .into()
 }
@@ -63,7 +64,7 @@ fn parse_args(args: TokenStream) -> IterationTrait {
         .start
         .as_ref()
         .map(|expr| evaluate_usize(&expr).unwrap_or_else(|| abort!(expr, "invalid start")))
-        .unwrap_or(0);
+        .unwrap_or_else(|| abort!(range, "range cannot be unbounded at start"));
     let end = range
         .end
         .as_ref()
@@ -88,15 +89,15 @@ fn parse_args(args: TokenStream) -> IterationTrait {
 }
 
 impl IterationTrait {
-    fn process_item(&self, input: syn::Item) -> Vec<syn::Item> {
+    fn process_item(&self, input: Item) -> Vec<Item> {
         let mut output = Vec::new();
         match input {
-            syn::Item::Const(_) => abort!(input, "Const unsupported"),
-            syn::Item::Enum(_) => abort!(input, "Enum unsupported"),
-            syn::Item::ExternCrate(_) => abort!(input, "ExternCrate unsupported"),
-            syn::Item::Fn(_) => abort!(input, "Fn unsupported"),
-            syn::Item::ForeignMod(_) => abort!(input, "ForeignMod unsupported"),
-            syn::Item::Impl(item) => {
+            Item::Const(_) => abort!(input, "Const unsupported"),
+            Item::Enum(_) => abort!(input, "Enum unsupported"),
+            Item::ExternCrate(_) => abort!(input, "ExternCrate unsupported"),
+            Item::Fn(_) => abort!(input, "Fn unsupported"),
+            Item::ForeignMod(_) => abort!(input, "ForeignMod unsupported"),
+            Item::Impl(item) => {
                 if self.generics_contain_trait(&item.generics) {
                     for count in self.min..=self.max {
                         let mut specific = SpecificContext {
@@ -107,16 +108,16 @@ impl IterationTrait {
                             tuples: HashMap::new(),
                         };
                         let item = specific.process_impl(&item);
-                        output.push(syn::Item::Impl(item));
+                        output.push(Item::Impl(item));
                     }
                 } else {
-                    output.push(syn::Item::Impl(item));
+                    output.push(Item::Impl(item));
                 }
             }
-            syn::Item::Macro(_) => abort!(input, "Macro unsupported"),
-            syn::Item::Mod(_) => abort!(input, "Mod unsupported"),
-            syn::Item::Static(_) => abort!(input, "Static unsupported"),
-            syn::Item::Struct(item) => {
+            Item::Macro(_) => abort!(input, "Macro unsupported"),
+            Item::Mod(_) => abort!(input, "Mod unsupported"),
+            Item::Static(_) => abort!(input, "Static unsupported"),
+            Item::Struct(item) => {
                 if self.generics_contain_trait(&item.generics) {
                     for count in self.min..=self.max {
                         let mut specific = SpecificContext {
@@ -127,18 +128,18 @@ impl IterationTrait {
                             tuples: HashMap::new(),
                         };
                         let item_struct = specific.process_struct(&item);
-                        output.push(syn::Item::Struct(item_struct));
+                        output.push(Item::Struct(item_struct));
                     }
                 } else {
-                    output.push(syn::Item::Struct(item));
+                    output.push(Item::Struct(item));
                 }
             }
-            syn::Item::Trait(_) => abort!(input, "Trait unsupported"),
-            syn::Item::TraitAlias(_) => abort!(input, "TraitAlias unsupported"),
-            syn::Item::Type(_) => abort!(input, "Type unsupported"),
-            syn::Item::Union(_) => abort!(input, "Union unsupported"),
-            syn::Item::Use(_) => abort!(input, "Use unsupported"),
-            syn::Item::Verbatim(_) => abort!(input, "Verbatim unsupported"),
+            Item::Trait(_) => abort!(input, "Trait unsupported"),
+            Item::TraitAlias(_) => abort!(input, "TraitAlias unsupported"),
+            Item::Type(_) => abort!(input, "Type unsupported"),
+            Item::Union(_) => abort!(input, "Union unsupported"),
+            Item::Use(_) => abort!(input, "Use unsupported"),
+            Item::Verbatim(_) => abort!(input, "Verbatim unsupported"),
             item => {
                 output.push(item);
             }
@@ -173,7 +174,7 @@ impl IterationTrait {
 enum SpecificMode {
     // T expands to (T0, T1,...)
     Tuple,
-    // T expands to specific index, e.g T3
+    // T expands to element type, e.g T3
     Index(usize),
 }
 
@@ -187,7 +188,7 @@ struct SpecificContext<'a> {
 }
 
 impl<'a> SpecificContext<'a> {
-    fn process_struct(&mut self, item: &syn::ItemStruct) -> syn::ItemStruct {
+    fn process_struct(&mut self, item: &ItemStruct) -> ItemStruct {
         let mut item = item.clone();
         self.tuples = self.process_where_clause(&mut item.generics);
         if !self.tuples.is_empty() {
@@ -208,7 +209,7 @@ impl<'a> SpecificContext<'a> {
         item
     }
 
-    fn process_impl(&mut self, item: &syn::ItemImpl) -> syn::ItemImpl {
+    fn process_impl(&mut self, item: &ItemImpl) -> ItemImpl {
         let mut item = item.clone();
         self.tuples = self.process_where_clause(&mut item.generics);
         if !self.tuples.is_empty() {
@@ -242,12 +243,46 @@ impl<'a> SpecificContext<'a> {
     fn replace_block(&self, block: &mut Block) {
         for stmt in &mut block.stmts {
             match stmt {
-                syn::Stmt::Local(_) => todo!(),
-                syn::Stmt::Item(_) => todo!(),
+                syn::Stmt::Local(local) => {
+                    self.replace_pat(&mut local.pat);
+                    if let Some(init) = &mut local.init {
+                        self.replace_expr(&mut init.expr);
+                        if let Some((_, diverge)) = &mut init.diverge {
+                            self.replace_expr(diverge);
+                        }
+                    }
+                }
+                syn::Stmt::Item(item) => {
+                    self.replace_item(item);
+                }
                 syn::Stmt::Expr(expr, _) => self.replace_expr(expr),
                 syn::Stmt::Macro(stmt_macro) => self.replace_macro(&mut stmt_macro.mac),
             }
         }
+    }
+
+    fn extract_ident_range(&self, for_loop: &ExprForLoop) -> Option<(Ident, usize, usize)> {
+        if let Pat::Ident(pat_ident) = &*for_loop.pat {
+            if let Expr::Range(expr_range) = &*for_loop.expr {
+                let (Some(start_expr), Some(end_expr)) = (&expr_range.start, &expr_range.end)
+                else {
+                    return None;
+                };
+                let Some(start) = evaluate_usize(start_expr) else {
+                    return None;
+                };
+                let Some(mut end) = evaluate_usize(end_expr) else {
+                    return None;
+                };
+                if let RangeLimits::Closed(_) = expr_range.limits {
+                    end += 1;
+                }
+                if start <= end && end <= self.count {
+                    return Some((pat_ident.ident.clone(), start, end));
+                }
+            }
+        }
+        None
     }
 
     fn replace_expr(&self, expr: &mut Expr) {
@@ -308,7 +343,37 @@ impl<'a> SpecificContext<'a> {
             Expr::ForLoop(for_loop) => {
                 self.replace_pat(&mut for_loop.pat);
                 self.replace_expr(&mut for_loop.expr);
-                self.replace_block(&mut for_loop.body);
+                match self.extract_ident_range(for_loop) {
+                    Some((ident, start, end)) => {
+                        let mut context = self.clone();
+                        let mut stmts = Vec::new();
+                        context.constants.insert(ident.clone(), 0);
+                        for index in start..end {
+                            context.constants.get_mut(&ident).map(|v| *v = index);
+                            let mut block = for_loop.body.clone();
+                            context.replace_block(&mut block);
+                            stmts.push(Stmt::Expr(
+                                Expr::Block(ExprBlock {
+                                    attrs: Vec::new(),
+                                    label: None,
+                                    block,
+                                }),
+                                None,
+                            ));
+                        }
+                        *expr = Expr::Block(ExprBlock {
+                            attrs: std::mem::take(&mut for_loop.attrs),
+                            label: for_loop.label.take(),
+                            block: Block {
+                                brace_token: syn::token::Brace::default(),
+                                stmts,
+                            },
+                        });
+                    }
+                    None => {
+                        self.replace_block(&mut for_loop.body);
+                    }
+                }
             }
             Expr::Group(group) => {
                 self.replace_expr(&mut group.expr);
@@ -322,10 +387,10 @@ impl<'a> SpecificContext<'a> {
             }
             Expr::Index(index) => {
                 self.replace_expr(&mut index.expr);
-                self.replace_expr(&mut index.index);
-                if let Expr::Array(array) = &*index.index {
+                if let Expr::Array(array) = &mut *index.index {
                     // t[[0]]
                     assert_eq!(array.elems.len(), 1);
+                    self.replace_expr(&mut array.elems[0]);
                     let Some(i) = evaluate_usize(&array.elems[0]) else {
                         abort!(index.index, "unsupported tuple index")
                     };
@@ -338,6 +403,8 @@ impl<'a> SpecificContext<'a> {
                             span: index.index.span(),
                         }),
                     });
+                } else {
+                    self.replace_expr(&mut index.index);
                 }
             }
             Expr::Infer(_) => {}
@@ -532,6 +599,50 @@ impl<'a> SpecificContext<'a> {
         }
     }
 
+    fn replace_fields(&self, fields: &mut Fields) {
+        match fields {
+            Fields::Named(FieldsNamed { named: fields, .. })
+            | Fields::Unnamed(FieldsUnnamed {
+                unnamed: fields, ..
+            }) => {
+                for field in fields {
+                    self.replace_type(&mut field.ty);
+                }
+            }
+            Fields::Unit => {}
+        }
+    }
+    fn replace_item(&self, item: &mut Item) {
+        match item {
+            Item::Const(r#const) => {
+                self.replace_type(&mut r#const.ty);
+                self.replace_expr(&mut r#const.expr);
+            }
+            Item::Enum(r#enum) => {
+                for variant in &mut r#enum.variants {
+                    self.replace_fields(&mut variant.fields);
+                }
+            }
+            Item::ExternCrate(_) => abort!(item, "ExternCrate unsupported"),
+            Item::Fn(function) => {
+                self.replace_signature(&mut function.sig);
+                self.replace_block(&mut function.block);
+            }
+            Item::ForeignMod(_) => abort!(item, "ForeignMod unsupported"),
+            Item::Impl(_) => abort!(item, "Impl unsupported"),
+            Item::Macro(_) => abort!(item, "Macro unsupported"),
+            Item::Mod(_) => abort!(item, "Mod unsupported"),
+            Item::Static(_) => abort!(item, "Static unsupported"),
+            Item::Struct(_) => abort!(item, "Struct unsupported"),
+            Item::Trait(_) => abort!(item, "Trait unsupported"),
+            Item::TraitAlias(_) => abort!(item, "TraitAlias unsupported"),
+            Item::Type(_) => abort!(item, "Type unsupported"),
+            Item::Union(_) => abort!(item, "Union unsupported"),
+            Item::Use(_) => abort!(item, "Use unsupported"),
+            Item::Verbatim(_) => abort!(item, "Verbatim unsupported"),
+            _ => todo!(),
+        }
+    }
     fn replace_macro(&self, r#macro: &mut Macro) {
         // typle_expand!(Option<T>) -> (Option<T0>, Option<T1>)
         // typle_expand!(T::default()) -> (T0::default(), T1::default())
@@ -553,23 +664,43 @@ impl<'a> SpecificContext<'a> {
                         })
                         .collect(),
                 };
-                let Ok(r#type) = syn::parse2::<Type>(std::mem::take(&mut r#macro.tokens)) else {
-                    abort!(default_span, "expected expression");
-                };
-                let mut tuple = TypeTuple {
-                    paren_token: syn::token::Paren::default(),
-                    elems: syn::punctuated::Punctuated::new(),
-                };
-                for index in 0..self.count {
-                    let context = SpecificContext {
-                        mode: SpecificMode::Index(index),
-                        ..self.clone()
+                let tokens = std::mem::take(&mut r#macro.tokens);
+                if let Ok(expr) = syn::parse2::<Expr>(tokens.clone()) {
+                    let mut tuple = ExprTuple {
+                        paren_token: syn::token::Paren::default(),
+                        elems: syn::punctuated::Punctuated::new(),
+                        attrs: Vec::new(),
                     };
-                    let mut element = r#type.clone();
-                    context.replace_type(&mut element);
-                    tuple.elems.push(element);
+                    for index in 0..self.count {
+                        let context = SpecificContext {
+                            mode: SpecificMode::Index(index),
+                            ..self.clone()
+                        };
+                        let mut element = expr.clone();
+                        context.replace_expr(&mut element);
+                        tuple.elems.push(element);
+                    }
+                    r#macro.tokens = tuple.into_token_stream();
+                    return;
                 }
-                r#macro.tokens = tuple.into_token_stream();
+                if let Ok(r#type) = syn::parse2::<Type>(tokens) {
+                    let mut tuple = TypeTuple {
+                        paren_token: syn::token::Paren::default(),
+                        elems: syn::punctuated::Punctuated::new(),
+                    };
+                    for index in 0..self.count {
+                        let context = SpecificContext {
+                            mode: SpecificMode::Index(index),
+                            ..self.clone()
+                        };
+                        let mut element = r#type.clone();
+                        context.replace_type(&mut element);
+                        tuple.elems.push(element);
+                    }
+                    r#macro.tokens = tuple.into_token_stream();
+                    return;
+                }
+                abort!(default_span, "expected type or expression");
             }
         }
     }
@@ -623,7 +754,7 @@ impl<'a> SpecificContext<'a> {
                     // an empty Path?
                     return;
                 };
-                if let Some(element_type_idents) = self.tuples.get(&path_segment.ident) {
+                if let Some(element_type_names) = self.tuples.get(&path_segment.ident) {
                     match &mut path_segment.arguments {
                         syn::PathArguments::None => {
                             match self.mode {
@@ -632,7 +763,7 @@ impl<'a> SpecificContext<'a> {
                                     let span = path_segment.ident.span();
                                     *ty = Type::Tuple(TypeTuple {
                                         paren_token: syn::token::Paren::default(),
-                                        elems: element_type_idents
+                                        elems: element_type_names
                                             .iter()
                                             .map(|name| {
                                                 Type::Path(TypePath {
@@ -644,9 +775,9 @@ impl<'a> SpecificContext<'a> {
                                     });
                                 }
                                 SpecificMode::Index(index) => {
-                                    // T -> T0
-                                    path.path = element_type_to_path(
-                                        &element_type_idents[index],
+                                    // T -> T0, T::State -> T0::State
+                                    path_segment.ident = Ident::new(
+                                        &element_type_names[index],
                                         path_segment.span(),
                                     );
                                 }
@@ -666,7 +797,7 @@ impl<'a> SpecificContext<'a> {
                                                     // T<i>
                                                     *path_segment = syn::PathSegment {
                                                         ident: Ident::new(
-                                                            &element_type_idents[*value],
+                                                            &element_type_names[*value],
                                                             path_segment.ident.span(),
                                                         ),
                                                         arguments: syn::PathArguments::None,
@@ -689,7 +820,7 @@ impl<'a> SpecificContext<'a> {
                                     };
                                     *path_segment = syn::PathSegment {
                                         ident: Ident::new(
-                                            &element_type_idents[value],
+                                            &element_type_names[value],
                                             path_segment.ident.span(),
                                         ),
                                         arguments: syn::PathArguments::None,

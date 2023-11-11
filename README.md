@@ -2,20 +2,38 @@
 
 A Rust macro to create items for different sized tuples.
 
+The code on the left generates implementations for tuples up to 12 elements. The generated implementations for 3-tuples appear on the right.
+
+<table>
+<tr>
+<th>Source code</th>
+<th>Generated code</th>
+</tr>
+<tr>
+<td>
+
 ```rust
-struct MyStruct<T, U> {
-    t: T,
-    u: Option<U>,
+struct MyStruct<S, T> {
+    s: S,
+    t: Option<T>,
 }
 
-#[typle(Tuple for ..=2)]
-impl<T, U> MyStruct<T, U>
+#[typle(Tuple for 0..=12)]
+impl<S, T> MyStruct<S, T>
 where
+    S: Tuple<u32>,
     T: Tuple<impl Sized>,
-    U: Tuple<u32>,
 {
-    fn new(t: T, u: Option<U>) -> MyStruct<T, U> {
-        MyStruct { t, u }
+    fn new(s: S, t: Option<T>) -> MyStruct<S, T> {
+        MyStruct { s, t }
+    }
+
+    fn sum(&self) -> u32 {
+        let mut sum = 0;
+        for i in 0..S::LEN {
+            sum += self.s[[i]];
+        }
+        sum
     }
 }
 
@@ -26,74 +44,77 @@ trait FirstLast {
     fn last(&self) -> Option<Self::L>;
 }
 
-#[typle(Tuple for 1..=2)]
-impl<T, U> FirstLast for MyStruct<T, U>
+#[typle(Tuple for 1..=12)]
+impl<S, T> FirstLast for MyStruct<S, T>
 where
     T: Tuple<impl Copy>,
 {
     type F = T<0>;
-    type L = T<{T::LEN - 1}>;
+    type L = T<{ T::LEN - 1 }>;
 
     fn first(&self) -> Option<Self::F> {
-        Some(self.t[[0]])
+        self.t.map(|tup| tup[[0]])
     }
 
     fn last(&self) -> Option<Self::L> {
-        Some(self.t[[T::LEN - 1]])
+        self.t.map(|tup| tup[[T::LEN - 1]])
     }
 }
 ```
 
-expands the implementations to:
+</td>
+<td>
 
 ```rust
-impl MyStruct<(), ()> {
-    fn new(t: (), u: Option<()>) -> MyStruct<(), ()> {
-        MyStruct { t, u }
-    }
-}
-impl<T0> MyStruct<(T0,), (u32,)>
-where
-    T0: Sized,
-{
-    fn new(t: (T0,), u: Option<(u32,)>) -> MyStruct<(T0,), (u32,)> {
-        MyStruct { t, u }
-    }
-}
-impl<T0, T1> MyStruct<(T0, T1), (u32, u32)>
+impl<T0, T1, T2> MyStruct<(u32, u32, u32), (T0, T1, T2)>
 where
     T0: Sized,
     T1: Sized,
+    T2: Sized,
 {
-    fn new(t: (T0, T1), u: Option<(u32, u32)>) -> MyStruct<(T0, T1), (u32, u32)> {
-        MyStruct { t, u }
+    fn new(
+        s: (u32, u32, u32),
+        t: Option<(T0, T1, T2)>,
+    ) -> MyStruct<(u32, u32, u32), (T0, T1, T2)> {
+        MyStruct { s, t }
+    }
+
+    fn sum(&self) -> u32 {
+        let mut sum = 0;
+        {
+            {
+                sum += self.s.0;
+            }
+            {
+                sum += self.s.1;
+            }
+            {
+                sum += self.s.2;
+            }
+        }
+        sum
     }
 }
-impl<T0, U> FirstLast for MyStruct<(T0,), U>
-where
-    T0: Copy,
-{
-    type F = T0;
-    type L = T0;
-    fn first(&self) -> Option<Self::F> {
-        Some(self.t.0)
-    }
-    fn last(&self) -> Option<Self::L> {
-        Some(self.t.0)
-    }
-}
-impl<T0, T1, U> FirstLast for MyStruct<(T0, T1), U>
+
+impl<S, T0, T1, T2> FirstLast for MyStruct<S, (T0, T1, T2)>
 where
     T0: Copy,
     T1: Copy,
+    T2: Copy,
 {
     type F = T0;
-    type L = T1;
+    type L = T2;
+
     fn first(&self) -> Option<Self::F> {
-        Some(self.t.0)
+        self.t.map(|tup| tup.0)
     }
+
     fn last(&self) -> Option<Self::L> {
-        Some(self.t.1)
+        self.t.map(|tup| tup.2)
     }
 }
 ```
+
+</td>
+</tr>
+</table>
