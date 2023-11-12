@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 
 use proc_macro2::{Ident, Span, TokenStream, TokenTree};
 use proc_macro_error::{abort, abort_call_site, proc_macro_error};
-use quote::ToTokens;
+use quote::{format_ident, ToTokens};
 use syn::spanned::Spanned as _;
 use syn::{
     Block, Expr, ExprBlock, ExprField, ExprLit, ExprPath, ExprRange, ExprTuple, Fields,
@@ -208,8 +208,7 @@ impl<'a> SpecificContext<'a> {
         let mut item = item.clone();
         self.tuples = self.process_where_clause(&mut item.generics);
         if !self.tuples.is_empty() {
-            let item_name = format!("{}{}", item.ident, self.count);
-            item.ident = Ident::new(&item_name, item.ident.span());
+            item.ident = format_ident!("{}{}", item.ident, self.count);
             for mut variant in std::mem::take(&mut item.variants) {
                 if let Some((_, discriminant)) = &mut variant.discriminant {
                     if let Expr::Macro(r#macro) = discriminant {
@@ -234,10 +233,7 @@ impl<'a> SpecificContext<'a> {
                                     }
                                     let element = Variant {
                                         attrs: variant.attrs.clone(),
-                                        ident: Ident::new(
-                                            &format!("{}{}", &variant.ident, index),
-                                            variant.ident.span(),
-                                        ),
+                                        ident: format_ident!("{}{}", &variant.ident, index),
                                         fields,
                                         discriminant: None,
                                     };
@@ -270,8 +266,7 @@ impl<'a> SpecificContext<'a> {
         let mut item = item.clone();
         self.tuples = self.process_where_clause(&mut item.generics);
         if !self.tuples.is_empty() {
-            let item_name = format!("{}{}", item.ident, self.count);
-            item.ident = Ident::new(&item_name, item.ident.span());
+            item.ident = format_ident!("{}{}", item.ident, self.count);
             match &mut item.fields {
                 syn::Fields::Named(syn::FieldsNamed { named: fields, .. })
                 | syn::Fields::Unnamed(syn::FieldsUnnamed {
@@ -797,13 +792,10 @@ impl<'a> SpecificContext<'a> {
                         elems: syn::punctuated::Punctuated::new(),
                     };
                     for index in 0..self.count {
-                        let mut context = SpecificContext {
+                        let context = SpecificContext {
                             mode: SpecificMode::Index(index),
                             ..self.clone()
                         };
-                        context
-                            .constants
-                            .insert(Ident::new("_", r#type.span()), index);
                         let mut element = r#type.clone();
                         context.replace_type(&mut element);
                         tuple.elems.push(element);
