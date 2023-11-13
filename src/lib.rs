@@ -465,6 +465,48 @@ impl<'a> SpecificContext<'a> {
                 self.replace_expr(&mut group.expr);
             }
             Expr::If(r#if) => {
+                // Check for if typle_const!(i == T::LEN) {}
+                if let Expr::Macro(expr_macro) = &mut *r#if.cond {
+                    if let Some(macro_ident) = expr_macro.mac.path.get_ident() {
+                        if macro_ident == "typle_const" {
+                            let span = expr_macro.mac.tokens.span();
+                            let tokens = std::mem::take(&mut expr_macro.mac.tokens);
+                            let Ok(mut cond) = syn::parse2::<Expr>(tokens) else {
+                                abort!(span, "expected expression");
+                            };
+                            self.replace_expr(&mut cond);
+                            let Some(b) = evaluate_bool(&cond) else {
+                                abort!(span, "expected boolean expression");
+                            };
+                            if b {
+                                *expr = Expr::Block(ExprBlock {
+                                    attrs: std::mem::take(&mut r#if.attrs),
+                                    label: None,
+                                    block: r#if.then_branch.clone(),
+                                });
+                            } else {
+                                match &r#if.else_branch {
+                                    Some((_, branch)) => {
+                                        *expr = branch.as_ref().clone();
+                                        self.replace_expr(expr);
+                                    }
+                                    None => {
+                                        *expr = Expr::Block(ExprBlock {
+                                            attrs: std::mem::take(&mut r#if.attrs),
+                                            label: None,
+                                            block: Block {
+                                                brace_token: syn::token::Brace::default(),
+                                                stmts: Vec::new(),
+                                            },
+                                        });
+                                    }
+                                }
+                            }
+                            return;
+                        }
+                    }
+                }
+
                 self.replace_expr(&mut r#if.cond);
                 self.replace_block(&mut r#if.then_branch);
                 if let Some((_, block)) = &mut r#if.else_branch {
@@ -1356,6 +1398,68 @@ impl<'a> SpecificContext<'a> {
             }
         }
     }
+}
+
+fn evaluate_bool(expr: &Expr) -> Option<bool> {
+    match expr {
+        Expr::Array(_) => todo!(),
+        Expr::Assign(_) => todo!(),
+        Expr::Async(_) => todo!(),
+        Expr::Await(_) => todo!(),
+        Expr::Binary(binary) => match binary.op {
+            syn::BinOp::Eq(_) => {
+                if let Some(left) = evaluate_usize(&binary.left) {
+                    if let Some(right) = evaluate_usize(&binary.right) {
+                        return Some(left == right);
+                    }
+                }
+            }
+            syn::BinOp::Ne(_) => {
+                if let Some(left) = evaluate_usize(&binary.left) {
+                    if let Some(right) = evaluate_usize(&binary.right) {
+                        return Some(left != right);
+                    }
+                }
+            }
+            _ => {}
+        },
+        Expr::Block(_) => todo!(),
+        Expr::Break(_) => todo!(),
+        Expr::Call(_) => todo!(),
+        Expr::Cast(_) => todo!(),
+        Expr::Closure(_) => todo!(),
+        Expr::Const(_) => todo!(),
+        Expr::Continue(_) => todo!(),
+        Expr::Field(_) => todo!(),
+        Expr::ForLoop(_) => todo!(),
+        Expr::Group(_) => todo!(),
+        Expr::If(_) => todo!(),
+        Expr::Index(_) => todo!(),
+        Expr::Infer(_) => todo!(),
+        Expr::Let(_) => todo!(),
+        Expr::Lit(_) => todo!(),
+        Expr::Loop(_) => todo!(),
+        Expr::Macro(_) => todo!(),
+        Expr::Match(_) => todo!(),
+        Expr::MethodCall(_) => todo!(),
+        Expr::Paren(_) => todo!(),
+        Expr::Path(_) => todo!(),
+        Expr::Range(_) => todo!(),
+        Expr::Reference(_) => todo!(),
+        Expr::Repeat(_) => todo!(),
+        Expr::Return(_) => todo!(),
+        Expr::Struct(_) => todo!(),
+        Expr::Try(_) => todo!(),
+        Expr::TryBlock(_) => todo!(),
+        Expr::Tuple(_) => todo!(),
+        Expr::Unary(_) => todo!(),
+        Expr::Unsafe(_) => todo!(),
+        Expr::Verbatim(_) => todo!(),
+        Expr::While(_) => todo!(),
+        Expr::Yield(_) => todo!(),
+        _ => todo!(),
+    }
+    None
 }
 
 fn evaluate_usize(expr: &Expr) -> Option<usize> {

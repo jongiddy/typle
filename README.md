@@ -2,15 +2,7 @@
 
 A Rust macro to create items for different sized tuples.
 
-The code on the left generates implementations for tuples up to 12 elements. The generated implementations for 3-tuples appear on the right.
-
-<table>
-<tr>
-<th>Source code</th>
-<th>Generated code</th>
-</tr>
-<tr>
-<td>
+The code below generates implementations for tuples up to 12 elements.
 
 ```rust
 struct MyStruct<S, T> {
@@ -34,6 +26,10 @@ where
             sum += self.s[[i]];
         }
         sum
+    }
+
+    fn multiply(&self, multipliers: typle_expand!(u32)) -> typle_expand!(u32) {
+        typle_expand!(self.s[[S::INDEX]] * multipliers[[S::INDEX]])
     }
 }
 
@@ -62,8 +58,7 @@ where
 }
 ```
 
-</td>
-<td>
+The generated implementations for 3-tuples are:
 
 ```rust
 impl<T0, T1, T2> MyStruct<(u32, u32, u32), (T0, T1, T2)>
@@ -94,6 +89,14 @@ where
         }
         sum
     }
+
+    fn multiply(&self, multipliers: (u32, u32, u32)) -> (u32, u32, u32) {
+        (
+            self.s.0 * multipliers.0,
+            self.s.1 * multipliers.1,
+            self.s.2 * multipliers.2,
+        )
+    }
 }
 
 impl<S, T0, T1, T2> FirstLast for MyStruct<S, (T0, T1, T2)>
@@ -114,7 +117,3 @@ where
     }
 }
 ```
-
-</td>
-</tr>
-</table>
