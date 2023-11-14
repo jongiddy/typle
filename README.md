@@ -91,11 +91,7 @@ where
     }
 
     fn multiply(&self, multipliers: (u32, u32, u32)) -> (u32, u32, u32) {
-        (
-            self.s.0 * multipliers.0,
-            self.s.1 * multipliers.1,
-            self.s.2 * multipliers.2,
-        )
+        (self.s.0 * multipliers.0, self.s.1 * multipliers.1, self.s.2 * multipliers.2)
     }
 }
 

@@ -1,0 +1,988 @@
+use typle::typle;
+struct MyStruct<S, T> {
+    s: S,
+    t: Option<T>,
+}
+impl MyStruct<(), ()> {
+    fn new(s: (), t: Option<()>) -> MyStruct<(), ()> {
+        MyStruct { s, t }
+    }
+    fn sum(&self) -> u32 {
+        let mut sum = 0;
+        {}
+        sum
+    }
+    fn multiply(&self, multipliers: ()) -> () {
+        ()
+    }
+}
+impl<T0> MyStruct<(u32,), (T0,)>
+where
+    T0: Sized,
+{
+    fn new(s: (u32,), t: Option<(T0,)>) -> MyStruct<(u32,), (T0,)> {
+        MyStruct { s, t }
+    }
+    fn sum(&self) -> u32 {
+        let mut sum = 0;
+        {
+            {
+                sum += self.s.0;
+            }
+        }
+        sum
+    }
+    fn multiply(&self, multipliers: (u32,)) -> (u32,) {
+        (self.s.0 * multipliers.0,)
+    }
+}
+impl<T0, T1> MyStruct<(u32, u32), (T0, T1)>
+where
+    T0: Sized,
+    T1: Sized,
+{
+    fn new(s: (u32, u32), t: Option<(T0, T1)>) -> MyStruct<(u32, u32), (T0, T1)> {
+        MyStruct { s, t }
+    }
+    fn sum(&self) -> u32 {
+        let mut sum = 0;
+        {
+            {
+                sum += self.s.0;
+            }
+            {
+                sum += self.s.1;
+            }
+        }
+        sum
+    }
+    fn multiply(&self, multipliers: (u32, u32)) -> (u32, u32) {
+        (self.s.0 * multipliers.0, self.s.1 * multipliers.1)
+    }
+}
+impl<T0, T1, T2> MyStruct<(u32, u32, u32), (T0, T1, T2)>
+where
+    T0: Sized,
+    T1: Sized,
+    T2: Sized,
+{
+    fn new(
+        s: (u32, u32, u32),
+        t: Option<(T0, T1, T2)>,
+    ) -> MyStruct<(u32, u32, u32), (T0, T1, T2)> {
+        MyStruct { s, t }
+    }
+    fn sum(&self) -> u32 {
+        let mut sum = 0;
+        {
+            {
+                sum += self.s.0;
+            }
+            {
+                sum += self.s.1;
+            }
+            {
+                sum += self.s.2;
+            }
+        }
+        sum
+    }
+    fn multiply(&self, multipliers: (u32, u32, u32)) -> (u32, u32, u32) {
+        (self.s.0 * multipliers.0, self.s.1 * multipliers.1, self.s.2 * multipliers.2)
+    }
+}
+impl<T0, T1, T2, T3> MyStruct<(u32, u32, u32, u32), (T0, T1, T2, T3)>
+where
+    T0: Sized,
+    T1: Sized,
+    T2: Sized,
+    T3: Sized,
+{
+    fn new(
+        s: (u32, u32, u32, u32),
+        t: Option<(T0, T1, T2, T3)>,
+    ) -> MyStruct<(u32, u32, u32, u32), (T0, T1, T2, T3)> {
+        MyStruct { s, t }
+    }
+    fn sum(&self) -> u32 {
+        let mut sum = 0;
+        {
+            {
+                sum += self.s.0;
+            }
+            {
+                sum += self.s.1;
+            }
+            {
+                sum += self.s.2;
+            }
+            {
+                sum += self.s.3;
+            }
+        }
+        sum
+    }
+    fn multiply(&self, multipliers: (u32, u32, u32, u32)) -> (u32, u32, u32, u32) {
+        (
+            self.s.0 * multipliers.0,
+            self.s.1 * multipliers.1,
+            self.s.2 * multipliers.2,
+            self.s.3 * multipliers.3,
+        )
+    }
+}
+impl<T0, T1, T2, T3, T4> MyStruct<(u32, u32, u32, u32, u32), (T0, T1, T2, T3, T4)>
+where
+    T0: Sized,
+    T1: Sized,
+    T2: Sized,
+    T3: Sized,
+    T4: Sized,
+{
+    fn new(
+        s: (u32, u32, u32, u32, u32),
+        t: Option<(T0, T1, T2, T3, T4)>,
+    ) -> MyStruct<(u32, u32, u32, u32, u32), (T0, T1, T2, T3, T4)> {
+        MyStruct { s, t }
+    }
+    fn sum(&self) -> u32 {
+        let mut sum = 0;
+        {
+            {
+                sum += self.s.0;
+            }
+            {
+                sum += self.s.1;
+            }
+            {
+                sum += self.s.2;
+            }
+            {
+                sum += self.s.3;
+            }
+            {
+                sum += self.s.4;
+            }
+        }
+        sum
+    }
+    fn multiply(
+        &self,
+        multipliers: (u32, u32, u32, u32, u32),
+    ) -> (u32, u32, u32, u32, u32) {
+        (
+            self.s.0 * multipliers.0,
+            self.s.1 * multipliers.1,
+            self.s.2 * multipliers.2,
+            self.s.3 * multipliers.3,
+            self.s.4 * multipliers.4,
+        )
+    }
+}
+impl<
+    T0,
+    T1,
+    T2,
+    T3,
+    T4,
+    T5,
+> MyStruct<(u32, u32, u32, u32, u32, u32), (T0, T1, T2, T3, T4, T5)>
+where
+    T0: Sized,
+    T1: Sized,
+    T2: Sized,
+    T3: Sized,
+    T4: Sized,
+    T5: Sized,
+{
+    fn new(
+        s: (u32, u32, u32, u32, u32, u32),
+        t: Option<(T0, T1, T2, T3, T4, T5)>,
+    ) -> MyStruct<(u32, u32, u32, u32, u32, u32), (T0, T1, T2, T3, T4, T5)> {
+        MyStruct { s, t }
+    }
+    fn sum(&self) -> u32 {
+        let mut sum = 0;
+        {
+            {
+                sum += self.s.0;
+            }
+            {
+                sum += self.s.1;
+            }
+            {
+                sum += self.s.2;
+            }
+            {
+                sum += self.s.3;
+            }
+            {
+                sum += self.s.4;
+            }
+            {
+                sum += self.s.5;
+            }
+        }
+        sum
+    }
+    fn multiply(
+        &self,
+        multipliers: (u32, u32, u32, u32, u32, u32),
+    ) -> (u32, u32, u32, u32, u32, u32) {
+        (
+            self.s.0 * multipliers.0,
+            self.s.1 * multipliers.1,
+            self.s.2 * multipliers.2,
+            self.s.3 * multipliers.3,
+            self.s.4 * multipliers.4,
+            self.s.5 * multipliers.5,
+        )
+    }
+}
+impl<
+    T0,
+    T1,
+    T2,
+    T3,
+    T4,
+    T5,
+    T6,
+> MyStruct<(u32, u32, u32, u32, u32, u32, u32), (T0, T1, T2, T3, T4, T5, T6)>
+where
+    T0: Sized,
+    T1: Sized,
+    T2: Sized,
+    T3: Sized,
+    T4: Sized,
+    T5: Sized,
+    T6: Sized,
+{
+    fn new(
+        s: (u32, u32, u32, u32, u32, u32, u32),
+        t: Option<(T0, T1, T2, T3, T4, T5, T6)>,
+    ) -> MyStruct<(u32, u32, u32, u32, u32, u32, u32), (T0, T1, T2, T3, T4, T5, T6)> {
+        MyStruct { s, t }
+    }
+    fn sum(&self) -> u32 {
+        let mut sum = 0;
+        {
+            {
+                sum += self.s.0;
+            }
+            {
+                sum += self.s.1;
+            }
+            {
+                sum += self.s.2;
+            }
+            {
+                sum += self.s.3;
+            }
+            {
+                sum += self.s.4;
+            }
+            {
+                sum += self.s.5;
+            }
+            {
+                sum += self.s.6;
+            }
+        }
+        sum
+    }
+    fn multiply(
+        &self,
+        multipliers: (u32, u32, u32, u32, u32, u32, u32),
+    ) -> (u32, u32, u32, u32, u32, u32, u32) {
+        (
+            self.s.0 * multipliers.0,
+            self.s.1 * multipliers.1,
+            self.s.2 * multipliers.2,
+            self.s.3 * multipliers.3,
+            self.s.4 * multipliers.4,
+            self.s.5 * multipliers.5,
+            self.s.6 * multipliers.6,
+        )
+    }
+}
+impl<
+    T0,
+    T1,
+    T2,
+    T3,
+    T4,
+    T5,
+    T6,
+    T7,
+> MyStruct<(u32, u32, u32, u32, u32, u32, u32, u32), (T0, T1, T2, T3, T4, T5, T6, T7)>
+where
+    T0: Sized,
+    T1: Sized,
+    T2: Sized,
+    T3: Sized,
+    T4: Sized,
+    T5: Sized,
+    T6: Sized,
+    T7: Sized,
+{
+    fn new(
+        s: (u32, u32, u32, u32, u32, u32, u32, u32),
+        t: Option<(T0, T1, T2, T3, T4, T5, T6, T7)>,
+    ) -> MyStruct<
+        (u32, u32, u32, u32, u32, u32, u32, u32),
+        (T0, T1, T2, T3, T4, T5, T6, T7),
+    > {
+        MyStruct { s, t }
+    }
+    fn sum(&self) -> u32 {
+        let mut sum = 0;
+        {
+            {
+                sum += self.s.0;
+            }
+            {
+                sum += self.s.1;
+            }
+            {
+                sum += self.s.2;
+            }
+            {
+                sum += self.s.3;
+            }
+            {
+                sum += self.s.4;
+            }
+            {
+                sum += self.s.5;
+            }
+            {
+                sum += self.s.6;
+            }
+            {
+                sum += self.s.7;
+            }
+        }
+        sum
+    }
+    fn multiply(
+        &self,
+        multipliers: (u32, u32, u32, u32, u32, u32, u32, u32),
+    ) -> (u32, u32, u32, u32, u32, u32, u32, u32) {
+        (
+            self.s.0 * multipliers.0,
+            self.s.1 * multipliers.1,
+            self.s.2 * multipliers.2,
+            self.s.3 * multipliers.3,
+            self.s.4 * multipliers.4,
+            self.s.5 * multipliers.5,
+            self.s.6 * multipliers.6,
+            self.s.7 * multipliers.7,
+        )
+    }
+}
+impl<
+    T0,
+    T1,
+    T2,
+    T3,
+    T4,
+    T5,
+    T6,
+    T7,
+    T8,
+> MyStruct<
+    (u32, u32, u32, u32, u32, u32, u32, u32, u32),
+    (T0, T1, T2, T3, T4, T5, T6, T7, T8),
+>
+where
+    T0: Sized,
+    T1: Sized,
+    T2: Sized,
+    T3: Sized,
+    T4: Sized,
+    T5: Sized,
+    T6: Sized,
+    T7: Sized,
+    T8: Sized,
+{
+    fn new(
+        s: (u32, u32, u32, u32, u32, u32, u32, u32, u32),
+        t: Option<(T0, T1, T2, T3, T4, T5, T6, T7, T8)>,
+    ) -> MyStruct<
+        (u32, u32, u32, u32, u32, u32, u32, u32, u32),
+        (T0, T1, T2, T3, T4, T5, T6, T7, T8),
+    > {
+        MyStruct { s, t }
+    }
+    fn sum(&self) -> u32 {
+        let mut sum = 0;
+        {
+            {
+                sum += self.s.0;
+            }
+            {
+                sum += self.s.1;
+            }
+            {
+                sum += self.s.2;
+            }
+            {
+                sum += self.s.3;
+            }
+            {
+                sum += self.s.4;
+            }
+            {
+                sum += self.s.5;
+            }
+            {
+                sum += self.s.6;
+            }
+            {
+                sum += self.s.7;
+            }
+            {
+                sum += self.s.8;
+            }
+        }
+        sum
+    }
+    fn multiply(
+        &self,
+        multipliers: (u32, u32, u32, u32, u32, u32, u32, u32, u32),
+    ) -> (u32, u32, u32, u32, u32, u32, u32, u32, u32) {
+        (
+            self.s.0 * multipliers.0,
+            self.s.1 * multipliers.1,
+            self.s.2 * multipliers.2,
+            self.s.3 * multipliers.3,
+            self.s.4 * multipliers.4,
+            self.s.5 * multipliers.5,
+            self.s.6 * multipliers.6,
+            self.s.7 * multipliers.7,
+            self.s.8 * multipliers.8,
+        )
+    }
+}
+impl<
+    T0,
+    T1,
+    T2,
+    T3,
+    T4,
+    T5,
+    T6,
+    T7,
+    T8,
+    T9,
+> MyStruct<
+    (u32, u32, u32, u32, u32, u32, u32, u32, u32, u32),
+    (T0, T1, T2, T3, T4, T5, T6, T7, T8, T9),
+>
+where
+    T0: Sized,
+    T1: Sized,
+    T2: Sized,
+    T3: Sized,
+    T4: Sized,
+    T5: Sized,
+    T6: Sized,
+    T7: Sized,
+    T8: Sized,
+    T9: Sized,
+{
+    fn new(
+        s: (u32, u32, u32, u32, u32, u32, u32, u32, u32, u32),
+        t: Option<(T0, T1, T2, T3, T4, T5, T6, T7, T8, T9)>,
+    ) -> MyStruct<
+        (u32, u32, u32, u32, u32, u32, u32, u32, u32, u32),
+        (T0, T1, T2, T3, T4, T5, T6, T7, T8, T9),
+    > {
+        MyStruct { s, t }
+    }
+    fn sum(&self) -> u32 {
+        let mut sum = 0;
+        {
+            {
+                sum += self.s.0;
+            }
+            {
+                sum += self.s.1;
+            }
+            {
+                sum += self.s.2;
+            }
+            {
+                sum += self.s.3;
+            }
+            {
+                sum += self.s.4;
+            }
+            {
+                sum += self.s.5;
+            }
+            {
+                sum += self.s.6;
+            }
+            {
+                sum += self.s.7;
+            }
+            {
+                sum += self.s.8;
+            }
+            {
+                sum += self.s.9;
+            }
+        }
+        sum
+    }
+    fn multiply(
+        &self,
+        multipliers: (u32, u32, u32, u32, u32, u32, u32, u32, u32, u32),
+    ) -> (u32, u32, u32, u32, u32, u32, u32, u32, u32, u32) {
+        (
+            self.s.0 * multipliers.0,
+            self.s.1 * multipliers.1,
+            self.s.2 * multipliers.2,
+            self.s.3 * multipliers.3,
+            self.s.4 * multipliers.4,
+            self.s.5 * multipliers.5,
+            self.s.6 * multipliers.6,
+            self.s.7 * multipliers.7,
+            self.s.8 * multipliers.8,
+            self.s.9 * multipliers.9,
+        )
+    }
+}
+impl<
+    T0,
+    T1,
+    T2,
+    T3,
+    T4,
+    T5,
+    T6,
+    T7,
+    T8,
+    T9,
+    T10,
+> MyStruct<
+    (u32, u32, u32, u32, u32, u32, u32, u32, u32, u32, u32),
+    (T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10),
+>
+where
+    T0: Sized,
+    T1: Sized,
+    T2: Sized,
+    T3: Sized,
+    T4: Sized,
+    T5: Sized,
+    T6: Sized,
+    T7: Sized,
+    T8: Sized,
+    T9: Sized,
+    T10: Sized,
+{
+    fn new(
+        s: (u32, u32, u32, u32, u32, u32, u32, u32, u32, u32, u32),
+        t: Option<(T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10)>,
+    ) -> MyStruct<
+        (u32, u32, u32, u32, u32, u32, u32, u32, u32, u32, u32),
+        (T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10),
+    > {
+        MyStruct { s, t }
+    }
+    fn sum(&self) -> u32 {
+        let mut sum = 0;
+        {
+            {
+                sum += self.s.0;
+            }
+            {
+                sum += self.s.1;
+            }
+            {
+                sum += self.s.2;
+            }
+            {
+                sum += self.s.3;
+            }
+            {
+                sum += self.s.4;
+            }
+            {
+                sum += self.s.5;
+            }
+            {
+                sum += self.s.6;
+            }
+            {
+                sum += self.s.7;
+            }
+            {
+                sum += self.s.8;
+            }
+            {
+                sum += self.s.9;
+            }
+            {
+                sum += self.s.10;
+            }
+        }
+        sum
+    }
+    fn multiply(
+        &self,
+        multipliers: (u32, u32, u32, u32, u32, u32, u32, u32, u32, u32, u32),
+    ) -> (u32, u32, u32, u32, u32, u32, u32, u32, u32, u32, u32) {
+        (
+            self.s.0 * multipliers.0,
+            self.s.1 * multipliers.1,
+            self.s.2 * multipliers.2,
+            self.s.3 * multipliers.3,
+            self.s.4 * multipliers.4,
+            self.s.5 * multipliers.5,
+            self.s.6 * multipliers.6,
+            self.s.7 * multipliers.7,
+            self.s.8 * multipliers.8,
+            self.s.9 * multipliers.9,
+            self.s.10 * multipliers.10,
+        )
+    }
+}
+impl<
+    T0,
+    T1,
+    T2,
+    T3,
+    T4,
+    T5,
+    T6,
+    T7,
+    T8,
+    T9,
+    T10,
+    T11,
+> MyStruct<
+    (u32, u32, u32, u32, u32, u32, u32, u32, u32, u32, u32, u32),
+    (T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11),
+>
+where
+    T0: Sized,
+    T1: Sized,
+    T2: Sized,
+    T3: Sized,
+    T4: Sized,
+    T5: Sized,
+    T6: Sized,
+    T7: Sized,
+    T8: Sized,
+    T9: Sized,
+    T10: Sized,
+    T11: Sized,
+{
+    fn new(
+        s: (u32, u32, u32, u32, u32, u32, u32, u32, u32, u32, u32, u32),
+        t: Option<(T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11)>,
+    ) -> MyStruct<
+        (u32, u32, u32, u32, u32, u32, u32, u32, u32, u32, u32, u32),
+        (T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11),
+    > {
+        MyStruct { s, t }
+    }
+    fn sum(&self) -> u32 {
+        let mut sum = 0;
+        {
+            {
+                sum += self.s.0;
+            }
+            {
+                sum += self.s.1;
+            }
+            {
+                sum += self.s.2;
+            }
+            {
+                sum += self.s.3;
+            }
+            {
+                sum += self.s.4;
+            }
+            {
+                sum += self.s.5;
+            }
+            {
+                sum += self.s.6;
+            }
+            {
+                sum += self.s.7;
+            }
+            {
+                sum += self.s.8;
+            }
+            {
+                sum += self.s.9;
+            }
+            {
+                sum += self.s.10;
+            }
+            {
+                sum += self.s.11;
+            }
+        }
+        sum
+    }
+    fn multiply(
+        &self,
+        multipliers: (u32, u32, u32, u32, u32, u32, u32, u32, u32, u32, u32, u32),
+    ) -> (u32, u32, u32, u32, u32, u32, u32, u32, u32, u32, u32, u32) {
+        (
+            self.s.0 * multipliers.0,
+            self.s.1 * multipliers.1,
+            self.s.2 * multipliers.2,
+            self.s.3 * multipliers.3,
+            self.s.4 * multipliers.4,
+            self.s.5 * multipliers.5,
+            self.s.6 * multipliers.6,
+            self.s.7 * multipliers.7,
+            self.s.8 * multipliers.8,
+            self.s.9 * multipliers.9,
+            self.s.10 * multipliers.10,
+            self.s.11 * multipliers.11,
+        )
+    }
+}
+trait FirstLast {
+    type F;
+    type L;
+    fn first(&self) -> Option<Self::F>;
+    fn last(&self) -> Option<Self::L>;
+}
+impl<S, T0> FirstLast for MyStruct<S, (T0,)>
+where
+    T0: Copy,
+{
+    type F = T0;
+    type L = T0;
+    fn first(&self) -> Option<Self::F> {
+        self.t.map(|tup| tup.0)
+    }
+    fn last(&self) -> Option<Self::L> {
+        self.t.map(|tup| tup.0)
+    }
+}
+impl<S, T0, T1> FirstLast for MyStruct<S, (T0, T1)>
+where
+    T0: Copy,
+    T1: Copy,
+{
+    type F = T0;
+    type L = T1;
+    fn first(&self) -> Option<Self::F> {
+        self.t.map(|tup| tup.0)
+    }
+    fn last(&self) -> Option<Self::L> {
+        self.t.map(|tup| tup.1)
+    }
+}
+impl<S, T0, T1, T2> FirstLast for MyStruct<S, (T0, T1, T2)>
+where
+    T0: Copy,
+    T1: Copy,
+    T2: Copy,
+{
+    type F = T0;
+    type L = T2;
+    fn first(&self) -> Option<Self::F> {
+        self.t.map(|tup| tup.0)
+    }
+    fn last(&self) -> Option<Self::L> {
+        self.t.map(|tup| tup.2)
+    }
+}
+impl<S, T0, T1, T2, T3> FirstLast for MyStruct<S, (T0, T1, T2, T3)>
+where
+    T0: Copy,
+    T1: Copy,
+    T2: Copy,
+    T3: Copy,
+{
+    type F = T0;
+    type L = T3;
+    fn first(&self) -> Option<Self::F> {
+        self.t.map(|tup| tup.0)
+    }
+    fn last(&self) -> Option<Self::L> {
+        self.t.map(|tup| tup.3)
+    }
+}
+impl<S, T0, T1, T2, T3, T4> FirstLast for MyStruct<S, (T0, T1, T2, T3, T4)>
+where
+    T0: Copy,
+    T1: Copy,
+    T2: Copy,
+    T3: Copy,
+    T4: Copy,
+{
+    type F = T0;
+    type L = T4;
+    fn first(&self) -> Option<Self::F> {
+        self.t.map(|tup| tup.0)
+    }
+    fn last(&self) -> Option<Self::L> {
+        self.t.map(|tup| tup.4)
+    }
+}
+impl<S, T0, T1, T2, T3, T4, T5> FirstLast for MyStruct<S, (T0, T1, T2, T3, T4, T5)>
+where
+    T0: Copy,
+    T1: Copy,
+    T2: Copy,
+    T3: Copy,
+    T4: Copy,
+    T5: Copy,
+{
+    type F = T0;
+    type L = T5;
+    fn first(&self) -> Option<Self::F> {
+        self.t.map(|tup| tup.0)
+    }
+    fn last(&self) -> Option<Self::L> {
+        self.t.map(|tup| tup.5)
+    }
+}
+impl<S, T0, T1, T2, T3, T4, T5, T6> FirstLast
+for MyStruct<S, (T0, T1, T2, T3, T4, T5, T6)>
+where
+    T0: Copy,
+    T1: Copy,
+    T2: Copy,
+    T3: Copy,
+    T4: Copy,
+    T5: Copy,
+    T6: Copy,
+{
+    type F = T0;
+    type L = T6;
+    fn first(&self) -> Option<Self::F> {
+        self.t.map(|tup| tup.0)
+    }
+    fn last(&self) -> Option<Self::L> {
+        self.t.map(|tup| tup.6)
+    }
+}
+impl<S, T0, T1, T2, T3, T4, T5, T6, T7> FirstLast
+for MyStruct<S, (T0, T1, T2, T3, T4, T5, T6, T7)>
+where
+    T0: Copy,
+    T1: Copy,
+    T2: Copy,
+    T3: Copy,
+    T4: Copy,
+    T5: Copy,
+    T6: Copy,
+    T7: Copy,
+{
+    type F = T0;
+    type L = T7;
+    fn first(&self) -> Option<Self::F> {
+        self.t.map(|tup| tup.0)
+    }
+    fn last(&self) -> Option<Self::L> {
+        self.t.map(|tup| tup.7)
+    }
+}
+impl<S, T0, T1, T2, T3, T4, T5, T6, T7, T8> FirstLast
+for MyStruct<S, (T0, T1, T2, T3, T4, T5, T6, T7, T8)>
+where
+    T0: Copy,
+    T1: Copy,
+    T2: Copy,
+    T3: Copy,
+    T4: Copy,
+    T5: Copy,
+    T6: Copy,
+    T7: Copy,
+    T8: Copy,
+{
+    type F = T0;
+    type L = T8;
+    fn first(&self) -> Option<Self::F> {
+        self.t.map(|tup| tup.0)
+    }
+    fn last(&self) -> Option<Self::L> {
+        self.t.map(|tup| tup.8)
+    }
+}
+impl<S, T0, T1, T2, T3, T4, T5, T6, T7, T8, T9> FirstLast
+for MyStruct<S, (T0, T1, T2, T3, T4, T5, T6, T7, T8, T9)>
+where
+    T0: Copy,
+    T1: Copy,
+    T2: Copy,
+    T3: Copy,
+    T4: Copy,
+    T5: Copy,
+    T6: Copy,
+    T7: Copy,
+    T8: Copy,
+    T9: Copy,
+{
+    type F = T0;
+    type L = T9;
+    fn first(&self) -> Option<Self::F> {
+        self.t.map(|tup| tup.0)
+    }
+    fn last(&self) -> Option<Self::L> {
+        self.t.map(|tup| tup.9)
+    }
+}
+impl<S, T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10> FirstLast
+for MyStruct<S, (T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10)>
+where
+    T0: Copy,
+    T1: Copy,
+    T2: Copy,
+    T3: Copy,
+    T4: Copy,
+    T5: Copy,
+    T6: Copy,
+    T7: Copy,
+    T8: Copy,
+    T9: Copy,
+    T10: Copy,
+{
+    type F = T0;
+    type L = T10;
+    fn first(&self) -> Option<Self::F> {
+        self.t.map(|tup| tup.0)
+    }
+    fn last(&self) -> Option<Self::L> {
+        self.t.map(|tup| tup.10)
+    }
+}
+impl<S, T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11> FirstLast
+for MyStruct<S, (T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11)>
+where
+    T0: Copy,
+    T1: Copy,
+    T2: Copy,
+    T3: Copy,
+    T4: Copy,
+    T5: Copy,
+    T6: Copy,
+    T7: Copy,
+    T8: Copy,
+    T9: Copy,
+    T10: Copy,
+    T11: Copy,
+{
+    type F = T0;
+    type L = T11;
+    fn first(&self) -> Option<Self::F> {
+        self.t.map(|tup| tup.0)
+    }
+    fn last(&self) -> Option<Self::L> {
+        self.t.map(|tup| tup.11)
+    }
+}

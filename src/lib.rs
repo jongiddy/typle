@@ -1,3 +1,91 @@
+//! A proc macro to generate multiple items for tuples. Example code:
+//!
+//! ```
+//! use typle::typle;
+//!
+//! struct MyStruct<T> {
+//!     pub t: T,
+//! }
+//!
+//! #[typle(Tuple for 1..=3)]
+//! impl<T> MyStruct<T>
+//! where
+//!     T: Tuple<u32>,
+//! {
+//!     fn max(&self) -> Option<u32> {
+//!         let mut max = self.t[[0]];
+//!         for typle_const!(i) in 1..T::LEN {
+//!             if self.t[[i]] > max {
+//!                 max = self.t[[i]];
+//!             }
+//!         }
+//!         Some(max)
+//!     }
+//! }
+//! ```
+//!
+//! This code creates implementations for 1-, 2-, and 3-tuples:
+//!
+//! ```
+//! # struct MyStruct<T> {t: T}
+//! impl MyStruct<(u32,)> {
+//!     fn max(&self) -> Option<u32> {
+//!         let mut max = self.t.0;
+//!         {}
+//!         Some(max)
+//!     }
+//! }
+//! impl MyStruct<(u32, u32)> {
+//!     fn max(&self) -> Option<u32> {
+//!         let mut max = self.t.0;
+//!         {
+//!             {
+//!                 if self.t.1 > max {
+//!                     max = self.t.1;
+//!                 }
+//!             }
+//!         }
+//!         Some(max)
+//!     }
+//! }
+//! impl MyStruct<(u32, u32, u32)> {
+//!     fn max(&self) -> Option<u32> {
+//!         let mut max = self.t.0;
+//!         {
+//!             {
+//!                 if self.t.1 > max {
+//!                     max = self.t.1;
+//!                 }
+//!             }
+//!             {
+//!                 if self.t.2 > max {
+//!                     max = self.t.2;
+//!                 }
+//!             }
+//!         }
+//!         Some(max)
+//!     }
+//! }
+//! ```
+//!
+//! The macro arguments `Tuple for 1..=3` consist of an identifier `Tuple`, to use as a pseudo-trait
+//! in the `where` clause, and a range of tuple lengths `1..=3` for which the item will be created.
+//!
+//! If the `where` clause constrains a generic type using the pseudo-trait then the generic type
+//! must be a tuple with a length within the macro range and where each element is constrained by
+//! the argument to the trait. The element constraint can either be an explicit type (`Tuple<u32>`)
+//! or other traits (`Tuple<impl Clone + Debug>`).
+//!
+//! The elements of a tuple can be iterated over using a `for` loop with an iteration variable
+//! enclosed in `typle_const!` macro. As shown above, this executes the `for` loop body for each
+//! element in the tuple.
+//!
+//! Note that `T::LEN` is a special path that is available on each tuple type to provide the number
+//! of elements.
+//!
+//! Tuple elements are referenced using a double-bracketed index and a constant value, including an
+//! index created using `typle_const!`. Hence `self.t[[i]]` will be replaced by `s.0, s.1,...`.
+
 use std::collections::{HashMap, HashSet};
 
 use proc_macro2::{Ident, Span, TokenStream, TokenTree};
@@ -11,11 +99,13 @@ use syn::{
     TypeMacro, TypeParamBound, TypeParen, TypePath, TypeTuple, Variant, WherePredicate,
 };
 
+#[doc(hidden)]
 #[proc_macro]
 pub fn typle_identity(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
     item
 }
 
+#[doc(hidden)]
 #[proc_macro_error]
 #[proc_macro_attribute]
 pub fn typle(
@@ -417,6 +507,7 @@ impl<'a> SpecificContext<'a> {
                                     "cannot evaluate lower bound in constant context"
                                 );
                             };
+                            dbg!(&end_expr);
                             let Some(mut end) = evaluate_usize(end_expr) else {
                                 abort!(
                                     for_loop.expr.span(),
