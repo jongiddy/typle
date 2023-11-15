@@ -84,7 +84,13 @@
 //! of elements.
 //!
 //! Tuple elements are referenced using a double-bracketed index and a constant value, including an
-//! index created using `typle_const!`. Hence `self.t[[i]]` will be replaced by `s.0, s.1,...`.
+//! index created using `typle_const!`. Hence `self.t[[i]]` will be replaced by
+//! `self.t.0, self.t.1,...`.
+//!
+//! Other features include support for enums with a `typle_variants!()` macro and constant-if for
+//! conditional compilation based on constant values including a `typle_const!` iteration variable.
+//! See [this example](https://github.com/jongiddy/typle/blob/main/tests/expand/enum.rs) and its
+//! [expanded form](https://github.com/jongiddy/typle/blob/main/tests/expand/enum.expanded.rs).
 
 use std::collections::{HashMap, HashSet};
 

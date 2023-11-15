@@ -7,7 +7,7 @@ trait Process {
     fn process(state: Self::State) -> Result<Self::Output, Error>;
 }
 
-#[typle(Tuple for 2..=3)]
+#[typle(Tuple for 0..=3)]
 pub enum ProcessState<T>
 where
     T: Tuple<impl Process<Output = u64>>,
@@ -16,7 +16,21 @@ where
     Done([u64; T::LEN])
 }
 
-#[typle(Tuple for 2..=3)]
+#[typle(Tuple for 0..=3)]
+impl<T> Default for ProcessState<(T)>
+where
+    T: Tuple<impl Process<Output = u64>>
+{
+    fn default() -> Self {
+        if typle_const!(T::LEN == 0) {
+            Self::Done([])
+        } else {
+            Self::S0(None, [])
+        }
+    }
+}
+
+#[typle(Tuple for 0..=3)]
 impl Process for T
 where
     T: Tuple<impl Process<Output = u64>>,
@@ -41,7 +55,7 @@ where
                         if typle_const!(i + 1 == T::LEN) {
                             state = Self::State::Done(new_output);
                         } else {
-                            state = Self::State::S::<typle_index!(i + 1)>(new_output);
+                            state = Self::State::S::<typle_index!(i + 1)>(None, new_output);
                         }
                     }
                 }
