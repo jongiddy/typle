@@ -12,6 +12,8 @@ pub enum ProcessState<T>
 where
     T: Tuple<impl Process<Output = u64>>,
 {
+    // `typle_variants!`` creates a variant for each element-type. The variant will have a number
+    // added to the variant name here. `S2(Option<T2::State>, [u64; 2])`
     S(Option<T::State>, [u64; T::INDEX]) = typle_variants!(),
     Done([u64; T::LEN])
 }
@@ -22,6 +24,9 @@ where
     T: Tuple<impl Process<Output = u64>>
 {
     fn default() -> Self {
+        // Const-if allows false branches to contain invalid code. In this case state S0 does not
+        // exist for the empty tuple implementation. An alternative to using the `typle_const!` here
+        // is to set the typle! macro range to 1..=3 and implement `Default` separately for `()`.
         if typle_const!(T::LEN == 0) {
             Self::Done([])
         } else {
@@ -46,12 +51,18 @@ where
                         return Err(e);
                     }
                     Ok(value) => {
+                        // The iteration variable `i` can be used on other const contexts:
                         let mut new_output = <[u64; i + 1]>::default();
                         output
                             .into_iter()
                             .chain(std::iter::once(value))
                             .enumerate()
+                            // shadowing of `i` doesn't work correctly so use a different name:
                             .for_each(|(j, bs)| new_output[j] = bs);
+                        // Often a standard `if` can be used, but we need a const-if here because
+                        // the state S::<typle_index!(i + 1)> does not exist on the last iteration.
+                        // In that case, the second branch is never taken, and will likely get
+                        // optimized out, but it still needs to compile.
                         if typle_const!(i + 1 == T::LEN) {
                             state = Self::State::Done(new_output);
                         } else {

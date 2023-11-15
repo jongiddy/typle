@@ -28,8 +28,8 @@ where
         sum
     }
 
-    fn multiply(&self, multipliers: typle_expand!(u32)) -> typle_expand!(u32) {
-        typle_expand!(self.s[[S::INDEX]] * multipliers[[S::INDEX]])
+    fn multiply(&self, multipliers: S) -> typle_expand!(u64) {
+        typle_expand!(self.s[[S::INDEX]] as u64 * multipliers[[S::INDEX]] as u64)
     }
 }
 
@@ -90,8 +90,12 @@ where
         sum
     }
 
-    fn multiply(&self, multipliers: (u32, u32, u32)) -> (u32, u32, u32) {
-        (self.s.0 * multipliers.0, self.s.1 * multipliers.1, self.s.2 * multipliers.2)
+    fn multiply(&self, multipliers: (u32, u32, u32)) -> (u64, u64, u64) {
+        (
+            self.s.0 as u64 * multipliers.0 as u64,
+            self.s.1 as u64 * multipliers.1 as u64,
+            self.s.2 as u64 * multipliers.2 as u64,
+        )
     }
 }
 

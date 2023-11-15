@@ -32,8 +32,8 @@ where
         }
         sum
     }
-    fn multiply(&self, multipliers: (u32,)) -> (u32,) {
-        (self.s.0 * multipliers.0,)
+    fn multiply(&self, multipliers: (u32,)) -> (u64,) {
+        (self.s.0 as u64 * multipliers.0 as u64,)
     }
 }
 impl<T0, T1> MyStruct<(u32, u32), (T0, T1)>
@@ -56,8 +56,8 @@ where
         }
         sum
     }
-    fn multiply(&self, multipliers: (u32, u32)) -> (u32, u32) {
-        (self.s.0 * multipliers.0, self.s.1 * multipliers.1)
+    fn multiply(&self, multipliers: (u32, u32)) -> (u64, u64) {
+        (self.s.0 as u64 * multipliers.0 as u64, self.s.1 as u64 * multipliers.1 as u64)
     }
 }
 impl<T0, T1, T2> MyStruct<(u32, u32, u32), (T0, T1, T2)>
@@ -87,8 +87,12 @@ where
         }
         sum
     }
-    fn multiply(&self, multipliers: (u32, u32, u32)) -> (u32, u32, u32) {
-        (self.s.0 * multipliers.0, self.s.1 * multipliers.1, self.s.2 * multipliers.2)
+    fn multiply(&self, multipliers: (u32, u32, u32)) -> (u64, u64, u64) {
+        (
+            self.s.0 as u64 * multipliers.0 as u64,
+            self.s.1 as u64 * multipliers.1 as u64,
+            self.s.2 as u64 * multipliers.2 as u64,
+        )
     }
 }
 impl<T0, T1, T2, T3> MyStruct<(u32, u32, u32, u32), (T0, T1, T2, T3)>
@@ -122,12 +126,12 @@ where
         }
         sum
     }
-    fn multiply(&self, multipliers: (u32, u32, u32, u32)) -> (u32, u32, u32, u32) {
+    fn multiply(&self, multipliers: (u32, u32, u32, u32)) -> (u64, u64, u64, u64) {
         (
-            self.s.0 * multipliers.0,
-            self.s.1 * multipliers.1,
-            self.s.2 * multipliers.2,
-            self.s.3 * multipliers.3,
+            self.s.0 as u64 * multipliers.0 as u64,
+            self.s.1 as u64 * multipliers.1 as u64,
+            self.s.2 as u64 * multipliers.2 as u64,
+            self.s.3 as u64 * multipliers.3 as u64,
         )
     }
 }
@@ -169,13 +173,13 @@ where
     fn multiply(
         &self,
         multipliers: (u32, u32, u32, u32, u32),
-    ) -> (u32, u32, u32, u32, u32) {
+    ) -> (u64, u64, u64, u64, u64) {
         (
-            self.s.0 * multipliers.0,
-            self.s.1 * multipliers.1,
-            self.s.2 * multipliers.2,
-            self.s.3 * multipliers.3,
-            self.s.4 * multipliers.4,
+            self.s.0 as u64 * multipliers.0 as u64,
+            self.s.1 as u64 * multipliers.1 as u64,
+            self.s.2 as u64 * multipliers.2 as u64,
+            self.s.3 as u64 * multipliers.3 as u64,
+            self.s.4 as u64 * multipliers.4 as u64,
         )
     }
 }
@@ -228,14 +232,14 @@ where
     fn multiply(
         &self,
         multipliers: (u32, u32, u32, u32, u32, u32),
-    ) -> (u32, u32, u32, u32, u32, u32) {
+    ) -> (u64, u64, u64, u64, u64, u64) {
         (
-            self.s.0 * multipliers.0,
-            self.s.1 * multipliers.1,
-            self.s.2 * multipliers.2,
-            self.s.3 * multipliers.3,
-            self.s.4 * multipliers.4,
-            self.s.5 * multipliers.5,
+            self.s.0 as u64 * multipliers.0 as u64,
+            self.s.1 as u64 * multipliers.1 as u64,
+            self.s.2 as u64 * multipliers.2 as u64,
+            self.s.3 as u64 * multipliers.3 as u64,
+            self.s.4 as u64 * multipliers.4 as u64,
+            self.s.5 as u64 * multipliers.5 as u64,
         )
     }
 }
@@ -293,15 +297,15 @@ where
     fn multiply(
         &self,
         multipliers: (u32, u32, u32, u32, u32, u32, u32),
-    ) -> (u32, u32, u32, u32, u32, u32, u32) {
+    ) -> (u64, u64, u64, u64, u64, u64, u64) {
         (
-            self.s.0 * multipliers.0,
-            self.s.1 * multipliers.1,
-            self.s.2 * multipliers.2,
-            self.s.3 * multipliers.3,
-            self.s.4 * multipliers.4,
-            self.s.5 * multipliers.5,
-            self.s.6 * multipliers.6,
+            self.s.0 as u64 * multipliers.0 as u64,
+            self.s.1 as u64 * multipliers.1 as u64,
+            self.s.2 as u64 * multipliers.2 as u64,
+            self.s.3 as u64 * multipliers.3 as u64,
+            self.s.4 as u64 * multipliers.4 as u64,
+            self.s.5 as u64 * multipliers.5 as u64,
+            self.s.6 as u64 * multipliers.6 as u64,
         )
     }
 }
@@ -367,16 +371,16 @@ where
     fn multiply(
         &self,
         multipliers: (u32, u32, u32, u32, u32, u32, u32, u32),
-    ) -> (u32, u32, u32, u32, u32, u32, u32, u32) {
+    ) -> (u64, u64, u64, u64, u64, u64, u64, u64) {
         (
-            self.s.0 * multipliers.0,
-            self.s.1 * multipliers.1,
-            self.s.2 * multipliers.2,
-            self.s.3 * multipliers.3,
-            self.s.4 * multipliers.4,
-            self.s.5 * multipliers.5,
-            self.s.6 * multipliers.6,
-            self.s.7 * multipliers.7,
+            self.s.0 as u64 * multipliers.0 as u64,
+            self.s.1 as u64 * multipliers.1 as u64,
+            self.s.2 as u64 * multipliers.2 as u64,
+            self.s.3 as u64 * multipliers.3 as u64,
+            self.s.4 as u64 * multipliers.4 as u64,
+            self.s.5 as u64 * multipliers.5 as u64,
+            self.s.6 as u64 * multipliers.6 as u64,
+            self.s.7 as u64 * multipliers.7 as u64,
         )
     }
 }
@@ -450,17 +454,17 @@ where
     fn multiply(
         &self,
         multipliers: (u32, u32, u32, u32, u32, u32, u32, u32, u32),
-    ) -> (u32, u32, u32, u32, u32, u32, u32, u32, u32) {
+    ) -> (u64, u64, u64, u64, u64, u64, u64, u64, u64) {
         (
-            self.s.0 * multipliers.0,
-            self.s.1 * multipliers.1,
-            self.s.2 * multipliers.2,
-            self.s.3 * multipliers.3,
-            self.s.4 * multipliers.4,
-            self.s.5 * multipliers.5,
-            self.s.6 * multipliers.6,
-            self.s.7 * multipliers.7,
-            self.s.8 * multipliers.8,
+            self.s.0 as u64 * multipliers.0 as u64,
+            self.s.1 as u64 * multipliers.1 as u64,
+            self.s.2 as u64 * multipliers.2 as u64,
+            self.s.3 as u64 * multipliers.3 as u64,
+            self.s.4 as u64 * multipliers.4 as u64,
+            self.s.5 as u64 * multipliers.5 as u64,
+            self.s.6 as u64 * multipliers.6 as u64,
+            self.s.7 as u64 * multipliers.7 as u64,
+            self.s.8 as u64 * multipliers.8 as u64,
         )
     }
 }
@@ -539,18 +543,18 @@ where
     fn multiply(
         &self,
         multipliers: (u32, u32, u32, u32, u32, u32, u32, u32, u32, u32),
-    ) -> (u32, u32, u32, u32, u32, u32, u32, u32, u32, u32) {
+    ) -> (u64, u64, u64, u64, u64, u64, u64, u64, u64, u64) {
         (
-            self.s.0 * multipliers.0,
-            self.s.1 * multipliers.1,
-            self.s.2 * multipliers.2,
-            self.s.3 * multipliers.3,
-            self.s.4 * multipliers.4,
-            self.s.5 * multipliers.5,
-            self.s.6 * multipliers.6,
-            self.s.7 * multipliers.7,
-            self.s.8 * multipliers.8,
-            self.s.9 * multipliers.9,
+            self.s.0 as u64 * multipliers.0 as u64,
+            self.s.1 as u64 * multipliers.1 as u64,
+            self.s.2 as u64 * multipliers.2 as u64,
+            self.s.3 as u64 * multipliers.3 as u64,
+            self.s.4 as u64 * multipliers.4 as u64,
+            self.s.5 as u64 * multipliers.5 as u64,
+            self.s.6 as u64 * multipliers.6 as u64,
+            self.s.7 as u64 * multipliers.7 as u64,
+            self.s.8 as u64 * multipliers.8 as u64,
+            self.s.9 as u64 * multipliers.9 as u64,
         )
     }
 }
@@ -634,19 +638,19 @@ where
     fn multiply(
         &self,
         multipliers: (u32, u32, u32, u32, u32, u32, u32, u32, u32, u32, u32),
-    ) -> (u32, u32, u32, u32, u32, u32, u32, u32, u32, u32, u32) {
+    ) -> (u64, u64, u64, u64, u64, u64, u64, u64, u64, u64, u64) {
         (
-            self.s.0 * multipliers.0,
-            self.s.1 * multipliers.1,
-            self.s.2 * multipliers.2,
-            self.s.3 * multipliers.3,
-            self.s.4 * multipliers.4,
-            self.s.5 * multipliers.5,
-            self.s.6 * multipliers.6,
-            self.s.7 * multipliers.7,
-            self.s.8 * multipliers.8,
-            self.s.9 * multipliers.9,
-            self.s.10 * multipliers.10,
+            self.s.0 as u64 * multipliers.0 as u64,
+            self.s.1 as u64 * multipliers.1 as u64,
+            self.s.2 as u64 * multipliers.2 as u64,
+            self.s.3 as u64 * multipliers.3 as u64,
+            self.s.4 as u64 * multipliers.4 as u64,
+            self.s.5 as u64 * multipliers.5 as u64,
+            self.s.6 as u64 * multipliers.6 as u64,
+            self.s.7 as u64 * multipliers.7 as u64,
+            self.s.8 as u64 * multipliers.8 as u64,
+            self.s.9 as u64 * multipliers.9 as u64,
+            self.s.10 as u64 * multipliers.10 as u64,
         )
     }
 }
@@ -735,20 +739,20 @@ where
     fn multiply(
         &self,
         multipliers: (u32, u32, u32, u32, u32, u32, u32, u32, u32, u32, u32, u32),
-    ) -> (u32, u32, u32, u32, u32, u32, u32, u32, u32, u32, u32, u32) {
+    ) -> (u64, u64, u64, u64, u64, u64, u64, u64, u64, u64, u64, u64) {
         (
-            self.s.0 * multipliers.0,
-            self.s.1 * multipliers.1,
-            self.s.2 * multipliers.2,
-            self.s.3 * multipliers.3,
-            self.s.4 * multipliers.4,
-            self.s.5 * multipliers.5,
-            self.s.6 * multipliers.6,
-            self.s.7 * multipliers.7,
-            self.s.8 * multipliers.8,
-            self.s.9 * multipliers.9,
-            self.s.10 * multipliers.10,
-            self.s.11 * multipliers.11,
+            self.s.0 as u64 * multipliers.0 as u64,
+            self.s.1 as u64 * multipliers.1 as u64,
+            self.s.2 as u64 * multipliers.2 as u64,
+            self.s.3 as u64 * multipliers.3 as u64,
+            self.s.4 as u64 * multipliers.4 as u64,
+            self.s.5 as u64 * multipliers.5 as u64,
+            self.s.6 as u64 * multipliers.6 as u64,
+            self.s.7 as u64 * multipliers.7 as u64,
+            self.s.8 as u64 * multipliers.8 as u64,
+            self.s.9 as u64 * multipliers.9 as u64,
+            self.s.10 as u64 * multipliers.10 as u64,
+            self.s.11 as u64 * multipliers.11 as u64,
         )
     }
 }
