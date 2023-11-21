@@ -93,6 +93,8 @@
 //! iteration variable. See the [README](https://github.com/jongiddy/typle#readme), and
 //! [this example](https://github.com/jongiddy/typle/blob/main/tests/expand/enum.rs) and its
 //! [expanded form](https://github.com/jongiddy/typle/blob/main/tests/expand/enum.expanded.rs).
+//!
+//! Also, see how `typle` is used in the [`hefty` crate](https://github.com/jongiddy/hefty/blob/main/src/tuple.rs).
 
 use std::collections::{HashMap, HashSet};
 
@@ -515,7 +517,6 @@ impl<'a> SpecificContext<'a> {
                                     "cannot evaluate lower bound in constant context"
                                 );
                             };
-                            dbg!(&end_expr);
                             let Some(mut end) = evaluate_usize(end_expr) else {
                                 abort!(
                                     for_loop.expr.span(),
