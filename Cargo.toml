@@ -1,11 +1,12 @@
 [package]
 name = "typle"
-version = "0.2.3"
+version = "0.2.4"
 edition = "2021"
 description = "A macro to create items for different sized tuples"
 license = "MIT"
 keywords = ["tuple"]
 repository = "https://github.com/jongiddy/typle"
+rust-version = "1.65"
 
 [lib]
 proc-macro = true

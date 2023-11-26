@@ -104,9 +104,9 @@ use quote::{format_ident, ToTokens};
 use syn::spanned::Spanned as _;
 use syn::{
     Block, Expr, ExprBlock, ExprField, ExprLit, ExprParen, ExprPath, ExprRange, ExprTuple, Fields,
-    FieldsNamed, FieldsUnnamed, GenericArgument, Item, ItemEnum, ItemImpl, ItemStruct, LitInt,
-    Macro, Pat, Path, PathArguments, PathSegment, PredicateType, QSelf, RangeLimits, Stmt, Type,
-    TypeMacro, TypeParamBound, TypeParen, TypePath, TypeTuple, Variant, WherePredicate,
+    FieldsNamed, FieldsUnnamed, GenericArgument, Item, ItemEnum, ItemImpl, ItemStruct, ItemType,
+    LitInt, Macro, Pat, Path, PathArguments, PathSegment, PredicateType, QSelf, RangeLimits, Stmt,
+    Type, TypeMacro, TypeParamBound, TypeParen, TypePath, TypeTuple, Variant, WherePredicate,
 };
 
 #[doc(hidden)]
@@ -252,7 +252,23 @@ impl IterationTrait {
             }
             Item::Trait(_) => abort!(input, "Trait unsupported"),
             Item::TraitAlias(_) => abort!(input, "TraitAlias unsupported"),
-            Item::Type(_) => abort!(input, "Type unsupported"),
+            Item::Type(item) => {
+                if self.generics_contain_trait(&item.generics) {
+                    for count in self.min..=self.max {
+                        let mut specific = SpecificContext {
+                            trait_ident: &self.ident,
+                            count,
+                            mode: SpecificMode::Tuple,
+                            constants: HashMap::new(),
+                            tuples: HashMap::new(),
+                        };
+                        let item = specific.process_type(&item);
+                        output.push(Item::Type(item));
+                    }
+                } else {
+                    output.push(Item::Type(item));
+                }
+            }
             Item::Union(_) => abort!(input, "Union unsupported"),
             Item::Use(_) => abort!(input, "Use unsupported"),
             Item::Verbatim(_) => abort!(input, "Verbatim unsupported"),
@@ -409,6 +425,30 @@ impl<'a> SpecificContext<'a> {
                     _ => {}
                 }
             }
+        }
+        item
+    }
+
+    // type TSO1<T0> where T0: Extract = (Option<T0::Output>);
+    // type TSO2<T0, T1> where T0: Extract, T1: Extract = (Option<T0::Output>, Option<T1::Output>);
+
+    // pub enum TupleSequenceState2<T0, T1>
+    // where
+    //     T0: Extract,
+    //     T1: Extract,
+    // {
+    //     S0(Option<T0::State>, TSO2<T0, T1>),
+    //     S1(Option<T1::State>, TSO2<T0, T1>),
+    // }
+
+    // #[typle(Tuple for 1..=12)]
+    // type TSO<T> where T: Extract = typle_expand!(Option<T::Output>);
+    fn process_type(&mut self, item: &ItemType) -> ItemType {
+        let mut item = item.clone();
+        self.tuples = self.process_where_clause(&mut item.generics);
+        if !self.tuples.is_empty() {
+            item.ident = format_ident!("{}{}", item.ident, self.count);
+            self.replace_type(&mut item.ty);
         }
         item
     }
