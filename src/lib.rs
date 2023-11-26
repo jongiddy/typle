@@ -429,20 +429,6 @@ impl<'a> SpecificContext<'a> {
         item
     }
 
-    // type TSO1<T0> where T0: Extract = (Option<T0::Output>);
-    // type TSO2<T0, T1> where T0: Extract, T1: Extract = (Option<T0::Output>, Option<T1::Output>);
-
-    // pub enum TupleSequenceState2<T0, T1>
-    // where
-    //     T0: Extract,
-    //     T1: Extract,
-    // {
-    //     S0(Option<T0::State>, TSO2<T0, T1>),
-    //     S1(Option<T1::State>, TSO2<T0, T1>),
-    // }
-
-    // #[typle(Tuple for 1..=12)]
-    // type TSO<T> where T: Extract = typle_expand!(Option<T::Output>);
     fn process_type(&mut self, item: &ItemType) -> ItemType {
         let mut item = item.clone();
         self.tuples = self.process_where_clause(&mut item.generics);
@@ -624,6 +610,7 @@ impl<'a> SpecificContext<'a> {
                                     label: None,
                                     block: r#if.then_branch.clone(),
                                 });
+                                self.replace_expr(expr);
                             } else {
                                 match &r#if.else_branch {
                                     Some((_, branch)) => {
@@ -934,6 +921,7 @@ impl<'a> SpecificContext<'a> {
             Fields::Unit => {}
         }
     }
+
     fn replace_item(&self, item: &mut Item) {
         match item {
             Item::Const(r#const) => {
@@ -965,6 +953,7 @@ impl<'a> SpecificContext<'a> {
             _ => todo!(),
         }
     }
+
     fn replace_macro(&self, r#macro: &mut Macro) {
         // typle_expand!(Option<T>) -> (Option<T0>, Option<T1>)
         // typle_expand!(T::default()) -> (T0::default(), T1::default())
