@@ -402,6 +402,9 @@ impl<'a> SpecificContext<'a> {
         let mut item = item.clone();
         self.tuples = self.process_where_clause(&mut item.generics);
         if !self.tuples.is_empty() {
+            if let Some((_, path, _)) = &mut item.trait_ {
+                self.replace_path_arguments(path);
+            }
             // Replace types in type
             // S<T> -> S<(T0, T1>)
             self.replace_type(&mut *item.self_ty);
@@ -863,14 +866,7 @@ impl<'a> SpecificContext<'a> {
                 }
             }
             Expr::Struct(r#struct) => {
-                self.replace_path(&mut r#struct.path, |path_segment| {
-                    match &path_segment.arguments {
-                        PathArguments::None => {}
-                        PathArguments::AngleBracketed(_) => todo!(),
-                        PathArguments::Parenthesized(_) => {}
-                    }
-                    None::<Expr>
-                });
+                self.replace_path_arguments(&mut r#struct.path);
                 for field in &mut r#struct.fields {
                     self.replace_expr(&mut field.expr);
                 }
@@ -1117,16 +1113,69 @@ impl<'a> SpecificContext<'a> {
         }
     }
 
-    fn replace_path<T, F>(&self, path: &mut Path, mut f: F) -> Option<T>
-    where
-        F: FnMut(&mut PathSegment) -> Option<T>,
-    {
-        if path.segments.len() == 1 {
-            if let Some(path_segment) = path.segments.first_mut() {
-                return (f)(path_segment);
+    fn replace_path_arguments(&self, path: &mut Path) {
+        for mut path_segment in std::mem::take(&mut path.segments) {
+            match &mut path_segment.arguments {
+                PathArguments::None => {}
+                PathArguments::AngleBracketed(args) => {
+                    let mut star = None;
+                    // std::option::Option<T> -> std::option::Option<(T0, T1,...)
+                    // std::option::Option<T<3>> -> std::option::Option<T3>
+                    // std::option::Option<(T)> -> std::option::Option2<T0, T1>
+                    // Enum::Variant<(i)> -> Enum::Variant0
+                    for arg in std::mem::take(&mut args.args) {
+                        match arg {
+                            syn::GenericArgument::Type(Type::Paren(TypeParen { elem, .. })) => {
+                                if let Type::Path(TypePath { path, .. }) = &*elem {
+                                    if let Some(ident) = path.get_ident() {
+                                        if let Some(element_names) = self.tuples.get(ident) {
+                                            star = Some(self.count);
+                                            for name in element_names {
+                                                args.args.push(syn::GenericArgument::Type(
+                                                    Type::Path(TypePath {
+                                                        qself: None,
+                                                        path: element_type_to_path(
+                                                            name,
+                                                            path.span(),
+                                                        ),
+                                                    }),
+                                                ));
+                                            }
+                                        } else if let Some(value) = self.constants.get(ident) {
+                                            star = Some(*value);
+                                        }
+                                    }
+                                }
+                            }
+                            syn::GenericArgument::Const(Expr::Paren(ExprParen {
+                                mut expr,
+                                ..
+                            })) => {
+                                self.replace_expr(&mut expr);
+                                if let Some(value) = evaluate_usize(&expr) {
+                                    star = Some(value);
+                                }
+                            }
+                            syn::GenericArgument::Type(mut generic_type) => {
+                                self.replace_type(&mut generic_type);
+                                args.args.push(syn::GenericArgument::Type(generic_type));
+                            }
+                            p => {
+                                args.args.push(p);
+                            }
+                        }
+                    }
+                    if let Some(value) = star {
+                        path_segment.ident = format_ident!("{}{}", path_segment.ident, value);
+                    }
+                    if args.args.is_empty() {
+                        path_segment.arguments = PathArguments::None;
+                    }
+                }
+                PathArguments::Parenthesized(_) => todo!(),
             }
+            path.segments.push(path_segment);
         }
-        None
     }
 
     // Replace `T`` with `(T0, T1,...)`` and `T<1>`` with `T1``
@@ -1155,165 +1204,85 @@ impl<'a> SpecificContext<'a> {
                 if let Some(qself) = &mut path.qself {
                     self.replace_type(&mut qself.ty);
                 }
-                let mut first = true;
-                for mut path_segment in std::mem::take(&mut path.path.segments) {
-                    if first {
-                        if let Some(element_type_names) = self.tuples.get(&path_segment.ident) {
-                            match &mut path_segment.arguments {
-                                PathArguments::None => {
-                                    match self.mode {
-                                        SpecificMode::Tuple => {
-                                            // T -> (T0, T1,...)
-                                            let span = path_segment.ident.span();
-                                            *ty = Type::Tuple(TypeTuple {
-                                                paren_token: syn::token::Paren::default(),
-                                                elems: element_type_names
-                                                    .iter()
-                                                    .map(|name| {
-                                                        Type::Path(TypePath {
-                                                            qself: None,
-                                                            path: element_type_to_path(name, span),
-                                                        })
-                                                    })
-                                                    .collect(),
-                                            });
-                                            return;
-                                        }
-                                        SpecificMode::Index(index) => {
-                                            // T -> T0, T::State -> T0::State
-                                            path_segment.ident = Ident::new(
-                                                &element_type_names[index],
-                                                path_segment.span(),
-                                            );
-                                        }
-                                    }
+                let first = &mut path.path.segments[0];
+                if let Some(element_type_names) = self.tuples.get(&first.ident) {
+                    match &mut first.arguments {
+                        PathArguments::None => {
+                            match self.mode {
+                                SpecificMode::Tuple => {
+                                    // T -> (T0, T1,...)
+                                    let span = first.ident.span();
+                                    *ty = Type::Tuple(TypeTuple {
+                                        paren_token: syn::token::Paren::default(),
+                                        elems: element_type_names
+                                            .iter()
+                                            .map(|name| {
+                                                Type::Path(TypePath {
+                                                    qself: None,
+                                                    path: element_type_to_path(name, span),
+                                                })
+                                            })
+                                            .collect(),
+                                    });
+                                    return;
                                 }
-                                PathArguments::AngleBracketed(args) => {
-                                    // T<3> or T<i> where i comes from constants
-                                    if args.args.len() != 1 {
-                                        abort!(path_segment, "expected one type parameter");
-                                    }
-                                    match args.args.first_mut() {
-                                        Some(syn::GenericArgument::Type(expr)) => {
-                                            match expr {
-                                                Type::Path(path) => {
-                                                    if let Some(ident) = path.path.get_ident() {
-                                                        if let Some(value) =
-                                                            self.constants.get(ident)
-                                                        {
-                                                            // T<i>
-                                                            path_segment = syn::PathSegment {
-                                                                ident: Ident::new(
-                                                                    &element_type_names[*value],
-                                                                    path_segment.ident.span(),
-                                                                ),
-                                                                arguments: PathArguments::None,
-                                                            };
-                                                        }
-                                                    }
+                                SpecificMode::Index(index) => {
+                                    // T -> T0, T::State -> T0::State
+                                    first.ident =
+                                        Ident::new(&element_type_names[index], first.span());
+                                }
+                            }
+                        }
+                        PathArguments::AngleBracketed(args) => {
+                            // T<3> or T<i> where i comes from constants
+                            if args.args.len() != 1 {
+                                abort!(first, "expected one type parameter");
+                            }
+                            match args.args.first_mut() {
+                                Some(syn::GenericArgument::Type(expr)) => {
+                                    match expr {
+                                        Type::Path(path) => {
+                                            if let Some(ident) = path.path.get_ident() {
+                                                if let Some(value) = self.constants.get(ident) {
+                                                    // T<i>
+                                                    *first = syn::PathSegment {
+                                                        ident: Ident::new(
+                                                            &element_type_names[*value],
+                                                            first.ident.span(),
+                                                        ),
+                                                        arguments: PathArguments::None,
+                                                    };
                                                 }
-                                                _ => {}
                                             }
-                                        }
-                                        Some(syn::GenericArgument::Const(expr)) => {
-                                            // T<{T::LEN - 1}>
-                                            self.replace_expr(expr);
-                                            // T<{5 - 1}>
-                                            let Some(value) = evaluate_usize(expr) else {
-                                                abort!(expr, "unsupported tuple type index");
-                                            };
-                                            path_segment = syn::PathSegment {
-                                                ident: Ident::new(
-                                                    &element_type_names[value],
-                                                    path_segment.ident.span(),
-                                                ),
-                                                arguments: PathArguments::None,
-                                            };
                                         }
                                         _ => {}
                                     }
                                 }
-                                PathArguments::Parenthesized(_) => {
-                                    // Parenthesized arguments are not supported for tuple types
-                                    abort!(
-                                        path_segment.arguments.span(),
-                                        "unexpected patenthesized args"
-                                    );
+                                Some(syn::GenericArgument::Const(expr)) => {
+                                    // T<{T::LEN - 1}>
+                                    self.replace_expr(expr);
+                                    // T<{5 - 1}>
+                                    let Some(value) = evaluate_usize(expr) else {
+                                        abort!(expr, "unsupported tuple type index");
+                                    };
+                                    *first = syn::PathSegment {
+                                        ident: Ident::new(
+                                            &element_type_names[value],
+                                            first.ident.span(),
+                                        ),
+                                        arguments: PathArguments::None,
+                                    };
                                 }
+                                _ => {}
                             }
                         }
-                    } else {
-                        first = false;
-                    }
-                    // Replace arguments
-                    match &mut path_segment.arguments {
-                        PathArguments::None => {}
-                        PathArguments::AngleBracketed(args) => {
-                            let mut star = None;
-                            // std::option::Option<T> -> std::option::Option<(T0, T1,...)
-                            // std::option::Option<T<3>> -> std::option::Option<T3>
-                            // std::option::Option<*T> -> std::option::Option2<T0, T1>
-                            // Enum::Variant<(i)> -> Enum::Variant0
-                            for arg in std::mem::take(&mut args.args) {
-                                match arg {
-                                    syn::GenericArgument::Type(Type::Paren(TypeParen {
-                                        elem,
-                                        ..
-                                    })) => {
-                                        if let Type::Path(TypePath { path, .. }) = &*elem {
-                                            if let Some(ident) = path.get_ident() {
-                                                if let Some(element_names) = self.tuples.get(ident)
-                                                {
-                                                    star = Some(self.count);
-                                                    for name in element_names {
-                                                        args.args.push(syn::GenericArgument::Type(
-                                                            Type::Path(TypePath {
-                                                                qself: None,
-                                                                path: element_type_to_path(
-                                                                    name,
-                                                                    path.span(),
-                                                                ),
-                                                            }),
-                                                        ));
-                                                    }
-                                                } else if let Some(value) =
-                                                    self.constants.get(ident)
-                                                {
-                                                    star = Some(*value);
-                                                }
-                                            }
-                                        }
-                                    }
-                                    syn::GenericArgument::Const(Expr::Paren(ExprParen {
-                                        mut expr,
-                                        ..
-                                    })) => {
-                                        self.replace_expr(&mut expr);
-                                        if let Some(value) = evaluate_usize(&expr) {
-                                            star = Some(value);
-                                        }
-                                    }
-                                    syn::GenericArgument::Type(mut generic_type) => {
-                                        self.replace_type(&mut generic_type);
-                                        args.args.push(syn::GenericArgument::Type(generic_type));
-                                    }
-                                    p => {
-                                        args.args.push(p);
-                                    }
-                                }
-                            }
-                            if let Some(value) = star {
-                                path_segment.ident =
-                                    format_ident!("{}{}", path_segment.ident, value);
-                            }
-                            if args.args.is_empty() {
-                                path_segment.arguments = PathArguments::None;
-                            }
+                        PathArguments::Parenthesized(_) => {
+                            // Parenthesized arguments are not supported for tuple types
+                            abort!(first.arguments.span(), "unexpected patenthesized args");
                         }
-                        PathArguments::Parenthesized(_) => todo!(),
                     }
-                    path.path.segments.push(path_segment);
                 }
+                self.replace_path_arguments(&mut path.path);
             }
             Type::Ptr(ptr) => {
                 self.replace_type(&mut ptr.elem);
