@@ -617,9 +617,9 @@ impl<'a> SpecificContext<'a> {
                                 });
                                 self.replace_expr(expr);
                             } else {
-                                match &r#if.else_branch {
+                                match r#if.else_branch.take() {
                                     Some((_, branch)) => {
-                                        *expr = branch.as_ref().clone();
+                                        *expr = *branch;
                                         self.replace_expr(expr);
                                     }
                                     None => {
@@ -667,7 +667,6 @@ impl<'a> SpecificContext<'a> {
                     self.replace_expr(&mut index.index);
                 }
             }
-            Expr::Infer(_) => {}
             Expr::Let(r#let) => {
                 self.replace_pat(&mut r#let.pat);
                 self.replace_expr(&mut r#let.expr);
