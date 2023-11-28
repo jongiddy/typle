@@ -201,7 +201,6 @@ impl IterationTrait {
                         let mut specific = SpecificContext {
                             trait_ident: &self.ident,
                             count,
-                            mode: SpecificMode::Tuple,
                             constants: HashMap::new(),
                             tuples: HashMap::new(),
                         };
@@ -221,7 +220,6 @@ impl IterationTrait {
                         let mut specific = SpecificContext {
                             trait_ident: &self.ident,
                             count,
-                            mode: SpecificMode::Tuple,
                             constants: HashMap::new(),
                             tuples: HashMap::new(),
                         };
@@ -241,7 +239,6 @@ impl IterationTrait {
                         let mut specific = SpecificContext {
                             trait_ident: &self.ident,
                             count,
-                            mode: SpecificMode::Tuple,
                             constants: HashMap::new(),
                             tuples: HashMap::new(),
                         };
@@ -260,7 +257,6 @@ impl IterationTrait {
                         let mut specific = SpecificContext {
                             trait_ident: &self.ident,
                             count,
-                            mode: SpecificMode::Tuple,
                             constants: HashMap::new(),
                             tuples: HashMap::new(),
                         };
@@ -305,18 +301,9 @@ impl IterationTrait {
 }
 
 #[derive(Clone)]
-enum SpecificMode {
-    // T expands to (T0, T1,...)
-    Tuple,
-    // T expands to element type, e.g T3
-    Index(usize),
-}
-
-#[derive(Clone)]
 struct SpecificContext<'a> {
     trait_ident: &'a Ident,
     count: usize,
-    mode: SpecificMode,
     constants: HashMap<Ident, usize>,
     tuples: HashMap<Ident, Vec<String>>,
 }
@@ -333,10 +320,10 @@ impl<'a> SpecificContext<'a> {
                         if let Some(ident) = r#macro.mac.path.get_ident() {
                             if ident == "typle_variants" {
                                 for index in 0..self.count {
-                                    let context = SpecificContext {
-                                        mode: SpecificMode::Index(index),
-                                        ..self.clone()
-                                    };
+                                    let mut context = self.clone();
+                                    context
+                                        .constants
+                                        .insert(Ident::new("INDEX", ident.span()), index);
                                     let mut fields = variant.fields.clone();
                                     match &mut fields {
                                         Fields::Named(FieldsNamed { named: fields, .. })
@@ -723,24 +710,6 @@ impl<'a> SpecificContext<'a> {
                                 });
                                 return;
                             }
-                            Some(second) if second.ident == "INDEX" => {
-                                // T::INDEX
-                                match self.mode {
-                                    SpecificMode::Tuple => {
-                                        abort!(second, "INDEX not valid in this context");
-                                    }
-                                    SpecificMode::Index(index) => {
-                                        *expr = Expr::Lit(ExprLit {
-                                            attrs: std::mem::take(&mut path.attrs),
-                                            lit: syn::Lit::Int(LitInt::new(
-                                                &index.to_string(),
-                                                path.span(),
-                                            )),
-                                        });
-                                        return;
-                                    }
-                                }
-                            }
                             Some(second) => {
                                 // T::clone(&t) -> <(T0, T1)>::clone(&t)
                                 // todo: T::<0>::default() -> T0::default()
@@ -774,34 +743,23 @@ impl<'a> SpecificContext<'a> {
                                 };
                             }
                             None => {
-                                match self.mode {
-                                    SpecificMode::Tuple => {
-                                        // T -> (T0, T1,...)
-                                        let span = path.span();
-                                        *expr = Expr::Tuple(ExprTuple {
-                                            attrs: Vec::new(),
-                                            paren_token: syn::token::Paren::default(),
-                                            elems: element_type_idents
-                                                .iter()
-                                                .map(|name| {
-                                                    Expr::Path(ExprPath {
-                                                        attrs: Vec::new(),
-                                                        qself: None,
-                                                        path: element_type_to_path(name, span),
-                                                    })
-                                                })
-                                                .collect(),
-                                        });
-                                        return;
-                                    }
-                                    SpecificMode::Index(index) => {
-                                        // T -> T0
-                                        path.path = element_type_to_path(
-                                            &element_type_idents[index],
-                                            first.span(),
-                                        );
-                                    }
-                                }
+                                // T -> (T0, T1,...)
+                                let span = path.span();
+                                *expr = Expr::Tuple(ExprTuple {
+                                    attrs: Vec::new(),
+                                    paren_token: syn::token::Paren::default(),
+                                    elems: element_type_idents
+                                        .iter()
+                                        .map(|name| {
+                                            Expr::Path(ExprPath {
+                                                attrs: Vec::new(),
+                                                qself: None,
+                                                path: element_type_to_path(name, span),
+                                            })
+                                        })
+                                        .collect(),
+                                });
+                                return;
                             }
                         }
                     } else if let Some(value) = self.constants.get(&first.ident) {
@@ -980,10 +938,10 @@ impl<'a> SpecificContext<'a> {
                         attrs: Vec::new(),
                     };
                     for index in 0..self.count {
-                        let context = SpecificContext {
-                            mode: SpecificMode::Index(index),
-                            ..self.clone()
-                        };
+                        let mut context = self.clone();
+                        context
+                            .constants
+                            .insert(Ident::new("INDEX", default_span), index);
                         let mut element = expr.clone();
                         context.replace_expr(&mut element);
                         tuple.elems.push(element);
@@ -997,10 +955,10 @@ impl<'a> SpecificContext<'a> {
                         elems: syn::punctuated::Punctuated::new(),
                     };
                     for index in 0..self.count {
-                        let context = SpecificContext {
-                            mode: SpecificMode::Index(index),
-                            ..self.clone()
-                        };
+                        let mut context = self.clone();
+                        context
+                            .constants
+                            .insert(Ident::new("INDEX", default_span), index);
                         let mut element = r#type.clone();
                         context.replace_type(&mut element);
                         tuple.elems.push(element);
@@ -1209,30 +1167,21 @@ impl<'a> SpecificContext<'a> {
                 if let Some(element_type_names) = self.tuples.get(&first.ident) {
                     match &mut first.arguments {
                         PathArguments::None => {
-                            match self.mode {
-                                SpecificMode::Tuple => {
-                                    // T -> (T0, T1,...)
-                                    let span = first.ident.span();
-                                    *ty = Type::Tuple(TypeTuple {
-                                        paren_token: syn::token::Paren::default(),
-                                        elems: element_type_names
-                                            .iter()
-                                            .map(|name| {
-                                                Type::Path(TypePath {
-                                                    qself: None,
-                                                    path: element_type_to_path(name, span),
-                                                })
-                                            })
-                                            .collect(),
-                                    });
-                                    return;
-                                }
-                                SpecificMode::Index(index) => {
-                                    // T -> T0, T::State -> T0::State
-                                    first.ident =
-                                        Ident::new(&element_type_names[index], first.span());
-                                }
-                            }
+                            // T -> (T0, T1,...)
+                            let span = first.ident.span();
+                            *ty = Type::Tuple(TypeTuple {
+                                paren_token: syn::token::Paren::default(),
+                                elems: element_type_names
+                                    .iter()
+                                    .map(|name| {
+                                        Type::Path(TypePath {
+                                            qself: None,
+                                            path: element_type_to_path(name, span),
+                                        })
+                                    })
+                                    .collect(),
+                            });
+                            return;
                         }
                         PathArguments::AngleBracketed(args) => {
                             // T<3> or T<i> where i comes from constants

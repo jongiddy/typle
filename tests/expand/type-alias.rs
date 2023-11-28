@@ -8,4 +8,4 @@ trait Process {
 }
 
 #[typle(Tuple for 0..=3)]
-type Alias<T> where T: Tuple<impl Process> = typle_expand!(Option<T::Output>);
+type Alias<T> where T: Tuple<impl Process> = typle_expand!(Option<T<INDEX>::Output>);

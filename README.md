@@ -29,7 +29,7 @@ where
     }
 
     fn multiply(&self, multipliers: S) -> typle_expand!(u64) {
-        typle_expand!(self.s[[S::INDEX]] as u64 * multipliers[[S::INDEX]] as u64)
+        typle_expand!(self.s[[INDEX]] as u64 * multipliers[[INDEX]] as u64)
     }
 }
 
