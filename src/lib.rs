@@ -149,37 +149,39 @@ struct IterationTrait {
 fn parse_args(args: TokenStream) -> IterationTrait {
     // #[typle(Tuple for 2..=12)]
     let mut args_iter = args.into_iter();
+    // Tuple
     let Some(TokenTree::Ident(trait_ident)) = args_iter.next() else {
-        abort_call_site!("expected an ident");
+        abort_call_site!("expected identifier");
     };
+    // for
     match args_iter.next() {
         Some(TokenTree::Ident(for_ident)) if for_ident == "for" => {}
         _ => {
-            abort_call_site!("expected 'for'");
+            abort_call_site!("expected for keyword");
         }
     }
+    // 2..=12
     let rest = args_iter.collect();
-    let range = syn::parse2::<ExprRange>(rest).expect("expect range");
+    let range = syn::parse2::<ExprRange>(rest).unwrap_or_else(|e| abort_call_site!("{}", e));
     let min = range
         .start
         .as_ref()
-        .map(|expr| evaluate_usize(&expr).unwrap_or_else(|| abort!(expr, "invalid start")))
-        .unwrap_or_else(|| abort!(range, "range cannot be unbounded at start"));
+        .map(|expr| evaluate_usize(&expr).unwrap_or_else(|| abort!(expr, "range start invalid")))
+        .unwrap_or_else(|| abort!(range, "range start must be bounded"));
     let end = range
         .end
         .as_ref()
-        .unwrap_or_else(|| abort!(range, "range cannot be unbounded at end"));
+        .unwrap_or_else(|| abort!(range, "range end must be bounded"));
     let max = match range.limits {
         syn::RangeLimits::HalfOpen(_) => evaluate_usize(&end)
-            .unwrap_or_else(|| abort!(end, "invalid end"))
-            .checked_sub(1)
-            .unwrap_or_else(|| abort!(end, "invalid end")),
+            .and_then(|max| max.checked_sub(1))
+            .unwrap_or_else(|| abort!(end, "range end invalid")),
         syn::RangeLimits::Closed(_) => {
-            evaluate_usize(&end).unwrap_or_else(|| abort!(end, "invalid end"))
+            evaluate_usize(&end).unwrap_or_else(|| abort!(end, "range end invalid"))
         }
     };
     if max < min {
-        abort!(range, "nothing to expand");
+        abort!(range, "range contains no values");
     }
     IterationTrait {
         ident: trait_ident,
@@ -527,18 +529,18 @@ impl<'a> SpecificContext<'a> {
                             let span = pat_macro.mac.tokens.span();
                             let mut tokens = std::mem::take(&mut pat_macro.mac.tokens).into_iter();
                             let Some(TokenTree::Ident(pat_ident)) = tokens.next() else {
-                                abort!(span, "unexpected token in typle_const");
+                                abort!(span, "expected identifier in typle_const macro");
                             };
                             if let Some(tt) = tokens.next() {
-                                abort!(tt.span(), "unexpected token in typle_const");
+                                abort!(tt, "unexpected token in typle_const");
                             };
                             let Expr::Range(expr_range) = &*for_loop.expr else {
-                                abort!(for_loop.expr.span(), "expected range");
+                                abort!(for_loop.expr, "expected range");
                             };
                             let (Some(start_expr), Some(end_expr)) =
                                 (&expr_range.start, &expr_range.end)
                             else {
-                                abort!(for_loop.expr.span(), "expected explicit bounds");
+                                abort!(for_loop.expr, "expected bounded range");
                             };
                             let Some(start) = evaluate_usize(start_expr) else {
                                 abort!(
@@ -556,7 +558,7 @@ impl<'a> SpecificContext<'a> {
                                 end += 1;
                             }
                             if start > end || end > self.count {
-                                abort!(for_loop.expr.span(), "expected sub-range of tuple size");
+                                abort!(for_loop.expr, "expected sub-range of tuple size");
                             }
                             let mut context = self.clone();
                             let mut stmts = Vec::new();
@@ -726,7 +728,7 @@ impl<'a> SpecificContext<'a> {
                                 // T::INDEX
                                 match self.mode {
                                     SpecificMode::Tuple => {
-                                        abort!(second.span(), "INDEX not valid in this context");
+                                        abort!(second, "INDEX not valid in this context");
                                     }
                                     SpecificMode::Index(index) => {
                                         *expr = Expr::Lit(ExprLit {
@@ -1014,12 +1016,12 @@ impl<'a> SpecificContext<'a> {
 
     fn replace_pat(&self, pat: &mut Pat) {
         match pat {
-            Pat::Const(_) => abort!(pat.span(), "Const unsupported"),
+            Pat::Const(_) => abort!(pat, "Const unsupported"),
             Pat::Ident(_) => {}
-            Pat::Lit(_) => abort!(pat.span(), "Lit unsupported"),
-            Pat::Macro(_) => abort!(pat.span(), "Macro unsupported"),
-            Pat::Or(_) => abort!(pat.span(), "Or unsupported"),
-            Pat::Paren(_) => abort!(pat.span(), "Paren unsupported"),
+            Pat::Lit(_) => abort!(pat, "Lit unsupported"),
+            Pat::Macro(_) => abort!(pat, "Macro unsupported"),
+            Pat::Or(_) => abort!(pat, "Or unsupported"),
+            Pat::Paren(_) => abort!(pat, "Paren unsupported"),
             Pat::Path(path) => {
                 // State::S::<typle_index!(i)> -> State::S2
                 if let Some(qself) = &mut path.qself {
@@ -1059,11 +1061,11 @@ impl<'a> SpecificContext<'a> {
                     path.path.segments.push(path_segment)
                 }
             }
-            Pat::Range(_) => abort!(pat.span(), "Range unsupported"),
-            Pat::Reference(_) => abort!(pat.span(), "Reference unsupported"),
-            Pat::Rest(_) => abort!(pat.span(), "Rest unsupported"),
-            Pat::Slice(_) => abort!(pat.span(), "Slice unsupported"),
-            Pat::Struct(_) => abort!(pat.span(), "Struct unsupported"),
+            Pat::Range(_) => abort!(pat, "Range unsupported"),
+            Pat::Reference(_) => abort!(pat, "Reference unsupported"),
+            Pat::Rest(_) => abort!(pat, "Rest unsupported"),
+            Pat::Slice(_) => abort!(pat, "Slice unsupported"),
+            Pat::Struct(_) => abort!(pat, "Struct unsupported"),
             Pat::Tuple(_) => {}
             Pat::TupleStruct(tuple_struct) => {
                 // State::S::<typle_index!(i)> -> State::S2
@@ -1107,8 +1109,8 @@ impl<'a> SpecificContext<'a> {
             Pat::Type(pat_type) => {
                 self.replace_type(&mut pat_type.ty);
             }
-            Pat::Verbatim(_) => abort!(pat.span(), "Verbatim unsupported"),
-            Pat::Wild(_) => abort!(pat.span(), "Wild unsupported"),
+            Pat::Verbatim(_) => abort!(pat, "Verbatim unsupported"),
+            Pat::Wild(_) => abort!(pat, "Wild unsupported"),
             _ => {}
         }
     }
