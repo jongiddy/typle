@@ -103,10 +103,11 @@ use proc_macro_error::{abort, abort_call_site, proc_macro_error};
 use quote::{format_ident, ToTokens};
 use syn::spanned::Spanned as _;
 use syn::{
-    Block, Expr, ExprBlock, ExprField, ExprLit, ExprParen, ExprPath, ExprRange, ExprTuple, Fields,
-    FieldsNamed, FieldsUnnamed, GenericArgument, Item, ItemEnum, ItemImpl, ItemStruct, ItemType,
-    LitInt, Macro, Pat, Path, PathArguments, PathSegment, PredicateType, QSelf, RangeLimits, Stmt,
-    Type, TypeMacro, TypeParamBound, TypeParen, TypePath, TypeTuple, Variant, WherePredicate,
+    Block, Expr, ExprArray, ExprBlock, ExprField, ExprLit, ExprParen, ExprPath, ExprRange,
+    ExprTuple, Fields, FieldsNamed, FieldsUnnamed, GenericArgument, Item, ItemEnum, ItemImpl,
+    ItemStruct, ItemType, LitInt, Macro, Pat, Path, PathArguments, PathSegment, PredicateType,
+    QSelf, RangeLimits, Stmt, Type, TypeMacro, TypeParamBound, TypeParen, TypePath, TypeTuple,
+    Variant, WherePredicate,
 };
 
 #[doc(hidden)]
@@ -932,11 +933,7 @@ impl<'a> SpecificContext<'a> {
                 };
                 let tokens = std::mem::take(&mut r#macro.tokens);
                 if let Ok(expr) = syn::parse2::<Expr>(tokens.clone()) {
-                    let mut tuple = ExprTuple {
-                        paren_token: syn::token::Paren::default(),
-                        elems: syn::punctuated::Punctuated::new(),
-                        attrs: Vec::new(),
-                    };
+                    let mut elems = syn::punctuated::Punctuated::new();
                     for index in 0..self.count {
                         let mut context = self.clone();
                         context
@@ -944,9 +941,29 @@ impl<'a> SpecificContext<'a> {
                             .insert(Ident::new("INDEX", default_span), index);
                         let mut element = expr.clone();
                         context.replace_expr(&mut element);
-                        tuple.elems.push(element);
+                        elems.push(element);
                     }
-                    r#macro.tokens = tuple.into_token_stream();
+                    r#macro.tokens = match r#macro.delimiter {
+                        syn::MacroDelimiter::Paren(_) => {
+                            let tuple = ExprTuple {
+                                paren_token: syn::token::Paren::default(),
+                                elems,
+                                attrs: Vec::new(),
+                            };
+                            tuple.into_token_stream()
+                        }
+                        syn::MacroDelimiter::Brace(_) => {
+                            abort!(default_span, "expected parentheses or brackets");
+                        }
+                        syn::MacroDelimiter::Bracket(_) => {
+                            let array = ExprArray {
+                                attrs: Vec::new(),
+                                bracket_token: syn::token::Bracket::default(),
+                                elems,
+                            };
+                            array.into_token_stream()
+                        }
+                    };
                     return;
                 }
                 if let Ok(r#type) = syn::parse2::<Type>(tokens) {
