@@ -14,7 +14,7 @@ where
 {
     // `typle_variants!`` creates a variant for each element-type. The variant will have a number
     // added to the variant name here. `S2(Option<T2::State>, [u64; 2])`
-    S(Option<T<INDEX>::State>, [u64; INDEX]) = typle_variants!(),
+    S(Option<T<{INDEX}>::State>, [u64; INDEX]) = typle_variants!(),
     Done([u64; T::LEN])
 }
 

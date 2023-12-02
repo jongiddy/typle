@@ -696,71 +696,107 @@ impl<'a> SpecificContext<'a> {
                     // <T as Default>::default()
                     self.replace_type(&mut qself.ty);
                 }
-                let mut iter = path.path.segments.iter();
-                if let Some(first) = iter.next() {
+                let mut segments = std::mem::take(&mut path.path.segments)
+                    .into_iter()
+                    .peekable();
+                if let Some(first) = segments.peek() {
                     if let Some(element_type_idents) = self.tuples.get(&first.ident) {
-                        match iter.next() {
-                            Some(second) if second.ident == "LEN" => {
-                                // T::LEN
-                                *expr = Expr::Lit(ExprLit {
-                                    attrs: std::mem::take(&mut path.attrs),
-                                    lit: syn::Lit::Int(LitInt::new(
-                                        &element_type_idents.len().to_string(),
-                                        path.span(),
-                                    )),
-                                });
-                                return;
-                            }
-                            Some(second) => {
-                                // T::clone(&t) -> <(T0, T1)>::clone(&t)
-                                // todo: T::<0>::default() -> T0::default()
-                                let tuple_type = Box::new(Type::Tuple(TypeTuple {
-                                    paren_token: syn::token::Paren::default(),
-                                    elems: element_type_idents
-                                        .iter()
-                                        .map(|name| {
-                                            Type::Path(TypePath {
-                                                qself: None,
-                                                path: element_type_to_path(name, path.span()),
-                                            })
-                                        })
-                                        .collect(),
-                                }));
-                                path.qself = Some(QSelf {
-                                    lt_token: syn::token::Lt::default(),
-                                    ty: tuple_type,
-                                    position: 0,
-                                    as_token: None,
-                                    gt_token: syn::token::Gt::default(),
-                                });
-                                let mut segments = syn::punctuated::Punctuated::new();
-                                segments.push(second.clone());
-                                for segment in iter {
-                                    segments.push(segment.clone());
+                        let mut first = segments.next().unwrap();
+                        match &mut first.arguments {
+                            PathArguments::None => {
+                                match segments.peek() {
+                                    Some(second) => {
+                                        if second.ident == "LEN" {
+                                            // T::LEN
+                                            *expr = Expr::Lit(ExprLit {
+                                                attrs: std::mem::take(&mut path.attrs),
+                                                lit: syn::Lit::Int(LitInt::new(
+                                                    &element_type_idents.len().to_string(),
+                                                    path.span(),
+                                                )),
+                                            });
+                                            return;
+                                        }
+                                        // T::clone(&t) -> <(T0, T1)>::clone(&t)
+                                        let tuple_type = Box::new(Type::Tuple(TypeTuple {
+                                            paren_token: syn::token::Paren::default(),
+                                            elems: element_type_idents
+                                                .iter()
+                                                .map(|name| {
+                                                    Type::Path(TypePath {
+                                                        qself: None,
+                                                        path: element_type_to_path(
+                                                            name,
+                                                            path.span(),
+                                                        ),
+                                                    })
+                                                })
+                                                .collect(),
+                                        }));
+                                        path.qself = Some(QSelf {
+                                            lt_token: syn::token::Lt::default(),
+                                            ty: tuple_type,
+                                            position: 0,
+                                            as_token: None,
+                                            gt_token: syn::token::Gt::default(),
+                                        });
+                                        path.path.leading_colon =
+                                            Some(syn::token::PathSep::default());
+                                    }
+                                    None => {
+                                        // T -> (T0, T1,...)
+                                        let span = path.span();
+                                        *expr = Expr::Tuple(ExprTuple {
+                                            attrs: Vec::new(),
+                                            paren_token: syn::token::Paren::default(),
+                                            elems: element_type_idents
+                                                .iter()
+                                                .map(|name| {
+                                                    Expr::Path(ExprPath {
+                                                        attrs: Vec::new(),
+                                                        qself: None,
+                                                        path: element_type_to_path(name, span),
+                                                    })
+                                                })
+                                                .collect(),
+                                        });
+                                        return;
+                                    }
                                 }
-                                path.path = Path {
-                                    leading_colon: Some(syn::token::PathSep::default()),
-                                    segments,
-                                };
                             }
-                            None => {
-                                // T -> (T0, T1,...)
-                                let span = path.span();
-                                *expr = Expr::Tuple(ExprTuple {
-                                    attrs: Vec::new(),
-                                    paren_token: syn::token::Paren::default(),
-                                    elems: element_type_idents
-                                        .iter()
-                                        .map(|name| {
-                                            Expr::Path(ExprPath {
-                                                attrs: Vec::new(),
-                                                qself: None,
-                                                path: element_type_to_path(name, span),
-                                            })
-                                        })
-                                        .collect(),
-                                });
-                                return;
+                            PathArguments::AngleBracketed(args) => {
+                                // T::<0>::default() -> T0::default()
+                                if args.args.len() != 1 {
+                                    abort!(first, "expected one type parameter");
+                                }
+                                match args.args.first_mut() {
+                                    Some(syn::GenericArgument::Const(expr)) => {
+                                        // T<{T::LEN - 1}>
+                                        self.replace_expr(expr);
+                                        // T<{5 - 1}>
+                                        let Some(value) = evaluate_usize(expr) else {
+                                            abort!(expr, "unsupported tuple type index");
+                                        };
+                                        // T<{4}>
+                                        let segment = syn::PathSegment {
+                                            ident: Ident::new(
+                                                &element_type_idents[value],
+                                                first.ident.span(),
+                                            ),
+                                            arguments: PathArguments::None,
+                                        };
+                                        path.path.segments.push(segment);
+                                    }
+                                    _ => {
+                                        abort!(
+                                            args,
+                                            "Require const parameter (wrap {} around expression)"
+                                        )
+                                    }
+                                }
+                            }
+                            PathArguments::Parenthesized(_) => {
+                                path.path.segments.push(first);
                             }
                         }
                     } else if let Some(value) = self.constants.get(&first.ident) {
@@ -770,7 +806,7 @@ impl<'a> SpecificContext<'a> {
                         });
                         return;
                     }
-                    for mut path_segment in std::mem::take(&mut path.path.segments) {
+                    for mut path_segment in segments {
                         match &mut path_segment.arguments {
                             PathArguments::None => {}
                             PathArguments::AngleBracketed(args) => {
@@ -1206,25 +1242,6 @@ impl<'a> SpecificContext<'a> {
                                 abort!(first, "expected one type parameter");
                             }
                             match args.args.first_mut() {
-                                Some(syn::GenericArgument::Type(expr)) => {
-                                    match expr {
-                                        Type::Path(path) => {
-                                            if let Some(ident) = path.path.get_ident() {
-                                                if let Some(value) = self.constants.get(ident) {
-                                                    // T<i>
-                                                    *first = syn::PathSegment {
-                                                        ident: Ident::new(
-                                                            &element_type_names[*value],
-                                                            first.ident.span(),
-                                                        ),
-                                                        arguments: PathArguments::None,
-                                                    };
-                                                }
-                                            }
-                                        }
-                                        _ => {}
-                                    }
-                                }
                                 Some(syn::GenericArgument::Const(expr)) => {
                                     // T<{T::LEN - 1}>
                                     self.replace_expr(expr);
@@ -1240,7 +1257,12 @@ impl<'a> SpecificContext<'a> {
                                         arguments: PathArguments::None,
                                     };
                                 }
-                                _ => {}
+                                _ => {
+                                    abort!(
+                                        args,
+                                        "Require const parameter (wrap {} around expression)"
+                                    )
+                                }
                             }
                         }
                         PathArguments::Parenthesized(_) => {
