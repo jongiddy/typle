@@ -4,7 +4,7 @@ use typle::typle;
 type TupleSequenceOutput<T>
 where
     T: Tuple<impl Extract>,
-= typle_expand!(Option<T<{INDEX}>::Output>);
+= typle_for!(i in .. => Option<T<{i}>::Output>);
 
 #[typle(Tuple for 1..=2)]
 struct SeqIntoIter<T>

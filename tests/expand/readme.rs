@@ -23,8 +23,8 @@ where
         sum
     }
 
-    fn multiply(&self, multipliers: S) -> typle_expand!(u64) {
-        typle_expand!(self.s[[INDEX]] as u64 * multipliers[[INDEX]] as u64)
+    fn multiply(&self, multipliers: S) -> typle_for!(.. => u64) {
+        typle_for!(i in .. => self.s[[i]] as u64 * multipliers[[i]] as u64)
     }
 }
 

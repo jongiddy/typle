@@ -5,6 +5,8 @@ A Rust macro to create items for different sized tuples.
 The code below generates implementations for tuples up to 12 elements.
 
 ```rust
+use typle::typle;
+
 struct MyStruct<S, T> {
     s: S,
     t: Option<T>,
@@ -28,8 +30,8 @@ where
         sum
     }
 
-    fn multiply(&self, multipliers: S) -> typle_expand!(u64) {
-        typle_expand!(self.s[[INDEX]] as u64 * multipliers[[INDEX]] as u64)
+    fn multiply(&self, multipliers: S) -> typle_for!(.. => u64) {
+        typle_for!(i in .. => self.s[[i]] as u64 * multipliers[[i]] as u64)
     }
 }
 

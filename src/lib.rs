@@ -87,7 +87,7 @@
 //! index created using `typle_const!`. Hence `self.t[[i]]` will be replaced by
 //! `self.t.0, self.t.1,...`.
 //!
-//! Other features include using `T<i>` to name element types, a `typle_expand!` macro to perform
+//! Other features include using `T<i>` to name element types, a `typle_for!` macro to perform
 //! element-by-element operations, support for enums with a `typle_variants!()` macro, and
 //! constant-if for conditional compilation based on constant values including a `typle_const!`
 //! iteration variable. See the [README](https://github.com/jongiddy/typle#readme), and
@@ -97,6 +97,7 @@
 //! Also, see how `typle` is used in the [`hefty` crate](https://github.com/jongiddy/hefty/blob/main/src/tuple.rs).
 
 use std::collections::{HashMap, HashSet};
+use std::ops::Range;
 
 use proc_macro2::{Ident, Span, TokenStream, TokenTree};
 use proc_macro_error::{abort, abort_call_site, proc_macro_error};
@@ -947,14 +948,18 @@ impl<'a> SpecificContext<'a> {
     }
 
     fn replace_macro(&self, r#macro: &mut Macro) {
-        // typle_expand!(Option<T>) -> (Option<T0>, Option<T1>)
-        // typle_expand!(T::default()) -> (T0::default(), T1::default())
+        // typle_for!(i in .. => Option<T<{i}>) -> (Option<T0>, Option<T1>)
+        // typle_for!(i in .. => T::<{i}>::default()) -> (T0::default(), T1::default())
         // as opposed to
         // Option<T> -> Option<(T0, T1)>
         // T::default() -> <(T0, T1)>::default()
-        // typle_expand!((T, T::<0>)) -> ((T0, T0), (T1, T0))
+        // typle_for!(i in .. => t[[i]]) -> (t.0, t.1)
+        // typle_for![i in .. => t[[i]]] -> [t.0, t.1]
+        // typle_for!{i in .. => let x = t[[i]]} -> let x = t.0; let x = t.1
+        // typle_for!(i in .. => (T::<{i}>, T::<0>)) -> ((T0, T0), (T1, T0))
+        // typle_for!(0..2 => None) // (None, None)
         if let Some(macro_name) = r#macro.path.get_ident() {
-            if macro_name == "typle_expand" {
+            if macro_name == "typle_for" {
                 let default_span = macro_name.span();
                 r#macro.path = Path {
                     leading_colon: None,
@@ -967,14 +972,17 @@ impl<'a> SpecificContext<'a> {
                         })
                         .collect(),
                 };
-                let tokens = std::mem::take(&mut r#macro.tokens);
-                if let Ok(expr) = syn::parse2::<Expr>(tokens.clone()) {
+                let mut token_stream = std::mem::take(&mut r#macro.tokens);
+                let (pattern, range) = self.parse_pattern_range(&mut token_stream);
+                if let Ok(expr) = syn::parse2::<Expr>(token_stream.clone()) {
                     let mut elems = syn::punctuated::Punctuated::new();
-                    for index in 0..self.count {
+                    for index in range {
                         let mut context = self.clone();
-                        context
-                            .constants
-                            .insert(Ident::new("INDEX", default_span), index);
+                        if let Some(ident) = pattern.clone() {
+                            if ident != "_" {
+                                context.constants.insert(ident, index);
+                            }
+                        }
                         let mut element = expr.clone();
                         context.replace_expr(&mut element);
                         elems.push(element);
@@ -1002,16 +1010,18 @@ impl<'a> SpecificContext<'a> {
                     };
                     return;
                 }
-                if let Ok(r#type) = syn::parse2::<Type>(tokens) {
+                if let Ok(r#type) = syn::parse2::<Type>(token_stream) {
                     let mut tuple = TypeTuple {
                         paren_token: syn::token::Paren::default(),
                         elems: syn::punctuated::Punctuated::new(),
                     };
-                    for index in 0..self.count {
+                    for index in range {
                         let mut context = self.clone();
-                        context
-                            .constants
-                            .insert(Ident::new("INDEX", default_span), index);
+                        if let Some(ident) = pattern.clone() {
+                            if ident != "_" {
+                                context.constants.insert(ident, index);
+                            }
+                        }
                         let mut element = r#type.clone();
                         context.replace_type(&mut element);
                         tuple.elems.push(element);
@@ -1022,6 +1032,98 @@ impl<'a> SpecificContext<'a> {
                 abort!(default_span, "expected type or expression");
             }
         }
+    }
+
+    fn parse_pattern_range(&self, token_stream: &mut TokenStream) -> (Option<Ident>, Range<usize>) {
+        let default_span = token_stream.span();
+        let mut tokens = std::mem::take(token_stream).into_iter();
+        let mut collect = Vec::new();
+        let mut pattern = None;
+        let mut startend = None;
+        let mut equals = None;
+        while let Some(token) = tokens.next() {
+            match token {
+                TokenTree::Ident(ident) if pattern.is_none() && ident == "in" => {
+                    if let Some(punct) = equals.take() {
+                        collect.push(TokenTree::Punct(punct))
+                    }
+                    let mut tokens = std::mem::take(&mut collect).into_iter();
+                    match tokens.next() {
+                        Some(TokenTree::Ident(ident)) => {
+                            pattern = Some(ident);
+                            if let Some(tt) = tokens.next() {
+                                abort!(tt, "unexpected token")
+                            }
+                        }
+                        Some(tt) => abort!(tt, "expected identifier before keyword `in`"),
+                        None => abort!(ident, "expected identifier before keyword `in`"),
+                    }
+                }
+                TokenTree::Punct(punct) if punct.as_char() == '=' => {
+                    equals = Some(punct);
+                }
+                TokenTree::Punct(punct) if equals.is_some() && punct.as_char() == '>' => {
+                    match syn::parse2::<Expr>(TokenStream::from_iter(collect)) {
+                        Ok(mut expr) => {
+                            self.replace_expr(&mut expr);
+                            if let Expr::Range(range) = expr {
+                                let start = range
+                                    .start
+                                    .as_ref()
+                                    .map(|expr| {
+                                        evaluate_usize(&expr)
+                                            .unwrap_or_else(|| abort!(expr, "range start invalid"))
+                                    })
+                                    .unwrap_or(0);
+                                let end = range
+                                    .end
+                                    .as_ref()
+                                    .map(|expr| {
+                                        evaluate_usize(expr).unwrap_or_else(|| {
+                                            abort!(range.end, "range end invalid")
+                                        })
+                                    })
+                                    .unwrap_or(self.count)
+                                    .checked_add(match range.limits {
+                                        RangeLimits::HalfOpen(_) => 0,
+                                        RangeLimits::Closed(_) => 1,
+                                    })
+                                    .unwrap_or_else(|| {
+                                        abort!(
+                                            range,
+                                            "for length {} range contains no values",
+                                            self.count
+                                        )
+                                    });
+                                if end < start {
+                                    abort!(
+                                        range,
+                                        "for length {} range contains no values",
+                                        self.count
+                                    );
+                                }
+                                startend = Some(start..end);
+                                break;
+                            } else {
+                                abort!(expr, "expected range");
+                            }
+                        }
+                        Err(e) => abort!(default_span, "not an expression: {}", e),
+                    }
+                }
+                tt => {
+                    if let Some(punct) = equals.take() {
+                        collect.push(TokenTree::Punct(punct))
+                    }
+                    collect.push(tt);
+                }
+            }
+        }
+        let Some(range) = startend else {
+            abort!(default_span, "expected `=>`");
+        };
+        *token_stream = TokenStream::from_iter(tokens);
+        (pattern, range)
     }
 
     fn replace_pat(&self, pat: &mut Pat) {
@@ -1575,6 +1677,13 @@ fn evaluate_usize(expr: &Expr) -> Option<usize> {
                 if let Some(left) = evaluate_usize(&binary.left) {
                     if let Some(right) = evaluate_usize(&binary.right) {
                         return left.checked_sub(right);
+                    }
+                }
+            }
+            syn::BinOp::Mul(_) => {
+                if let Some(left) = evaluate_usize(&binary.left) {
+                    if let Some(right) = evaluate_usize(&binary.right) {
+                        return left.checked_mul(right);
                     }
                 }
             }
