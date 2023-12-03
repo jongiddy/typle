@@ -88,7 +88,7 @@
 //! `self.t.0, self.t.1,...`.
 //!
 //! Other features include using `T<i>` to name element types, a `typle_for!` macro to perform
-//! element-by-element operations, support for enums with a `typle_variants!()` macro, and
+//! element-by-element operations, support for enums with a `typle_variant!()` macro, and
 //! constant-if for conditional compilation based on constant values including a `typle_const!`
 //! iteration variable. See the [README](https://github.com/jongiddy/typle#readme), and
 //! [this example](https://github.com/jongiddy/typle/blob/main/tests/expand/enum.rs) and its
@@ -99,12 +99,12 @@
 use std::collections::{HashMap, HashSet};
 use std::ops::Range;
 
-use proc_macro2::{Ident, Span, TokenStream, TokenTree};
+use proc_macro2::{Group, Ident, Span, TokenStream, TokenTree};
 use proc_macro_error::{abort, abort_call_site, proc_macro_error};
 use quote::{format_ident, ToTokens};
 use syn::spanned::Spanned as _;
 use syn::{
-    Block, Expr, ExprArray, ExprBlock, ExprField, ExprLit, ExprParen, ExprPath, ExprRange,
+    parse2, Block, Expr, ExprArray, ExprBlock, ExprField, ExprLit, ExprParen, ExprPath, ExprRange,
     ExprTuple, Fields, FieldsNamed, FieldsUnnamed, GenericArgument, Item, ItemEnum, ItemImpl,
     ItemStruct, ItemType, LitInt, Macro, Pat, Path, PathArguments, PathSegment, PredicateType,
     QSelf, RangeLimits, Stmt, Type, TypeMacro, TypeParamBound, TypeParen, TypePath, TypeTuple,
@@ -317,39 +317,80 @@ impl<'a> SpecificContext<'a> {
         if !self.tuples.is_empty() {
             item.ident = format_ident!("{}{}", item.ident, self.count);
             for mut variant in std::mem::take(&mut item.variants) {
-                if let Some((_, discriminant)) = &mut variant.discriminant {
-                    if let Expr::Macro(r#macro) = discriminant {
-                        if let Some(ident) = r#macro.mac.path.get_ident() {
-                            if ident == "typle_variants" {
-                                for index in 0..self.count {
-                                    let mut context = self.clone();
-                                    context
-                                        .constants
-                                        .insert(Ident::new("INDEX", ident.span()), index);
-                                    let mut fields = variant.fields.clone();
-                                    match &mut fields {
-                                        Fields::Named(FieldsNamed { named: fields, .. })
-                                        | Fields::Unnamed(FieldsUnnamed {
-                                            unnamed: fields, ..
-                                        }) => {
-                                            for field in fields {
-                                                context.replace_type(&mut field.ty);
+                if let Fields::Unit = variant.fields {
+                    if let Some((_, discriminant)) = &mut variant.discriminant {
+                        if let Expr::Macro(r#macro) = discriminant {
+                            if let Some(ident) = r#macro.mac.path.get_ident() {
+                                if ident == "typle_variant" {
+                                    let mut token_stream = std::mem::take(&mut r#macro.mac.tokens);
+                                    let (pattern, range) =
+                                        self.parse_pattern_range(&mut token_stream);
+                                    let fields = match r#macro.mac.delimiter {
+                                        syn::MacroDelimiter::Paren(_) => {
+                                            let group = TokenTree::Group(Group::new(
+                                                proc_macro2::Delimiter::Parenthesis,
+                                                token_stream,
+                                            ));
+                                            Fields::Unnamed(
+                                                parse2::<FieldsUnnamed>(TokenStream::from(group))
+                                                    .unwrap_or_else(|err| {
+                                                        abort!(r#macro, "{}", err)
+                                                    }),
+                                            )
+                                        }
+                                        syn::MacroDelimiter::Brace(_) => {
+                                            let group = TokenTree::Group(Group::new(
+                                                proc_macro2::Delimiter::Brace,
+                                                token_stream,
+                                            ));
+                                            Fields::Named(
+                                                parse2::<FieldsNamed>(TokenStream::from(group))
+                                                    .unwrap_or_else(|err| {
+                                                        abort!(r#macro, "{}", err)
+                                                    }),
+                                            )
+                                        }
+                                        syn::MacroDelimiter::Bracket(_) => {
+                                            abort!(r#macro.mac, "expect parentheses or braces")
+                                        }
+                                    };
+                                    for index in range {
+                                        let mut context = self.clone();
+                                        if let Some(ident) = pattern.clone() {
+                                            if ident != "_" {
+                                                context.constants.insert(ident, index);
                                             }
                                         }
-                                        Fields::Unit => {}
+                                        let mut fields = fields.clone();
+                                        match &mut fields {
+                                            Fields::Named(FieldsNamed {
+                                                named: fields, ..
+                                            })
+                                            | Fields::Unnamed(FieldsUnnamed {
+                                                unnamed: fields,
+                                                ..
+                                            }) => {
+                                                for field in fields {
+                                                    context.replace_type(&mut field.ty);
+                                                }
+                                            }
+                                            Fields::Unit => {}
+                                        }
+                                        let variant = Variant {
+                                            attrs: variant.attrs.clone(),
+                                            ident: format_ident!("{}{}", &variant.ident, index),
+                                            fields,
+                                            discriminant: None,
+                                        };
+                                        item.variants.push(variant);
                                     }
-                                    let element = Variant {
-                                        attrs: variant.attrs.clone(),
-                                        ident: format_ident!("{}{}", &variant.ident, index),
-                                        fields,
-                                        discriminant: None,
-                                    };
-                                    item.variants.push(element);
+                                    continue;
                                 }
-                                continue;
                             }
                         }
                     }
+                }
+                if let Some((_, discriminant)) = &mut variant.discriminant {
                     self.replace_expr(discriminant);
                 }
                 match &mut variant.fields {

@@ -12,9 +12,9 @@ pub enum ProcessState<T>
 where
     T: Tuple<impl Process<Output = u64>>,
 {
-    // `typle_variants!`` creates a variant for each element-type. The variant will have a number
+    // `typle_variant!` creates a variant for each element-type. The variant will have a number
     // added to the variant name here. `S2(Option<T2::State>, [u64; 2])`
-    S(Option<T<{INDEX}>::State>, [u64; INDEX]) = typle_variants!(),
+    S = typle_variant!(i in .. => Option<T<{i}>::State>, [u64; i]),
     Done([u64; T::LEN])
 }
 

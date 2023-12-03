@@ -35,7 +35,7 @@ where
 {
     #[default]
     Invalid,
-    S0([Vec<u8>; 0]),
+    S0 { field: (Option<T0>,) },
 }
 #[automatically_derived]
 impl<T0> ::core::default::Default for State1<T0>
@@ -54,8 +54,8 @@ where
 {
     #[default]
     Invalid,
-    S0([Vec<u8>; 0]),
-    S1([Vec<u8>; 1]),
+    S0 { field: (Option<T0>,) },
+    S1 { field: (Option<T0>, Option<T1>) },
 }
 #[automatically_derived]
 impl<T0, T1> ::core::default::Default for State2<T0, T1>

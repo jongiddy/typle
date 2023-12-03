@@ -22,7 +22,7 @@ where
 {
     #[default]
     Invalid,
-    S([Vec<u8>; INDEX]) = typle_variants!(),
+    S = typle_variant!{i in .. => field: typle_for!(j in ..=i => Option<T<{j}>>)},
 }
 
 #[typle(Tuple for 0..=2)]
