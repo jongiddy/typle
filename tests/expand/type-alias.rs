@@ -8,4 +8,8 @@ trait Process {
 }
 
 #[typle(Tuple for 0..=3)]
-type Alias<T> where T: Tuple<impl Process> = typle_for!(i in .. => Option<T<{i}>::Output>);
+type Alias<T>
+where
+    T: Tuple,
+    T::Types: Process,
+= typle_for!(i in .. => Option<T<{i}>::Output>);

@@ -15,8 +15,8 @@ struct MyStruct<S, T> {
 #[typle(Tuple for 0..=12)]
 impl<S, T> MyStruct<S, T>
 where
-    S: Tuple<u32>,
-    T: Tuple<impl Sized>,
+    S: Tuple(u32),
+    T: Tuple,
 {
     fn new(s: S, t: Option<T>) -> MyStruct<S, T> {
         MyStruct { s, t }
@@ -45,7 +45,8 @@ trait FirstLast {
 #[typle(Tuple for 1..=12)]
 impl<S, T> FirstLast for MyStruct<S, T>
 where
-    T: Tuple<impl Copy>,
+    T: Tuple,
+    T::Types: Copy,
 {
     type F = T<0>;
     type L = T<{ T::LEN - 1 }>;
@@ -63,12 +64,7 @@ where
 The generated implementations for 3-tuples are:
 
 ```rust
-impl<T0, T1, T2> MyStruct<(u32, u32, u32), (T0, T1, T2)>
-where
-    T0: Sized,
-    T1: Sized,
-    T2: Sized,
-{
+impl<T0, T1, T2> MyStruct<(u32, u32, u32), (T0, T1, T2)> {
     fn new(
         s: (u32, u32, u32),
         t: Option<(T0, T1, T2)>,

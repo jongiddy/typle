@@ -16,10 +16,7 @@ impl MyStruct<(), ()> {
         ()
     }
 }
-impl<T0> MyStruct<(u32,), (T0,)>
-where
-    T0: Sized,
-{
+impl<T0> MyStruct<(u32,), (T0,)> {
     fn new(s: (u32,), t: Option<(T0,)>) -> MyStruct<(u32,), (T0,)> {
         MyStruct { s, t }
     }
@@ -36,11 +33,7 @@ where
         (self.s.0 as u64 * multipliers.0 as u64,)
     }
 }
-impl<T0, T1> MyStruct<(u32, u32), (T0, T1)>
-where
-    T0: Sized,
-    T1: Sized,
-{
+impl<T0, T1> MyStruct<(u32, u32), (T0, T1)> {
     fn new(s: (u32, u32), t: Option<(T0, T1)>) -> MyStruct<(u32, u32), (T0, T1)> {
         MyStruct { s, t }
     }
@@ -60,12 +53,7 @@ where
         (self.s.0 as u64 * multipliers.0 as u64, self.s.1 as u64 * multipliers.1 as u64)
     }
 }
-impl<T0, T1, T2> MyStruct<(u32, u32, u32), (T0, T1, T2)>
-where
-    T0: Sized,
-    T1: Sized,
-    T2: Sized,
-{
+impl<T0, T1, T2> MyStruct<(u32, u32, u32), (T0, T1, T2)> {
     fn new(
         s: (u32, u32, u32),
         t: Option<(T0, T1, T2)>,
@@ -95,13 +83,7 @@ where
         )
     }
 }
-impl<T0, T1, T2, T3> MyStruct<(u32, u32, u32, u32), (T0, T1, T2, T3)>
-where
-    T0: Sized,
-    T1: Sized,
-    T2: Sized,
-    T3: Sized,
-{
+impl<T0, T1, T2, T3> MyStruct<(u32, u32, u32, u32), (T0, T1, T2, T3)> {
     fn new(
         s: (u32, u32, u32, u32),
         t: Option<(T0, T1, T2, T3)>,
@@ -135,14 +117,7 @@ where
         )
     }
 }
-impl<T0, T1, T2, T3, T4> MyStruct<(u32, u32, u32, u32, u32), (T0, T1, T2, T3, T4)>
-where
-    T0: Sized,
-    T1: Sized,
-    T2: Sized,
-    T3: Sized,
-    T4: Sized,
-{
+impl<T0, T1, T2, T3, T4> MyStruct<(u32, u32, u32, u32, u32), (T0, T1, T2, T3, T4)> {
     fn new(
         s: (u32, u32, u32, u32, u32),
         t: Option<(T0, T1, T2, T3, T4)>,
@@ -190,15 +165,7 @@ impl<
     T3,
     T4,
     T5,
-> MyStruct<(u32, u32, u32, u32, u32, u32), (T0, T1, T2, T3, T4, T5)>
-where
-    T0: Sized,
-    T1: Sized,
-    T2: Sized,
-    T3: Sized,
-    T4: Sized,
-    T5: Sized,
-{
+> MyStruct<(u32, u32, u32, u32, u32, u32), (T0, T1, T2, T3, T4, T5)> {
     fn new(
         s: (u32, u32, u32, u32, u32, u32),
         t: Option<(T0, T1, T2, T3, T4, T5)>,
@@ -251,16 +218,7 @@ impl<
     T4,
     T5,
     T6,
-> MyStruct<(u32, u32, u32, u32, u32, u32, u32), (T0, T1, T2, T3, T4, T5, T6)>
-where
-    T0: Sized,
-    T1: Sized,
-    T2: Sized,
-    T3: Sized,
-    T4: Sized,
-    T5: Sized,
-    T6: Sized,
-{
+> MyStruct<(u32, u32, u32, u32, u32, u32, u32), (T0, T1, T2, T3, T4, T5, T6)> {
     fn new(
         s: (u32, u32, u32, u32, u32, u32, u32),
         t: Option<(T0, T1, T2, T3, T4, T5, T6)>,
@@ -318,17 +276,7 @@ impl<
     T5,
     T6,
     T7,
-> MyStruct<(u32, u32, u32, u32, u32, u32, u32, u32), (T0, T1, T2, T3, T4, T5, T6, T7)>
-where
-    T0: Sized,
-    T1: Sized,
-    T2: Sized,
-    T3: Sized,
-    T4: Sized,
-    T5: Sized,
-    T6: Sized,
-    T7: Sized,
-{
+> MyStruct<(u32, u32, u32, u32, u32, u32, u32, u32), (T0, T1, T2, T3, T4, T5, T6, T7)> {
     fn new(
         s: (u32, u32, u32, u32, u32, u32, u32, u32),
         t: Option<(T0, T1, T2, T3, T4, T5, T6, T7)>,
@@ -397,18 +345,7 @@ impl<
 > MyStruct<
     (u32, u32, u32, u32, u32, u32, u32, u32, u32),
     (T0, T1, T2, T3, T4, T5, T6, T7, T8),
->
-where
-    T0: Sized,
-    T1: Sized,
-    T2: Sized,
-    T3: Sized,
-    T4: Sized,
-    T5: Sized,
-    T6: Sized,
-    T7: Sized,
-    T8: Sized,
-{
+> {
     fn new(
         s: (u32, u32, u32, u32, u32, u32, u32, u32, u32),
         t: Option<(T0, T1, T2, T3, T4, T5, T6, T7, T8)>,
@@ -482,19 +419,7 @@ impl<
 > MyStruct<
     (u32, u32, u32, u32, u32, u32, u32, u32, u32, u32),
     (T0, T1, T2, T3, T4, T5, T6, T7, T8, T9),
->
-where
-    T0: Sized,
-    T1: Sized,
-    T2: Sized,
-    T3: Sized,
-    T4: Sized,
-    T5: Sized,
-    T6: Sized,
-    T7: Sized,
-    T8: Sized,
-    T9: Sized,
-{
+> {
     fn new(
         s: (u32, u32, u32, u32, u32, u32, u32, u32, u32, u32),
         t: Option<(T0, T1, T2, T3, T4, T5, T6, T7, T8, T9)>,
@@ -573,20 +498,7 @@ impl<
 > MyStruct<
     (u32, u32, u32, u32, u32, u32, u32, u32, u32, u32, u32),
     (T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10),
->
-where
-    T0: Sized,
-    T1: Sized,
-    T2: Sized,
-    T3: Sized,
-    T4: Sized,
-    T5: Sized,
-    T6: Sized,
-    T7: Sized,
-    T8: Sized,
-    T9: Sized,
-    T10: Sized,
-{
+> {
     fn new(
         s: (u32, u32, u32, u32, u32, u32, u32, u32, u32, u32, u32),
         t: Option<(T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10)>,
@@ -670,21 +582,7 @@ impl<
 > MyStruct<
     (u32, u32, u32, u32, u32, u32, u32, u32, u32, u32, u32, u32),
     (T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11),
->
-where
-    T0: Sized,
-    T1: Sized,
-    T2: Sized,
-    T3: Sized,
-    T4: Sized,
-    T5: Sized,
-    T6: Sized,
-    T7: Sized,
-    T8: Sized,
-    T9: Sized,
-    T10: Sized,
-    T11: Sized,
-{
+> {
     fn new(
         s: (u32, u32, u32, u32, u32, u32, u32, u32, u32, u32, u32, u32),
         t: Option<(T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11)>,

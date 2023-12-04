@@ -10,7 +10,7 @@
 //! #[typle(Tuple for 1..=3)]
 //! impl<T> MyStruct<T>
 //! where
-//!     T: Tuple<u32>,
+//!     T: Tuple(u32),
 //! {
 //!     fn max(&self) -> Option<u32> {
 //!         let mut max = self.t[[0]];
@@ -68,13 +68,15 @@
 //! }
 //! ```
 //!
-//! The macro arguments `Tuple for 1..=3` consist of an identifier `Tuple`, to use as a pseudo-trait
+//! The macro arguments `Tuple for 1..=3` consist of an identifier (`Tuple`) to use as a pseudo-trait
 //! in the `where` clause, and a range of tuple lengths `1..=3` for which the item will be created.
 //!
 //! If the `where` clause constrains a generic type using the pseudo-trait then the generic type
 //! must be a tuple with a length within the macro range and where each element is constrained by
-//! the argument to the trait. The element constraint can either be an explicit type (`Tuple<u32>`)
-//! or other traits (`Tuple<impl Clone + Debug>`).
+//! the argument to the trait. The element constraint can either be an explicit type
+//! (`where T: Tuple(u32)`) or other traits (`where T: Tuple, T::Types: Clone + Debug`). Note that
+//! each component of the tuple must meet the type constraint for `T::Types` but the components can
+//! be different types. This is a special behavior for typles.
 //!
 //! The elements of a tuple can be iterated over using a `for` loop with an iteration variable
 //! enclosed in `typle_const!` macro. As shown above, this executes the `for` loop body for each
@@ -87,16 +89,15 @@
 //! index created using `typle_const!`. Hence `self.t[[i]]` will be replaced by
 //! `self.t.0, self.t.1,...`.
 //!
-//! Other features include using `T<i>` to name element types, a `typle_for!` macro to perform
+//! Other features include using `T<{i}>` to name element types, a `typle_for!` macro to perform
 //! element-by-element operations, support for enums with a `typle_variant!()` macro, and
 //! constant-if for conditional compilation based on constant values including a `typle_const!`
-//! iteration variable. See the [README](https://github.com/jongiddy/typle#readme), and
-//! [this example](https://github.com/jongiddy/typle/blob/main/tests/expand/enum.rs) and its
-//! [expanded form](https://github.com/jongiddy/typle/blob/main/tests/expand/enum.expanded.rs).
+//! iteration variable. See the [README](https://github.com/jongiddy/typle#readme) and
+//! [the test directory](https://github.com/jongiddy/typle/blob/main/tests/expand/).
 //!
 //! Also, see how `typle` is used in the [`hefty` crate](https://github.com/jongiddy/hefty/blob/main/src/tuple.rs).
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::ops::Range;
 
 use proc_macro2::{Group, Ident, Span, TokenStream, TokenTree};
@@ -107,8 +108,8 @@ use syn::{
     parse2, Block, Expr, ExprArray, ExprBlock, ExprField, ExprLit, ExprParen, ExprPath, ExprRange,
     ExprTuple, Fields, FieldsNamed, FieldsUnnamed, GenericArgument, Item, ItemEnum, ItemImpl,
     ItemStruct, ItemType, LitInt, Macro, Pat, Path, PathArguments, PathSegment, PredicateType,
-    QSelf, RangeLimits, Stmt, Type, TypeMacro, TypeParamBound, TypeParen, TypePath, TypeTuple,
-    Variant, WherePredicate,
+    QSelf, RangeLimits, ReturnType, Stmt, Type, TypeMacro, TypeParamBound, TypeParen, TypePath,
+    TypeTuple, Variant, WherePredicate,
 };
 
 #[doc(hidden)]
@@ -198,7 +199,10 @@ impl IterationTrait {
         match input {
             Item::Const(_) => abort!(input, "Const unsupported"),
             Item::Enum(item) => {
-                if self.generics_contain_trait(&item.generics) {
+                let typle_idents = self.typle_generics(&item.generics);
+                if typle_idents.is_empty() {
+                    output.push(Item::Enum(item));
+                } else {
                     for count in self.min..=self.max {
                         let mut specific = SpecificContext {
                             trait_ident: &self.ident,
@@ -206,18 +210,19 @@ impl IterationTrait {
                             constants: HashMap::new(),
                             tuples: HashMap::new(),
                         };
-                        let item_struct = specific.process_enum(&item);
+                        let item_struct = specific.process_enum(&item, &typle_idents);
                         output.push(Item::Enum(item_struct));
                     }
-                } else {
-                    output.push(Item::Enum(item));
                 }
             }
             Item::ExternCrate(_) => abort!(input, "ExternCrate unsupported"),
             Item::Fn(_) => abort!(input, "Fn unsupported"),
             Item::ForeignMod(_) => abort!(input, "ForeignMod unsupported"),
             Item::Impl(item) => {
-                if self.generics_contain_trait(&item.generics) {
+                let typle_idents = self.typle_generics(&item.generics);
+                if typle_idents.is_empty() {
+                    output.push(Item::Impl(item));
+                } else {
                     for count in self.min..=self.max {
                         let mut specific = SpecificContext {
                             trait_ident: &self.ident,
@@ -225,18 +230,19 @@ impl IterationTrait {
                             constants: HashMap::new(),
                             tuples: HashMap::new(),
                         };
-                        let item = specific.process_impl(&item);
+                        let item = specific.process_impl(&item, &typle_idents);
                         output.push(Item::Impl(item));
                     }
-                } else {
-                    output.push(Item::Impl(item));
                 }
             }
             Item::Macro(_) => abort!(input, "Macro unsupported"),
             Item::Mod(_) => abort!(input, "Mod unsupported"),
             Item::Static(_) => abort!(input, "Static unsupported"),
             Item::Struct(item) => {
-                if self.generics_contain_trait(&item.generics) {
+                let typle_idents = self.typle_generics(&item.generics);
+                if typle_idents.is_empty() {
+                    output.push(Item::Struct(item));
+                } else {
                     for count in self.min..=self.max {
                         let mut specific = SpecificContext {
                             trait_ident: &self.ident,
@@ -244,17 +250,18 @@ impl IterationTrait {
                             constants: HashMap::new(),
                             tuples: HashMap::new(),
                         };
-                        let item_struct = specific.process_struct(&item);
+                        let item_struct = specific.process_struct(&item, &typle_idents);
                         output.push(Item::Struct(item_struct));
                     }
-                } else {
-                    output.push(Item::Struct(item));
                 }
             }
             Item::Trait(_) => abort!(input, "Trait unsupported"),
             Item::TraitAlias(_) => abort!(input, "TraitAlias unsupported"),
             Item::Type(item) => {
-                if self.generics_contain_trait(&item.generics) {
+                let typle_idents = self.typle_generics(&item.generics);
+                if typle_idents.is_empty() {
+                    output.push(Item::Type(item));
+                } else {
                     for count in self.min..=self.max {
                         let mut specific = SpecificContext {
                             trait_ident: &self.ident,
@@ -262,11 +269,9 @@ impl IterationTrait {
                             constants: HashMap::new(),
                             tuples: HashMap::new(),
                         };
-                        let item = specific.process_type(&item);
+                        let item = specific.process_type(&item, &typle_idents);
                         output.push(Item::Type(item));
                     }
-                } else {
-                    output.push(Item::Type(item));
                 }
             }
             Item::Union(_) => abort!(input, "Union unsupported"),
@@ -279,26 +284,37 @@ impl IterationTrait {
         output
     }
 
-    fn generics_contain_trait(&self, generics: &syn::Generics) -> bool {
+    fn typle_generics(&self, generics: &syn::Generics) -> HashMap<Ident, bool> {
+        let mut idents = HashMap::new();
         let Some(where_clause) = &generics.where_clause else {
-            return false;
+            return idents;
         };
         for predicate in &where_clause.predicates {
             if let WherePredicate::Type(predicate_type) = predicate {
                 for bound in &predicate_type.bounds {
                     if let TypeParamBound::Trait(trait_bound) = bound {
-                        let path = &trait_bound.path;
-                        if path.leading_colon.is_none()
-                            && path.segments.len() == 1
-                            && path.segments[0].ident == self.ident
+                        let trait_path = &trait_bound.path;
+                        if trait_path.leading_colon.is_none()
+                            && trait_path.segments.len() == 1
+                            && trait_path.segments[0].ident == self.ident
                         {
-                            return true;
+                            let Type::Path(type_path) = &predicate_type.bounded_ty else {
+                                abort!(predicate_type.bounded_ty, "expected simple identifier");
+                            };
+                            if type_path.qself.is_some() {
+                                abort!(predicate_type.bounded_ty, "expected simple identifier");
+                            }
+                            let Some(ident) = type_path.path.get_ident() else {
+                                abort!(predicate_type.bounded_ty, "expected simple identifier");
+                            };
+                            idents
+                                .insert(ident.clone(), trait_path.segments[0].arguments.is_none());
                         }
                     }
                 }
             }
         }
-        false
+        idents
     }
 }
 
@@ -311,9 +327,9 @@ struct SpecificContext<'a> {
 }
 
 impl<'a> SpecificContext<'a> {
-    fn process_enum(&mut self, item: &ItemEnum) -> ItemEnum {
+    fn process_enum(&mut self, item: &ItemEnum, typle_idents: &HashMap<Ident, bool>) -> ItemEnum {
         let mut item = item.clone();
-        self.tuples = self.process_where_clause(&mut item.generics);
+        self.tuples = self.process_where_clause(&mut item.generics, typle_idents);
         if !self.tuples.is_empty() {
             item.ident = format_ident!("{}{}", item.ident, self.count);
             for mut variant in std::mem::take(&mut item.variants) {
@@ -410,9 +426,13 @@ impl<'a> SpecificContext<'a> {
         item
     }
 
-    fn process_struct(&mut self, item: &ItemStruct) -> ItemStruct {
+    fn process_struct(
+        &mut self,
+        item: &ItemStruct,
+        typle_generics: &HashMap<Ident, bool>,
+    ) -> ItemStruct {
         let mut item = item.clone();
-        self.tuples = self.process_where_clause(&mut item.generics);
+        self.tuples = self.process_where_clause(&mut item.generics, typle_generics);
         if !self.tuples.is_empty() {
             item.ident = format_ident!("{}{}", item.ident, self.count);
             match &mut item.fields {
@@ -430,9 +450,9 @@ impl<'a> SpecificContext<'a> {
         item
     }
 
-    fn process_impl(&mut self, item: &ItemImpl) -> ItemImpl {
+    fn process_impl(&mut self, item: &ItemImpl, typle_generics: &HashMap<Ident, bool>) -> ItemImpl {
         let mut item = item.clone();
-        self.tuples = self.process_where_clause(&mut item.generics);
+        self.tuples = self.process_where_clause(&mut item.generics, typle_generics);
         if !self.tuples.is_empty() {
             if let Some((_, path, _)) = &mut item.trait_ {
                 self.replace_path_arguments(path);
@@ -464,9 +484,9 @@ impl<'a> SpecificContext<'a> {
         item
     }
 
-    fn process_type(&mut self, item: &ItemType) -> ItemType {
+    fn process_type(&mut self, item: &ItemType, typle_generics: &HashMap<Ident, bool>) -> ItemType {
         let mut item = item.clone();
-        self.tuples = self.process_where_clause(&mut item.generics);
+        self.tuples = self.process_where_clause(&mut item.generics, typle_generics);
         if !self.tuples.is_empty() {
             item.ident = format_ident!("{}{}", item.ident, self.count);
             self.replace_type(&mut item.ty);
@@ -1457,112 +1477,139 @@ impl<'a> SpecificContext<'a> {
         None
     }
 
-    fn predicate_to_tuple<'p>(
-        &self,
-        predicate: &'p WherePredicate,
-    ) -> Option<(&'p Ident, &'p Type)> {
-        if let WherePredicate::Type(predicate_type) = predicate {
-            if let Type::Path(type_path) = &predicate_type.bounded_ty {
-                if type_path.qself.is_none() {
-                    if let Some(tuple_type_ident) = type_path.path.get_ident() {
-                        if let Some(path) = predicate_type
-                            .bounds
-                            .iter()
-                            .filter_map(|bound| match bound {
-                                TypeParamBound::Trait(trait_bound) => {
-                                    let path = &trait_bound.path;
-                                    if path.leading_colon.is_none()
-                                        && path.segments.len() == 1
-                                        && &path.segments[0].ident == self.trait_ident
-                                    {
-                                        assert!(predicate_type.bounds.len() == 1);
-                                        Some(path)
-                                    } else {
-                                        None
-                                    }
-                                }
-                                _ => None,
-                            })
-                            .next()
-                        {
-                            let PathArguments::AngleBracketed(args) = &path.segments[0].arguments
-                            else {
-                                abort!(path, "expected angle-bracketed type arguments");
-                            };
-                            if args.args.len() != 1 {
-                                abort!(path, "expected 1 type argument");
-                            }
-                            let Some(GenericArgument::Type(tuple_element_bound)) =
-                                args.args.first()
-                            else {
-                                abort!(path, "expected type or trait");
-                            };
-                            return Some((tuple_type_ident, tuple_element_bound));
-                        }
-                    }
-                }
-            }
-        }
-        None
-    }
-
     // Replace `<T>` with `<T0, T1,...>` and `where T: Tuple<impl Sized>` with
     // `where T0: Sized, T1: Sized,...`.  Return a mapping from ident to tuple elementtypes, e.g.
     // T -> vec!["T0", "T1",...] or T -> vec!["u32", "u32",...]
-    fn process_where_clause(&self, generics: &mut syn::Generics) -> HashMap<Ident, Vec<String>> {
+    fn process_where_clause(
+        &self,
+        generics: &mut syn::Generics,
+        typle_idents: &HashMap<Ident, bool>,
+    ) -> HashMap<Ident, Vec<String>> {
         let mut output = HashMap::new();
         if let Some(mut where_clause) = generics.where_clause.take() {
             let mut predicates =
                 syn::punctuated::Punctuated::<WherePredicate, syn::token::Comma>::new();
-            let mut tuples_with_generic_bounds = HashSet::new();
             for predicate in where_clause.predicates {
-                if let Some((tuple_type_ident, element_constraint)) =
-                    self.predicate_to_tuple(&predicate)
-                {
-                    match element_constraint {
-                        Type::ImplTrait(impl_trait) => {
-                            // T: Tuple<impl Sized> -> T0: impl Sized, T1: impl Sized
-                            let mut element_type_idents = Vec::with_capacity(self.count);
-                            for i in 0..self.count {
-                                let type_ident = format!("{}{}", tuple_type_ident, i);
-                                predicates.push(WherePredicate::Type(PredicateType {
-                                    lifetimes: None,
-                                    bounded_ty: Type::Path(TypePath {
-                                        qself: None,
-                                        path: element_type_to_path(
-                                            &type_ident,
-                                            tuple_type_ident.span(),
-                                        ),
-                                    }),
-                                    colon_token: syn::token::Colon::default(),
-                                    bounds: impl_trait.bounds.clone(),
-                                }));
-                                element_type_idents.push(type_ident);
+                if let WherePredicate::Type(predicate_type) = predicate {
+                    if let Type::Path(type_path) = predicate_type.bounded_ty {
+                        if type_path.qself.is_none() && type_path.path.leading_colon.is_none() {
+                            let mut segments = type_path.path.segments.iter();
+                            if let Some(first) = segments.next() {
+                                if let Some(&is_generic) = typle_idents.get(&first.ident) {
+                                    match segments.next() {
+                                        Some(second) => {
+                                            // T::Types: AsRef<str> or T::Types::Output: AsRef<str>
+                                            if second.ident == "Types" {
+                                                for i in 0..self.count {
+                                                    let type_ident =
+                                                        format_ident!("{}{}", &first.ident, i);
+                                                    let mut path = ident_to_path(type_ident);
+                                                    for segment in segments.clone() {
+                                                        path.segments.push(segment.clone());
+                                                    }
+                                                    predicates.push(WherePredicate::Type(
+                                                        PredicateType {
+                                                            lifetimes: None,
+                                                            bounded_ty: Type::Path(TypePath {
+                                                                qself: None,
+                                                                path,
+                                                            }),
+                                                            colon_token: syn::token::Colon::default(
+                                                            ),
+                                                            bounds: predicate_type.bounds.clone(),
+                                                        },
+                                                    ));
+                                                }
+                                            } else {
+                                                abort!(second, "unknown associated item");
+                                            }
+                                        }
+                                        None => {
+                                            // T: Tuple or T: Tuple(u8)
+                                            let Some(TypeParamBound::Trait(trait_bound)) =
+                                                predicate_type.bounds.first()
+                                            else {
+                                                abort!(predicate_type.bounds, "Unexpected bound");
+                                            };
+                                            let trait_path =
+                                                trait_bound.path.segments.first().unwrap();
+                                            match &trait_path.arguments {
+                                                PathArguments::None => {
+                                                    // T: Tuple
+                                                    if !is_generic {
+                                                        abort!(
+                                                            trait_path.arguments,
+                                                            "x {:?}",
+                                                            &trait_path
+                                                        );
+                                                    }
+                                                    assert!(is_generic);
+                                                    let mut element_type_idents =
+                                                        Vec::with_capacity(self.count);
+                                                    for i in 0..self.count {
+                                                        let type_ident =
+                                                            format!("{}{}", &first.ident, i);
+                                                        element_type_idents.push(type_ident);
+                                                    }
+
+                                                    output.insert(
+                                                        first.ident.clone(),
+                                                        element_type_idents,
+                                                    );
+                                                }
+                                                PathArguments::AngleBracketed(arguments) => {
+                                                    // todo: support T: Tuple<Types=u8>
+                                                    abort!(
+                                                        arguments,
+                                                        "angled brackets not supported"
+                                                    );
+                                                }
+                                                PathArguments::Parenthesized(arguments) => {
+                                                    // T: Tuple(u8) - todo: support T: Tuple(Option<u8>)
+                                                    assert!(!is_generic);
+                                                    let ReturnType::Default = arguments.output
+                                                    else {
+                                                        abort!(
+                                                            arguments,
+                                                            "return type not supported"
+                                                        );
+                                                    };
+                                                    let mut inputs = arguments.inputs.iter();
+                                                    match inputs.next() {
+                                                        Some(Type::Path(type_path)) => {
+                                                            if let Some(tt) = inputs.next() {
+                                                                abort!(tt, "expected one type")
+                                                            }
+                                                            let mut element_type_idents =
+                                                                Vec::with_capacity(self.count);
+                                                            let Some(type_ident) =
+                                                                type_path.path.get_ident()
+                                                            else {
+                                                                abort!(
+                                                                    arguments,
+                                                                    "expected simple type"
+                                                                )
+                                                            };
+                                                            for _ in 0..self.count {
+                                                                element_type_idents
+                                                                    .push(type_ident.to_string());
+                                                            }
+                                                            output.insert(
+                                                                first.ident.clone(),
+                                                                element_type_idents,
+                                                            );
+                                                        }
+                                                        _ => {
+                                                            abort!(arguments, "expected identifier")
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                    continue;
+                                }
                             }
-                            if output
-                                .insert(tuple_type_ident.clone(), element_type_idents)
-                                .is_some()
-                            {
-                                abort!(tuple_type_ident, "type defined twice");
-                            }
-                            tuples_with_generic_bounds.insert(tuple_type_ident.clone());
-                        }
-                        Type::Path(type_path) => {
-                            // T: Tuple<u8> - todo: support T: Tuple<Option<u8>>
-                            let mut element_type_idents = Vec::with_capacity(self.count);
-                            let type_ident = type_path.path.get_ident().expect("single ident");
-                            for _ in 0..self.count {
-                                element_type_idents.push(type_ident.to_string());
-                            }
-                            if output
-                                .insert(tuple_type_ident.clone(), element_type_idents)
-                                .is_some()
-                            {
-                                abort!(tuple_type_ident, "type defined twice");
-                            }
-                        }
-                        _ => {
-                            abort!(element_constraint, "Unsupported arg type");
                         }
                     }
                 } else {
@@ -1577,7 +1624,7 @@ impl<'a> SpecificContext<'a> {
                 match generic_param {
                     syn::GenericParam::Type(type_param) => match output.get(&type_param.ident) {
                         Some(element_type_idents) => {
-                            if tuples_with_generic_bounds.contains(&type_param.ident) {
+                            if let Some(true) = typle_idents.get(&type_param.ident) {
                                 for type_ident in element_type_idents {
                                     let mut param = type_param.clone();
                                     param.ident = Ident::new(&type_ident, type_param.ident.span());
@@ -1744,5 +1791,17 @@ fn element_type_to_path(name: &str, span: Span) -> Path {
         }]
         .into_iter()
         .collect(),
+    }
+}
+
+fn ident_to_path(ident: Ident) -> Path {
+    let mut segments = syn::punctuated::Punctuated::new();
+    segments.push(PathSegment {
+        ident,
+        arguments: PathArguments::None,
+    });
+    syn::Path {
+        leading_colon: None,
+        segments,
     }
 }

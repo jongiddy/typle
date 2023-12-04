@@ -10,7 +10,8 @@ trait Process {
 #[typle(Tuple for 0..=3)]
 pub enum ProcessState<T>
 where
-    T: Tuple<impl Process<Output = u64>>,
+    T: Tuple,
+    T::Types: Process<Output = u64>,
 {
     // `typle_variant!` creates a variant for each element-type. The variant will have a number
     // added to the variant name here. `S2(Option<T2::State>, [u64; 2])`
@@ -21,7 +22,8 @@ where
 #[typle(Tuple for 0..=3)]
 impl<T> Default for ProcessState<(T)>
 where
-    T: Tuple<impl Process<Output = u64>>
+    T: Tuple,
+    T::Types: Process<Output = u64>
 {
     fn default() -> Self {
         // Const-if allows false branches to contain invalid code. In this case state S0 does not
@@ -38,7 +40,8 @@ where
 #[typle(Tuple for 0..=3)]
 impl Process for T
 where
-    T: Tuple<impl Process<Output = u64>>,
+    T: Tuple,
+    T::Types: Process<Output = u64>,
 {
     type State = ProcessState<(T)>;
     type Output = [u64; T::LEN];
