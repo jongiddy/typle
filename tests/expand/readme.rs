@@ -42,7 +42,7 @@ where
     T::Types: Copy,
 {
     type F = T<0>;
-    type L = T<{ T::LEN - 1 }>;
+    type L = T<{T::LEN - 1}>;
 
     fn first(&self) -> Option<Self::F> {
         self.t.map(|tup| tup[[0]])

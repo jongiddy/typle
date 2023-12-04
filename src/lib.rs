@@ -762,7 +762,25 @@ impl<'a> SpecificContext<'a> {
                     .into_iter()
                     .peekable();
                 if let Some(first) = segments.peek() {
-                    if let Some(element_type_idents) = self.tuples.get(&first.ident) {
+                    if &first.ident == self.trait_ident {
+                        let _ = segments.next().unwrap();
+                        match segments.peek() {
+                            Some(second) => {
+                                if second.ident == "LEN" {
+                                    // Tuple::LEN
+                                    *expr = Expr::Lit(ExprLit {
+                                        attrs: std::mem::take(&mut path.attrs),
+                                        lit: syn::Lit::Int(LitInt::new(
+                                            &self.count.to_string(),
+                                            path.span(),
+                                        )),
+                                    });
+                                    return;
+                                }
+                            }
+                            None => {}
+                        }
+                    } else if let Some(element_type_idents) = self.tuples.get(&first.ident) {
                         let mut first = segments.next().unwrap();
                         match &mut first.arguments {
                             PathArguments::None => {

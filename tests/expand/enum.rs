@@ -16,7 +16,7 @@ where
     // `typle_variant!` creates a variant for each element-type. The variant will have a number
     // added to the variant name here. `S2(Option<T2::State>, [u64; 2])`
     S = typle_variant!(i in .. => Option<T<{i}>::State>, [u64; i]),
-    Done([u64; T::LEN])
+    Done([u64; Tuple::LEN])
 }
 
 #[typle(Tuple for 0..=3)]
