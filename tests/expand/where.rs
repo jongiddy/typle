@@ -13,3 +13,12 @@ where
     T::Types: Extract,
     T::Types::Output: AsRef<str>,
 {}
+
+#[typle(Tuple for 1..=2)]
+impl<S, T> Extract for TupleC<T>
+where
+    S: Tuple,
+    S::Types: Extract,
+    T: Tuple,
+    T::Types: Extract<Output = Option<S>>,
+{}

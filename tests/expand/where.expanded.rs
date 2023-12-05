@@ -15,3 +15,15 @@ where
     T0::Output: AsRef<str>,
     T1::Output: AsRef<str>,
 {}
+impl<S0, T0> Extract for TupleC<(T0,)>
+where
+    S0: Extract,
+    T0: Extract<Output = Option<(S0,)>>,
+{}
+impl<S0, S1, T0, T1> Extract for TupleC<(T0, T1)>
+where
+    S0: Extract,
+    S1: Extract,
+    T0: Extract<Output = Option<(S0, S1)>>,
+    T1: Extract<Output = Option<(S0, S1)>>,
+{}

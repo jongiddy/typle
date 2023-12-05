@@ -24,7 +24,8 @@
 //! }
 //! ```
 //!
-//! This code creates implementations for 1-, 2-, and 3-tuples:
+//! This code creates implementations for 1-, 2-, and 3-tuples where each component of the tuple is
+//! a `u32`.
 //!
 //! ```
 //! # struct MyStruct<T> {t: T}
@@ -71,26 +72,51 @@
 //! The macro arguments `Tuple for 1..=3` consist of an identifier (`Tuple`) to use as a pseudo-trait
 //! in the `where` clause, and a range of tuple lengths `1..=3` for which the item will be created.
 //!
+//! The `Tuple` pseudo-trait is similar to a trait defined as
+//! ```
+//! trait Tuple {
+//!     const LEN: usize;
+//!     type Types;
+//! }
+//! ```
+//!
+//! `Tuple::LEN` or `T::LEN` provides the number of components for the tuple in the current item.
+//!
 //! If the `where` clause constrains a generic type using the pseudo-trait then the generic type
-//! must be a tuple with a length within the macro range and where each element is constrained by
-//! the argument to the trait. The element constraint can either be an explicit type
-//! (`where T: Tuple(u32)`) or other traits (`where T: Tuple, T::Types: Clone + Debug`). Note that
-//! each component of the tuple must meet the type constraint for `T::Types` but the components can
+//! must be a tuple with a length `Tuple::LEN` and where each component is constrained by the
+//! argument to the trait. The component can either be an explicit type (`where T: Tuple(u32)`) or
+//! can be constrained by other traits using the `Types` associated type:
+//! ```ignore
+//! impl<T> MyStruct<T>
+//! where
+//!     T: Tuple,
+//!     T::Types: Extract,
+//!     T::Types::Output: AsRef<str>,
+//! ```
+//!
+//! Each component of the tuple must meet the type constraints for `T::Types` but the components can
 //! be different types. This is a special behavior for typles.
 //!
-//! The elements of a tuple can be iterated over using a `for` loop with an iteration variable
+//! To force each component to be the same type, introduce an additional generic variable for the
+//! component type:
+//! ```ignore
+//! impl<T, C> MyStruct<T>
+//! where
+//!     T: Tuple(C),
+//!     C: Extract,
+//!     C::Output: AsRef<str>,
+//! ```
+//!
+//! The components of a tuple can be iterated over using a `for` loop with an iteration variable
 //! enclosed in `typle_const!` macro. As shown above, this executes the `for` loop body for each
-//! element in the tuple.
+//! component in the tuple.
 //!
-//! Note that `T::LEN` is a special path that is available on each tuple type to provide the number
-//! of elements.
-//!
-//! Tuple elements are referenced using a double-bracketed index and a constant value, including an
+//! Tuple components are referenced using a double-bracketed index and a constant value, including an
 //! index created using `typle_const!`. Hence `self.t[[i]]` will be replaced by
 //! `self.t.0, self.t.1,...`.
 //!
-//! Other features include using `T<{i}>` to name element types, a `typle_for!` macro to perform
-//! element-by-element operations, support for enums with a `typle_variant!()` macro, and
+//! Other features include using `T<{i}>` to name component types, a `typle_for!` macro to perform
+//! component-by-component operations, support for enums with a `typle_variant!()` macro, and
 //! constant-if for conditional compilation based on constant values including a `typle_const!`
 //! iteration variable. See the [README](https://github.com/jongiddy/typle#readme) and
 //! [the test directory](https://github.com/jongiddy/typle/blob/main/tests/expand/).
@@ -329,7 +355,7 @@ struct SpecificContext<'a> {
 impl<'a> SpecificContext<'a> {
     fn process_enum(&mut self, item: &ItemEnum, typle_idents: &HashMap<Ident, bool>) -> ItemEnum {
         let mut item = item.clone();
-        self.tuples = self.process_where_clause(&mut item.generics, typle_idents);
+        self.process_where_clause(&mut item.generics, typle_idents);
         if !self.tuples.is_empty() {
             item.ident = format_ident!("{}{}", item.ident, self.count);
             for mut variant in std::mem::take(&mut item.variants) {
@@ -432,7 +458,7 @@ impl<'a> SpecificContext<'a> {
         typle_generics: &HashMap<Ident, bool>,
     ) -> ItemStruct {
         let mut item = item.clone();
-        self.tuples = self.process_where_clause(&mut item.generics, typle_generics);
+        self.process_where_clause(&mut item.generics, typle_generics);
         if !self.tuples.is_empty() {
             item.ident = format_ident!("{}{}", item.ident, self.count);
             match &mut item.fields {
@@ -452,7 +478,7 @@ impl<'a> SpecificContext<'a> {
 
     fn process_impl(&mut self, item: &ItemImpl, typle_generics: &HashMap<Ident, bool>) -> ItemImpl {
         let mut item = item.clone();
-        self.tuples = self.process_where_clause(&mut item.generics, typle_generics);
+        self.process_where_clause(&mut item.generics, typle_generics);
         if !self.tuples.is_empty() {
             if let Some((_, path, _)) = &mut item.trait_ {
                 self.replace_path_arguments(path);
@@ -486,7 +512,7 @@ impl<'a> SpecificContext<'a> {
 
     fn process_type(&mut self, item: &ItemType, typle_generics: &HashMap<Ident, bool>) -> ItemType {
         let mut item = item.clone();
-        self.tuples = self.process_where_clause(&mut item.generics, typle_generics);
+        self.process_where_clause(&mut item.generics, typle_generics);
         if !self.tuples.is_empty() {
             item.ident = format_ident!("{}{}", item.ident, self.count);
             self.replace_type(&mut item.ty);
@@ -850,7 +876,7 @@ impl<'a> SpecificContext<'a> {
                                     abort!(first, "expected one type parameter");
                                 }
                                 match args.args.first_mut() {
-                                    Some(syn::GenericArgument::Const(expr)) => {
+                                    Some(GenericArgument::Const(expr)) => {
                                         // T<{T::LEN - 1}>
                                         self.replace_expr(expr);
                                         // T<{5 - 1}>
@@ -900,10 +926,14 @@ impl<'a> SpecificContext<'a> {
                                     // std::option::Option<T<3>> -> std::option::Option<T3>
                                     for arg in std::mem::take(&mut args.args) {
                                         match arg {
-                                            syn::GenericArgument::Type(mut generic_type) => {
+                                            GenericArgument::Type(mut generic_type) => {
                                                 self.replace_type(&mut generic_type);
+                                                args.args.push(GenericArgument::Type(generic_type));
+                                            }
+                                            GenericArgument::AssocType(mut assoc_type) => {
+                                                self.replace_type(&mut assoc_type.ty);
                                                 args.args
-                                                    .push(syn::GenericArgument::Type(generic_type));
+                                                    .push(GenericArgument::AssocType(assoc_type));
                                             }
                                             p => {
                                                 args.args.push(p);
@@ -1232,10 +1262,9 @@ impl<'a> SpecificContext<'a> {
                                 // std::option::Option<T<3>> -> std::option::Option<T3>
                                 for arg in std::mem::take(&mut args.args) {
                                     match arg {
-                                        syn::GenericArgument::Type(mut generic_type) => {
+                                        GenericArgument::Type(mut generic_type) => {
                                             self.replace_type(&mut generic_type);
-                                            args.args
-                                                .push(syn::GenericArgument::Type(generic_type));
+                                            args.args.push(GenericArgument::Type(generic_type));
                                         }
                                         p => {
                                             args.args.push(p);
@@ -1277,10 +1306,9 @@ impl<'a> SpecificContext<'a> {
                                 // std::option::Option<T<3>> -> std::option::Option<T3>
                                 for arg in std::mem::take(&mut args.args) {
                                     match arg {
-                                        syn::GenericArgument::Type(mut generic_type) => {
+                                        GenericArgument::Type(mut generic_type) => {
                                             self.replace_type(&mut generic_type);
-                                            args.args
-                                                .push(syn::GenericArgument::Type(generic_type));
+                                            args.args.push(GenericArgument::Type(generic_type));
                                         }
                                         p => {
                                             args.args.push(p);
@@ -1318,21 +1346,21 @@ impl<'a> SpecificContext<'a> {
                     // Enum::Variant<(i)> -> Enum::Variant0
                     for arg in std::mem::take(&mut args.args) {
                         match arg {
-                            syn::GenericArgument::Type(Type::Paren(TypeParen { elem, .. })) => {
+                            GenericArgument::Type(Type::Paren(TypeParen { elem, .. })) => {
                                 if let Type::Path(TypePath { path, .. }) = &*elem {
                                     if let Some(ident) = path.get_ident() {
                                         if let Some(element_names) = self.tuples.get(ident) {
                                             star = Some(self.count);
                                             for name in element_names {
-                                                args.args.push(syn::GenericArgument::Type(
-                                                    Type::Path(TypePath {
+                                                args.args.push(GenericArgument::Type(Type::Path(
+                                                    TypePath {
                                                         qself: None,
                                                         path: element_type_to_path(
                                                             name,
                                                             path.span(),
                                                         ),
-                                                    }),
-                                                ));
+                                                    },
+                                                )));
                                             }
                                         } else if let Some(value) = self.constants.get(ident) {
                                             star = Some(*value);
@@ -1340,18 +1368,19 @@ impl<'a> SpecificContext<'a> {
                                     }
                                 }
                             }
-                            syn::GenericArgument::Const(Expr::Paren(ExprParen {
-                                mut expr,
-                                ..
-                            })) => {
+                            GenericArgument::Const(Expr::Paren(ExprParen { mut expr, .. })) => {
                                 self.replace_expr(&mut expr);
                                 if let Some(value) = evaluate_usize(&expr) {
                                     star = Some(value);
                                 }
                             }
-                            syn::GenericArgument::Type(mut generic_type) => {
+                            GenericArgument::Type(mut generic_type) => {
                                 self.replace_type(&mut generic_type);
-                                args.args.push(syn::GenericArgument::Type(generic_type));
+                                args.args.push(GenericArgument::Type(generic_type));
+                            }
+                            GenericArgument::AssocType(mut assoc_type) => {
+                                self.replace_type(&mut assoc_type.ty);
+                                args.args.push(GenericArgument::AssocType(assoc_type));
                             }
                             p => {
                                 args.args.push(p);
@@ -1423,7 +1452,7 @@ impl<'a> SpecificContext<'a> {
                                 abort!(first, "expected one type parameter");
                             }
                             match args.args.first_mut() {
-                                Some(syn::GenericArgument::Const(expr)) => {
+                                Some(GenericArgument::Const(expr)) => {
                                     // T<{T::LEN - 1}>
                                     self.replace_expr(expr);
                                     // T<{5 - 1}>
@@ -1499,11 +1528,10 @@ impl<'a> SpecificContext<'a> {
     // `where T0: Sized, T1: Sized,...`.  Return a mapping from ident to tuple elementtypes, e.g.
     // T -> vec!["T0", "T1",...] or T -> vec!["u32", "u32",...]
     fn process_where_clause(
-        &self,
+        &mut self,
         generics: &mut syn::Generics,
         typle_idents: &HashMap<Ident, bool>,
-    ) -> HashMap<Ident, Vec<String>> {
-        let mut output = HashMap::new();
+    ) {
         if let Some(mut where_clause) = generics.where_clause.take() {
             let mut predicates =
                 syn::punctuated::Punctuated::<WherePredicate, syn::token::Comma>::new();
@@ -1570,7 +1598,7 @@ impl<'a> SpecificContext<'a> {
                                                         element_type_idents.push(type_ident);
                                                     }
 
-                                                    output.insert(
+                                                    self.tuples.insert(
                                                         first.ident.clone(),
                                                         element_type_idents,
                                                     );
@@ -1612,7 +1640,7 @@ impl<'a> SpecificContext<'a> {
                                                                 element_type_idents
                                                                     .push(type_ident.to_string());
                                                             }
-                                                            output.insert(
+                                                            self.tuples.insert(
                                                                 first.ident.clone(),
                                                                 element_type_idents,
                                                             );
@@ -1635,12 +1663,24 @@ impl<'a> SpecificContext<'a> {
                 }
             }
             if !predicates.is_empty() {
+                // Now that we have the tuples map populated, substitute any appearances of
+                // tuple types in the constraints (e.g. T::Types: Extract<Output = T<0>::Output>)
+                for predicate in &mut predicates {
+                    if let WherePredicate::Type(predicate_type) = predicate {
+                        for bound in &mut predicate_type.bounds {
+                            if let TypeParamBound::Trait(trait_bound) = bound {
+                                self.replace_path_arguments(&mut trait_bound.path);
+                            }
+                        }
+                    }
+                }
                 where_clause.predicates = predicates;
                 generics.where_clause = Some(where_clause);
             }
             for generic_param in std::mem::take(&mut generics.params) {
                 match generic_param {
-                    syn::GenericParam::Type(type_param) => match output.get(&type_param.ident) {
+                    syn::GenericParam::Type(type_param) => match self.tuples.get(&type_param.ident)
+                    {
                         Some(element_type_idents) => {
                             if let Some(true) = typle_idents.get(&type_param.ident) {
                                 for type_ident in element_type_idents {
@@ -1660,7 +1700,6 @@ impl<'a> SpecificContext<'a> {
                 }
             }
         }
-        output
     }
 
     fn replace_generic_arguments(
@@ -1669,9 +1708,9 @@ impl<'a> SpecificContext<'a> {
     ) {
         for arg in std::mem::take(args) {
             match arg {
-                syn::GenericArgument::Type(mut generic_type) => {
+                GenericArgument::Type(mut generic_type) => {
                     self.replace_type(&mut generic_type);
-                    args.push(syn::GenericArgument::Type(generic_type));
+                    args.push(GenericArgument::Type(generic_type));
                 }
                 p => {
                     args.push(p);
