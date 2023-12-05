@@ -1862,3 +1862,114 @@ fn ident_to_path(ident: Ident) -> Path {
         segments,
     }
 }
+
+/// Create a tuple or array.
+///
+/// Loop over the indices of the tuple, performing the expression for each index.
+///
+/// If the macro uses parentheses, the returned value is a tuple. If the macro uses brackets, the
+/// returned value is an array.
+///
+/// With parentheses, this macro can be used in type or value position.
+///
+/// Examples:
+/// ```ignore
+/// #[typle(Tuple for 0..=2)]
+/// impl<T> S<(T)>
+/// where
+///     T: Tuple(u32)
+/// {
+///     fn new(t: typle_for!(i in .. => &T<{i}>)) {
+///         // Square brackets create an array
+///         let a = typle_for![i in 0..T::LEN => *t[[i]] * 2];
+///         // Parentheses create a tuple
+///         // The default bounds of the range are 0..Tuple::LEN
+///         let b = typle_for!(i in .. => *t[[i]] * 2);
+///         // Arbitrary expressions can be used for the indices and
+///         // the iterator variable can be left out if not needed
+///         let init: [Option<u32>; T::LEN] = typle_for![T::LEN * 2..T::LEN * 3 => None];
+///     }
+/// }
+/// ```
+/// generates
+/// ```ignore
+/// impl S0 {
+///    fn new(t: ()) {
+///        let a = [];
+///        let b = ();
+///        let init: [Option<u32>; 0] = [];
+///    }
+/// }
+/// impl S1<u32> {
+///    fn new(t: (&u32,)) {
+///        let a = [*t.0 * 2];
+///        let b = (*t.0 * 2,);
+///        let init: [Option<u32>; 1] = [None];
+///    }
+/// }
+/// impl S2<u32, u32> {
+///    fn new(t: (&u32, &u32)) {
+///        let a = [*t.0 * 2, *t.1 * 2];
+///        let b = (*t.0 * 2, *t.1 * 2);
+///        let init: [Option<u32>; 2] = [None, None];
+///    }
+/// }
+/// ```
+#[proc_macro_error]
+#[proc_macro]
+pub fn typle_for(_item: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    abort_call_site!("typle_variant macro only available in item with typle attribute");
+}
+
+/// Create variants in an enum.
+///
+/// In an enum, the `typle_variant` macro allows the creation of variants for each component.
+///
+/// A variant is created for each index in the range provided. The default range is `0..Tuple::LEN`.
+///
+/// The variants will start with the variant name given before the `=` character, followed by the
+/// index.
+///
+/// If the macro uses parentheses the variant will be use unnamed fields. If the macro uses braces
+/// the variant will use named fields.
+///
+/// Examples:
+///
+/// ```
+/// # use typle::typle;
+/// # trait Process {
+/// #     type State;
+/// # }
+/// #[typle(Tuple for 2..=2)]
+/// pub enum ProcessState<T>
+/// where
+///     T: Tuple,
+///     T::Types: Process,
+/// {
+///     R = typle_variant!{i in 0..T::LEN => r: T<{i}>},
+///     S = typle_variant!(i in .. => Option<T<{i}>::State>, [u64; i]),
+///     Done([u64; Tuple::LEN])
+/// }
+/// ```
+/// creates
+/// ```
+/// # trait Process {
+/// #     type State;
+/// # }
+/// pub enum ProcessState2<T0, T1>
+/// where
+///     T0: Process,
+///     T1: Process,
+/// {
+///     R0 { r: T0 },
+///     R1 { r: T1 },
+///     S0(Option<T0::State>, [u64; 0]),
+///     S1(Option<T1::State>, [u64; 1]),
+///     Done([u64; 2]),
+/// }
+/// ```
+#[proc_macro_error]
+#[proc_macro]
+pub fn typle_variant(_item: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    abort_call_site!("typle_variant macro only available in item with typle attribute");
+}
