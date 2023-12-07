@@ -3,20 +3,10 @@ use typle::typle;
 use std::ops::{AddAssign, Mul};
 
 struct MyStruct<T> {
-    t: T,
+    pub t: T,
 }
 
-#[typle(Tuple for 0..=12)]
-impl<T> MyStruct<T>
-where
-    T: Tuple
-{
-    fn new(t: T) -> Self {
-        MyStruct { t }
-    }
-}
-
-#[typle(Tuple for 1..=12)]
+#[typle(Tuple for 1..=6)]
 impl<T, C> MyStruct<T>
 where
     T: Tuple(C),
@@ -36,7 +26,7 @@ where
     }
 }
 
-#[typle(Tuple for 1..=12)]
+#[typle(Tuple for 1..=6)]
 impl<T, C> MyStruct<T>
 where
     T: Tuple(C),
@@ -54,20 +44,20 @@ trait HeadTail {
     fn tail(&self) -> Self::Tail;
 }
 
-#[typle(Tuple for 1..=12)]
+#[typle(Tuple for 1..=6)]
 impl<T> HeadTail for MyStruct<T>
 where
     T: Tuple,
     T::Types: Copy,
 {
     type Head = T<0>;
-    type Tail = typle_for!(i in 1.. => T<{i}>);
+    type Tail = MyStruct<typle_for!(i in 1.. => T<{i}>)>;
 
     fn head(&self) -> Option<Self::Head> {
         Some(self.t[[0]])
     }
 
     fn tail(&self) -> Self::Tail {
-        typle_for!(i in 1.. => self.t[[i]])
+        MyStruct { t: typle_for!(i in 1.. => self.t[[i]]) }
     }
 }

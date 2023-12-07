@@ -10,20 +10,10 @@ use typle::typle;
 use std::ops::{AddAssign, Mul};
 
 struct MyStruct<T> {
-    t: T,
+    pub t: T,
 }
 
-#[typle(Tuple for 0..=12)]
-impl<T> MyStruct<T>
-where
-    T: Tuple
-{
-    fn new(t: T) -> Self {
-        MyStruct { t }
-    }
-}
-
-#[typle(Tuple for 1..=12)]
+#[typle(Tuple for 1..=6)]
 impl<T, C> MyStruct<T>
 where
     T: Tuple(C),
@@ -43,7 +33,7 @@ where
     }
 }
 
-#[typle(Tuple for 1..=12)]
+#[typle(Tuple for 1..=6)]
 impl<T, C> MyStruct<T>
 where
     T: Tuple(C),
@@ -61,21 +51,21 @@ trait HeadTail {
     fn tail(&self) -> Self::Tail;
 }
 
-#[typle(Tuple for 1..=12)]
+#[typle(Tuple for 1..=6)]
 impl<T> HeadTail for MyStruct<T>
 where
     T: Tuple,
     T::Types: Copy,
 {
     type Head = T<0>;
-    type Tail = typle_for!(i in 1.. => T<{i}>);
+    type Tail = MyStruct<typle_for!(i in 1.. => T<{i}>)>;
 
     fn head(&self) -> Option<Self::Head> {
         Some(self.t[[0]])
     }
 
     fn tail(&self) -> Self::Tail {
-        typle_for!(i in 1.. => self.t[[i]])
+        MyStruct { t: typle_for!(i in 1.. => self.t[[i]]) }
     }
 }
 ```
@@ -83,12 +73,6 @@ where
 The generated implementations for 3-tuples are:
 
 ```rust
-impl<T0, T1, T2> MyStruct<(T0, T1, T2)> {
-    fn new(t: (T0, T1, T2)) -> Self {
-        MyStruct { t }
-    }
-}
-
 impl<C> MyStruct<(C, C, C)>
 where
     C: AddAssign + Default + Copy,
@@ -136,14 +120,16 @@ where
     T2: Copy,
 {
     type Head = T0;
-    type Tail = (T1, T2);
+    type Tail = MyStruct<(T1, T2)>;
 
     fn head(&self) -> Option<Self::Head> {
         Some(self.t.0)
     }
 
     fn tail(&self) -> Self::Tail {
-        (self.t.1, self.t.2)
+        MyStruct {
+            t: (self.t.1, self.t.2),
+        }
     }
 }
 ```
