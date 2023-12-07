@@ -393,7 +393,10 @@ impl<'a> SpecificContext<'a> {
                                             )
                                         }
                                         syn::MacroDelimiter::Bracket(_) => {
-                                            abort!(r#macro.mac, "expect parentheses or braces")
+                                            if !token_stream.is_empty() {
+                                                abort!(token_stream, "braces require empty body")
+                                            }
+                                            Fields::Unit
                                         }
                                     };
                                     for index in range {
@@ -1931,7 +1934,7 @@ pub fn typle_for(_item: proc_macro::TokenStream) -> proc_macro::TokenStream {
 /// index.
 ///
 /// If the macro uses parentheses the variant will be use unnamed fields. If the macro uses braces
-/// the variant will use named fields.
+/// the variant will use named fields. If the macro uses brackets the variant will have no fields.
 ///
 /// Examples:
 ///
@@ -1946,6 +1949,7 @@ pub fn typle_for(_item: proc_macro::TokenStream) -> proc_macro::TokenStream {
 ///     T: Tuple,
 ///     T::Types: Process,
 /// {
+///     Q = typle_variant![.. =>],
 ///     R = typle_variant!{i in 0..T::LEN => r: T<{i}>},
 ///     S = typle_variant!(i in .. => Option<T<{i}>::State>, [u64; i]),
 ///     Done([u64; Tuple::LEN])
@@ -1961,6 +1965,8 @@ pub fn typle_for(_item: proc_macro::TokenStream) -> proc_macro::TokenStream {
 ///     T0: Process,
 ///     T1: Process,
 /// {
+///     Q0,
+///     Q1,
 ///     R0 { r: T0 },
 ///     R1 { r: T1 },
 ///     S0(Option<T0::State>, [u64; 0]),

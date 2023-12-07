@@ -12,6 +12,8 @@ where
     T0: Process<Output = u64>,
 {
     S0(Option<T0::State>, [u64; 0]),
+    U0 { u: [u32; 1] },
+    V0,
     Done([u64; 1]),
 }
 pub enum ProcessState2<T0, T1>
@@ -21,6 +23,10 @@ where
 {
     S0(Option<T0::State>, [u64; 0]),
     S1(Option<T1::State>, [u64; 1]),
+    U0 { u: [u32; 2] },
+    U1 { u: [u32; 2] },
+    V0,
+    V1,
     Done([u64; 2]),
 }
 pub enum ProcessState3<T0, T1, T2>
@@ -32,6 +38,12 @@ where
     S0(Option<T0::State>, [u64; 0]),
     S1(Option<T1::State>, [u64; 1]),
     S2(Option<T2::State>, [u64; 2]),
+    U0 { u: [u32; 3] },
+    U1 { u: [u32; 3] },
+    U2 { u: [u32; 3] },
+    V0,
+    V1,
+    V2,
     Done([u64; 3]),
 }
 impl Default for ProcessState0 {
