@@ -7,56 +7,75 @@ The code below generates implementations for tuples up to 12 elements.
 ```rust
 use typle::typle;
 
-struct MyStruct<S, T> {
-    s: S,
-    t: Option<T>,
+use std::ops::{AddAssign, Mul};
+
+struct MyStruct<T> {
+    t: T,
 }
 
 #[typle(Tuple for 0..=12)]
-impl<S, T> MyStruct<S, T>
+impl<T> MyStruct<T>
 where
-    S: Tuple(u32),
-    T: Tuple,
+    T: Tuple
 {
-    fn new(s: S, t: Option<T>) -> MyStruct<S, T> {
-        MyStruct { s, t }
+    fn new(t: T) -> Self {
+        MyStruct { t }
     }
-
-    fn sum(&self) -> u32 {
-        let mut sum = 0;
-        for typle_const!(i) in 0..S::LEN {
-            sum += self.s[[i]];
-        }
-        sum
-    }
-
-    fn multiply(&self, multipliers: S) -> typle_for!(.. => u64) {
-        typle_for!(i in .. => self.s[[i]] as u64 * multipliers[[i]] as u64)
-    }
-}
-
-trait FirstLast {
-    type F;
-    type L;
-    fn first(&self) -> Option<Self::F>;
-    fn last(&self) -> Option<Self::L>;
 }
 
 #[typle(Tuple for 1..=12)]
-impl<S, T> FirstLast for MyStruct<S, T>
+impl<T, C> MyStruct<T>
+where
+    T: Tuple(C),
+    C: AddAssign + Default + Copy,
+{
+    fn even_odd(&self) -> (C, C) {
+        let mut even = C::default();
+        let mut odd = C::default();
+        for typle_const!(i) in 0..T::LEN {
+            if typle_const!(i % 2 == 0) {
+                even += self.t[[i]];
+            } else {
+                odd += self.t[[i]];
+            }
+        }
+        (even, odd)
+    }
+}
+
+#[typle(Tuple for 1..=12)]
+impl<T, C> MyStruct<T>
+where
+    T: Tuple(C),
+    C: Mul<u32> + Copy,
+{
+    fn multiply(&self, multipliers: typle_for!(.. => u32)) -> typle_for!(.. => <C as Mul<u32>>::Output) {
+        typle_for!(i in .. => self.t[[i]] * multipliers[[i]])
+    }
+}
+
+trait HeadTail {
+    type Head;
+    type Tail;
+    fn head(&self) -> Option<Self::Head>;
+    fn tail(&self) -> Self::Tail;
+}
+
+#[typle(Tuple for 1..=12)]
+impl<T> HeadTail for MyStruct<T>
 where
     T: Tuple,
     T::Types: Copy,
 {
-    type F = T<0>;
-    type L = T<{T::LEN - 1}>;
+    type Head = T<0>;
+    type Tail = typle_for!(i in 1.. => T<{i}>);
 
-    fn first(&self) -> Option<Self::F> {
-        self.t.map(|tup| tup[[0]])
+    fn head(&self) -> Option<Self::Head> {
+        Some(self.t[[0]])
     }
 
-    fn last(&self) -> Option<Self::L> {
-        self.t.map(|tup| tup[[T::LEN - 1]])
+    fn tail(&self) -> Self::Tail {
+        typle_for!(i in 1.. => self.t[[i]])
     }
 }
 ```
@@ -64,54 +83,67 @@ where
 The generated implementations for 3-tuples are:
 
 ```rust
-impl<T0, T1, T2> MyStruct<(u32, u32, u32), (T0, T1, T2)> {
-    fn new(
-        s: (u32, u32, u32),
-        t: Option<(T0, T1, T2)>,
-    ) -> MyStruct<(u32, u32, u32), (T0, T1, T2)> {
-        MyStruct { s, t }
-    }
-
-    fn sum(&self) -> u32 {
-        let mut sum = 0;
-        {
-            {
-                sum += self.s.0;
-            }
-            {
-                sum += self.s.1;
-            }
-            {
-                sum += self.s.2;
-            }
-        }
-        sum
-    }
-
-    fn multiply(&self, multipliers: (u32, u32, u32)) -> (u64, u64, u64) {
-        (
-            self.s.0 as u64 * multipliers.0 as u64,
-            self.s.1 as u64 * multipliers.1 as u64,
-            self.s.2 as u64 * multipliers.2 as u64,
-        )
+impl<T0, T1, T2> MyStruct<(T0, T1, T2)> {
+    fn new(t: (T0, T1, T2)) -> Self {
+        MyStruct { t }
     }
 }
 
-impl<S, T0, T1, T2> FirstLast for MyStruct<S, (T0, T1, T2)>
+impl<C> MyStruct<(C, C, C)>
+where
+    C: AddAssign + Default + Copy,
+{
+    fn even_odd(&self) -> (C, C) {
+        let mut even = C::default();
+        let mut odd = C::default();
+        {
+            {
+                {
+                    even += self.t.0;
+                }
+            }
+            {
+                {
+                    odd += self.t.1;
+                }
+            }
+            {
+                {
+                    even += self.t.2;
+                }
+            }
+        }
+        (even, odd)
+    }
+}
+
+impl<C> MyStruct<(C, C, C)>
+where
+    C: Mul<u32> + Copy,
+{
+    fn multiply(
+        &self,
+        multipliers: (u32, u32, u32),
+    ) -> (<C as Mul<u32>>::Output, <C as Mul<u32>>::Output, <C as Mul<u32>>::Output) {
+        (self.t.0 * multipliers.0, self.t.1 * multipliers.1, self.t.2 * multipliers.2)
+    }
+}
+
+impl<T0, T1, T2> HeadTail for MyStruct<(T0, T1, T2)>
 where
     T0: Copy,
     T1: Copy,
     T2: Copy,
 {
-    type F = T0;
-    type L = T2;
+    type Head = T0;
+    type Tail = (T1, T2);
 
-    fn first(&self) -> Option<Self::F> {
-        self.t.map(|tup| tup.0)
+    fn head(&self) -> Option<Self::Head> {
+        Some(self.t.0)
     }
 
-    fn last(&self) -> Option<Self::L> {
-        self.t.map(|tup| tup.2)
+    fn tail(&self) -> Self::Tail {
+        (self.t.1, self.t.2)
     }
 }
 ```

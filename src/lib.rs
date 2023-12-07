@@ -1067,7 +1067,6 @@ impl<'a> SpecificContext<'a> {
         // T::default() -> <(T0, T1)>::default()
         // typle_for!(i in .. => t[[i]]) -> (t.0, t.1)
         // typle_for![i in .. => t[[i]]] -> [t.0, t.1]
-        // typle_for!{i in .. => let x = t[[i]]} -> let x = t.0; let x = t.1
         // typle_for!(i in .. => (T::<{i}>, T::<0>)) -> ((T0, T0), (T1, T0))
         // typle_for!(0..2 => None) // (None, None)
         if let Some(macro_name) = r#macro.path.get_ident() {
@@ -1539,8 +1538,8 @@ impl<'a> SpecificContext<'a> {
             let mut predicates =
                 syn::punctuated::Punctuated::<WherePredicate, syn::token::Comma>::new();
             for predicate in where_clause.predicates {
-                if let WherePredicate::Type(predicate_type) = predicate {
-                    if let Type::Path(type_path) = predicate_type.bounded_ty {
+                if let WherePredicate::Type(predicate_type) = &predicate {
+                    if let Type::Path(type_path) = &predicate_type.bounded_ty {
                         if type_path.qself.is_none() && type_path.path.leading_colon.is_none() {
                             let mut segments = type_path.path.segments.iter();
                             if let Some(first) = segments.next() {
@@ -1661,9 +1660,8 @@ impl<'a> SpecificContext<'a> {
                             }
                         }
                     }
-                } else {
-                    predicates.push(predicate);
                 }
+                predicates.push(predicate);
             }
             if !predicates.is_empty() {
                 // Now that we have the tuples map populated, substitute any appearances of
@@ -1832,6 +1830,13 @@ fn evaluate_usize(expr: &Expr) -> Option<usize> {
                 if let Some(left) = evaluate_usize(&binary.left) {
                     if let Some(right) = evaluate_usize(&binary.right) {
                         return left.checked_mul(right);
+                    }
+                }
+            }
+            syn::BinOp::Rem(_) => {
+                if let Some(left) = evaluate_usize(&binary.left) {
+                    if let Some(right) = evaluate_usize(&binary.right) {
+                        return left.checked_rem(right);
                     }
                 }
             }
