@@ -13,6 +13,16 @@ struct MyStruct<T> {
     pub t: T,
 }
 
+#[typle(Tuple for 0..=6)]
+impl<T> MyStruct<T>
+where
+    T: Tuple
+{
+    fn new(t: T) -> Self {
+        MyStruct { t }
+    }
+}
+
 #[typle(Tuple for 1..=6)]
 impl<T, C> MyStruct<T>
 where
@@ -65,7 +75,7 @@ where
     }
 
     fn tail(&self) -> Self::Tail {
-        MyStruct { t: typle_for!(i in 1.. => self.t[[i]]) }
+        MyStruct::<typle_for!(i in 1.. => T<{i}>)>::new(typle_for!(i in 1.. => self.t[[i]]))
     }
 }
 ```
@@ -73,6 +83,12 @@ where
 The generated implementations for 3-tuples are:
 
 ```rust
+impl<T0, T1, T2> MyStruct<(T0, T1, T2)> {
+    fn new(t: (T0, T1, T2)) -> Self {
+        MyStruct { t }
+    }
+}
+
 impl<C> MyStruct<(C, C, C)>
 where
     C: AddAssign + Default + Copy,
@@ -127,9 +143,7 @@ where
     }
 
     fn tail(&self) -> Self::Tail {
-        MyStruct {
-            t: (self.t.1, self.t.2),
-        }
+        MyStruct::<(T1, T2)>::new((self.t.1, self.t.2))
     }
 }
 ```

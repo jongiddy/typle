@@ -3,6 +3,41 @@ use std::ops::{AddAssign, Mul};
 struct MyStruct<T> {
     pub t: T,
 }
+impl MyStruct<()> {
+    fn new(t: ()) -> Self {
+        MyStruct { t }
+    }
+}
+impl<T0> MyStruct<(T0,)> {
+    fn new(t: (T0,)) -> Self {
+        MyStruct { t }
+    }
+}
+impl<T0, T1> MyStruct<(T0, T1)> {
+    fn new(t: (T0, T1)) -> Self {
+        MyStruct { t }
+    }
+}
+impl<T0, T1, T2> MyStruct<(T0, T1, T2)> {
+    fn new(t: (T0, T1, T2)) -> Self {
+        MyStruct { t }
+    }
+}
+impl<T0, T1, T2, T3> MyStruct<(T0, T1, T2, T3)> {
+    fn new(t: (T0, T1, T2, T3)) -> Self {
+        MyStruct { t }
+    }
+}
+impl<T0, T1, T2, T3, T4> MyStruct<(T0, T1, T2, T3, T4)> {
+    fn new(t: (T0, T1, T2, T3, T4)) -> Self {
+        MyStruct { t }
+    }
+}
+impl<T0, T1, T2, T3, T4, T5> MyStruct<(T0, T1, T2, T3, T4, T5)> {
+    fn new(t: (T0, T1, T2, T3, T4, T5)) -> Self {
+        MyStruct { t }
+    }
+}
 impl<C> MyStruct<(C,)>
 where
     C: AddAssign + Default + Copy,
@@ -295,7 +330,7 @@ where
         Some(self.t.0)
     }
     fn tail(&self) -> Self::Tail {
-        MyStruct { t: () }
+        MyStruct::<()>::new(())
     }
 }
 impl<T0, T1> HeadTail for MyStruct<(T0, T1)>
@@ -309,7 +344,7 @@ where
         Some(self.t.0)
     }
     fn tail(&self) -> Self::Tail {
-        MyStruct { t: (self.t.1,) }
+        MyStruct::<(T1,)>::new((self.t.1,))
     }
 }
 impl<T0, T1, T2> HeadTail for MyStruct<(T0, T1, T2)>
@@ -324,9 +359,7 @@ where
         Some(self.t.0)
     }
     fn tail(&self) -> Self::Tail {
-        MyStruct {
-            t: (self.t.1, self.t.2),
-        }
+        MyStruct::<(T1, T2)>::new((self.t.1, self.t.2))
     }
 }
 impl<T0, T1, T2, T3> HeadTail for MyStruct<(T0, T1, T2, T3)>
@@ -342,9 +375,7 @@ where
         Some(self.t.0)
     }
     fn tail(&self) -> Self::Tail {
-        MyStruct {
-            t: (self.t.1, self.t.2, self.t.3),
-        }
+        MyStruct::<(T1, T2, T3)>::new((self.t.1, self.t.2, self.t.3))
     }
 }
 impl<T0, T1, T2, T3, T4> HeadTail for MyStruct<(T0, T1, T2, T3, T4)>
@@ -361,9 +392,7 @@ where
         Some(self.t.0)
     }
     fn tail(&self) -> Self::Tail {
-        MyStruct {
-            t: (self.t.1, self.t.2, self.t.3, self.t.4),
-        }
+        MyStruct::<(T1, T2, T3, T4)>::new((self.t.1, self.t.2, self.t.3, self.t.4))
     }
 }
 impl<T0, T1, T2, T3, T4, T5> HeadTail for MyStruct<(T0, T1, T2, T3, T4, T5)>
@@ -381,8 +410,8 @@ where
         Some(self.t.0)
     }
     fn tail(&self) -> Self::Tail {
-        MyStruct {
-            t: (self.t.1, self.t.2, self.t.3, self.t.4, self.t.5),
-        }
+        MyStruct::<
+            (T1, T2, T3, T4, T5),
+        >::new((self.t.1, self.t.2, self.t.3, self.t.4, self.t.5))
     }
 }

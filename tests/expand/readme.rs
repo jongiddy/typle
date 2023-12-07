@@ -6,6 +6,16 @@ struct MyStruct<T> {
     pub t: T,
 }
 
+#[typle(Tuple for 0..=6)]
+impl<T> MyStruct<T>
+where
+    T: Tuple
+{
+    fn new(t: T) -> Self {
+        MyStruct { t }
+    }
+}
+
 #[typle(Tuple for 1..=6)]
 impl<T, C> MyStruct<T>
 where
@@ -58,6 +68,6 @@ where
     }
 
     fn tail(&self) -> Self::Tail {
-        MyStruct { t: typle_for!(i in 1.. => self.t[[i]]) }
+        MyStruct::<typle_for!(i in 1.. => T<{i}>)>::new(typle_for!(i in 1.. => self.t[[i]]))
     }
 }
