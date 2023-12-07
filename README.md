@@ -2,7 +2,7 @@
 
 A Rust macro to create items for different sized tuples.
 
-The code below generates implementations for tuples up to 12 elements.
+The code below generates implementations for tuples up to 6 components.
 
 ```rust
 use typle::typle;
