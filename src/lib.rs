@@ -144,6 +144,11 @@ pub fn typle_identity(item: proc_macro::TokenStream) -> proc_macro::TokenStream 
     item
 }
 
+enum EvaluationContext {
+    Type,
+    Value,
+}
+
 #[doc(hidden)]
 #[proc_macro_error]
 #[proc_macro_attribute]
@@ -504,7 +509,7 @@ impl<'a> SpecificContext<'a> {
                         self.replace_type(&mut ty.ty);
                     }
                     syn::ImplItem::Macro(r#macro) => {
-                        self.replace_macro(&mut r#macro.mac);
+                        self.replace_macro(&mut r#macro.mac, EvaluationContext::Type);
                     }
                     _ => {}
                 }
@@ -539,7 +544,9 @@ impl<'a> SpecificContext<'a> {
                     self.replace_item(item);
                 }
                 syn::Stmt::Expr(expr, _) => self.replace_expr(expr),
-                syn::Stmt::Macro(stmt_macro) => self.replace_macro(&mut stmt_macro.mac),
+                syn::Stmt::Macro(stmt_macro) => {
+                    self.replace_macro(&mut stmt_macro.mac, EvaluationContext::Value)
+                }
             }
         }
     }
@@ -754,7 +761,7 @@ impl<'a> SpecificContext<'a> {
                 self.replace_block(&mut r#loop.body);
             }
             Expr::Macro(r#macro) => {
-                self.replace_macro(&mut r#macro.mac);
+                self.replace_macro(&mut r#macro.mac, EvaluationContext::Value);
             }
             Expr::Match(r#match) => {
                 self.replace_expr(&mut r#match.expr);
@@ -1059,7 +1066,7 @@ impl<'a> SpecificContext<'a> {
         }
     }
 
-    fn replace_macro(&self, r#macro: &mut Macro) {
+    fn replace_macro(&self, r#macro: &mut Macro, context: EvaluationContext) {
         // typle_for!(i in .. => Option<T<{i}>) -> (Option<T0>, Option<T1>)
         // typle_for!(i in .. => T::<{i}>::default()) -> (T0::default(), T1::default())
         // as opposed to
@@ -1085,62 +1092,68 @@ impl<'a> SpecificContext<'a> {
                 };
                 let mut token_stream = std::mem::take(&mut r#macro.tokens);
                 let (pattern, range) = self.parse_pattern_range(&mut token_stream);
-                if let Ok(expr) = syn::parse2::<Expr>(token_stream.clone()) {
-                    let mut elems = syn::punctuated::Punctuated::new();
-                    for index in range {
-                        let mut context = self.clone();
-                        if let Some(ident) = pattern.clone() {
-                            if ident != "_" {
-                                context.constants.insert(ident, index);
+                let body_span = token_stream.span();
+                match context {
+                    EvaluationContext::Type => {
+                        let Ok(r#type) = syn::parse2::<Type>(token_stream) else {
+                            abort!(body_span, "expected type");
+                        };
+                        let mut tuple = TypeTuple {
+                            paren_token: syn::token::Paren::default(),
+                            elems: syn::punctuated::Punctuated::new(),
+                        };
+                        for index in range {
+                            let mut context = self.clone();
+                            if let Some(ident) = pattern.clone() {
+                                if ident != "_" {
+                                    context.constants.insert(ident, index);
+                                }
                             }
+                            let mut element = r#type.clone();
+                            context.replace_type(&mut element);
+                            tuple.elems.push(element);
                         }
-                        let mut element = expr.clone();
-                        context.replace_expr(&mut element);
-                        elems.push(element);
+                        r#macro.tokens = tuple.into_token_stream();
                     }
-                    r#macro.tokens = match r#macro.delimiter {
-                        syn::MacroDelimiter::Paren(_) => {
-                            let tuple = ExprTuple {
-                                paren_token: syn::token::Paren::default(),
-                                elems,
-                                attrs: Vec::new(),
-                            };
-                            tuple.into_token_stream()
-                        }
-                        syn::MacroDelimiter::Brace(_) => {
-                            abort!(default_span, "expected parentheses or brackets");
-                        }
-                        syn::MacroDelimiter::Bracket(_) => {
-                            let array = ExprArray {
-                                attrs: Vec::new(),
-                                bracket_token: syn::token::Bracket::default(),
-                                elems,
-                            };
-                            array.into_token_stream()
-                        }
-                    };
-                    return;
-                }
-                if let Ok(r#type) = syn::parse2::<Type>(token_stream) {
-                    let mut tuple = TypeTuple {
-                        paren_token: syn::token::Paren::default(),
-                        elems: syn::punctuated::Punctuated::new(),
-                    };
-                    for index in range {
-                        let mut context = self.clone();
-                        if let Some(ident) = pattern.clone() {
-                            if ident != "_" {
-                                context.constants.insert(ident, index);
+                    EvaluationContext::Value => {
+                        let Ok(expr) = syn::parse2::<Expr>(token_stream.clone()) else {
+                            abort!(body_span, "expected value");
+                        };
+                        let mut elems = syn::punctuated::Punctuated::new();
+                        for index in range {
+                            let mut context = self.clone();
+                            if let Some(ident) = pattern.clone() {
+                                if ident != "_" {
+                                    context.constants.insert(ident, index);
+                                }
                             }
+                            let mut element = expr.clone();
+                            context.replace_expr(&mut element);
+                            elems.push(element);
                         }
-                        let mut element = r#type.clone();
-                        context.replace_type(&mut element);
-                        tuple.elems.push(element);
+                        r#macro.tokens = match r#macro.delimiter {
+                            syn::MacroDelimiter::Paren(_) => {
+                                let tuple = ExprTuple {
+                                    paren_token: syn::token::Paren::default(),
+                                    elems,
+                                    attrs: Vec::new(),
+                                };
+                                tuple.into_token_stream()
+                            }
+                            syn::MacroDelimiter::Brace(_) => {
+                                abort!(default_span, "expected parentheses or brackets");
+                            }
+                            syn::MacroDelimiter::Bracket(_) => {
+                                let array = ExprArray {
+                                    attrs: Vec::new(),
+                                    bracket_token: syn::token::Bracket::default(),
+                                    elems,
+                                };
+                                array.into_token_stream()
+                            }
+                        };
                     }
-                    r#macro.tokens = tuple.into_token_stream();
-                    return;
                 }
-                abort!(default_span, "expected type or expression");
             }
         }
     }
@@ -1420,7 +1433,7 @@ impl<'a> SpecificContext<'a> {
             Type::Group(group) => {
                 self.replace_type(&mut group.elem);
             }
-            Type::Macro(r#macro) => self.replace_macro(&mut r#macro.mac),
+            Type::Macro(r#macro) => self.replace_macro(&mut r#macro.mac, EvaluationContext::Type),
             Type::Paren(paren) => {
                 self.replace_type(&mut paren.elem);
             }
