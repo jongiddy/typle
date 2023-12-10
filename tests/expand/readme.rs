@@ -1,7 +1,6 @@
 use typle::typle;
 
-use std::ops::{AddAssign, Mul};
-
+use std::ops::Mul;
 struct MyStruct<T> {
     pub t: T,
 }
@@ -14,13 +13,23 @@ where
     fn new(t: T) -> Self {
         MyStruct { t }
     }
+
+    fn multiply<M>(
+        &self,
+        multipliers: typle_for!(.. => M)
+    ) -> typle_for!(i in .. => <T<{i}> as Mul<M>>::Output)
+    where
+        T::Types: Mul<M> + Copy,
+    {
+        typle_for!(i in .. => self.t[[i]] * multipliers[[i]])
+    }
 }
 
 #[typle(Tuple for 1..=6)]
 impl<T, C> MyStruct<T>
 where
-    T: Tuple(C),
-    C: AddAssign + Default + Copy,
+    T: Tuple<Types=C>,
+    C: std::ops::AddAssign + Default + Copy,
 {
     fn even_odd(&self) -> (C, C) {
         let mut even = C::default();
@@ -33,17 +42,6 @@ where
             }
         }
         (even, odd)
-    }
-}
-
-#[typle(Tuple for 1..=6)]
-impl<T, C> MyStruct<T>
-where
-    T: Tuple(C),
-    C: Mul<u32> + Copy,
-{
-    fn multiply(&self, multipliers: typle_for!(.. => u32)) -> typle_for!(.. => <C as Mul<u32>>::Output) {
-        typle_for!(i in .. => self.t[[i]] * multipliers[[i]])
     }
 }
 
@@ -61,13 +59,13 @@ where
     T::Types: Copy,
 {
     type Head = T<0>;
-    type Tail = MyStruct<typle_for!(i in 1.. => T<{i}>)>;
+    type Tail = typle_for!(i in 1.. => T<{i}>);
 
     fn head(&self) -> Option<Self::Head> {
         Some(self.t[[0]])
     }
 
     fn tail(&self) -> Self::Tail {
-        MyStruct::<typle_for!(i in 1.. => T<{i}>)>::new(typle_for!(i in 1.. => self.t[[i]]))
+        typle_for!(i in 1.. => self.t[[i]])
     }
 }

@@ -3,7 +3,7 @@ use typle::typle;
 #[typle(Tuple for 0..=2)]
 impl<T> TupleA<T>
 where
-    T: Tuple(u32),
+    T: Tuple<Types=u32>,
 {}
 
 #[typle(Tuple for 0..=2)]

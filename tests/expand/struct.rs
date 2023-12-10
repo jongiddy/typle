@@ -13,7 +13,7 @@ where
     T: Tuple,
     T::Types: Into<ByteStream>,
 {
-    t: TupleSequenceOutput<(T)>,
+    t: TupleSequenceOutput<T::Types>,
 }
 
 #[typle(Tuple for 0..=2)]
@@ -29,13 +29,15 @@ where
 }
 
 #[typle(Tuple for 0..=2)]
-struct AStruct<T> {
+struct AStruct<T>
+where
+    T: Tuple {
     t: T,
-    state: State<(T)>,
+    state: State<T::Types>,
 }
 
 #[typle(Tuple for 0..=2)]
-impl<T> std::io::Read for AStruct<(T)>
+impl<T> std::io::Read for AStruct<T::Types>
 where
     T: Tuple,
     T::Types: std::io::Read,

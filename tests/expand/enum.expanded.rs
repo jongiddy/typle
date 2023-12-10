@@ -11,7 +11,7 @@ pub enum ProcessState1<T0>
 where
     T0: Process<Output = u64>,
 {
-    S0(Option<T0::State>, [u64; 0]),
+    S0(Option<<T0>::State>, [u64; 0]),
     U0 { u: [u32; 1] },
     V0,
     Done([u64; 1]),
@@ -21,8 +21,8 @@ where
     T0: Process<Output = u64>,
     T1: Process<Output = u64>,
 {
-    S0(Option<T0::State>, [u64; 0]),
-    S1(Option<T1::State>, [u64; 1]),
+    S0(Option<<T0>::State>, [u64; 0]),
+    S1(Option<<T1>::State>, [u64; 1]),
     U0 { u: [u32; 2] },
     U1 { u: [u32; 2] },
     V0,
@@ -35,9 +35,9 @@ where
     T1: Process<Output = u64>,
     T2: Process<Output = u64>,
 {
-    S0(Option<T0::State>, [u64; 0]),
-    S1(Option<T1::State>, [u64; 1]),
-    S2(Option<T2::State>, [u64; 2]),
+    S0(Option<<T0>::State>, [u64; 0]),
+    S1(Option<<T1>::State>, [u64; 1]),
+    S2(Option<<T2>::State>, [u64; 2]),
     U0 { u: [u32; 3] },
     U1 { u: [u32; 3] },
     U2 { u: [u32; 3] },

@@ -1,10 +1,10 @@
 use typle::typle;
-type TupleSequenceOutput1<T0> where T0: Extract = (Option<T0::Output>,);
+type TupleSequenceOutput1<T0> where T0: Extract = (Option<<T0>::Output>,);
 type TupleSequenceOutput2<T0, T1>
 where
     T0: Extract,
     T1: Extract,
-= (Option<T0::Output>, Option<T1::Output>);
+= (Option<<T0>::Output>, Option<<T1>::Output>);
 struct SeqIntoIter1<T0>
 where
     T0: Into<ByteStream>,
@@ -68,9 +68,17 @@ where
         Self::Invalid
     }
 }
-struct AStruct<T> {
-    t: T,
-    state: State<(T)>,
+struct AStruct0 {
+    t: (),
+    state: State0,
+}
+struct AStruct1<T0> {
+    t: (T0,),
+    state: State1<T0>,
+}
+struct AStruct2<T0, T1> {
+    t: (T0, T1),
+    state: State2<T0, T1>,
 }
 impl std::io::Read for AStruct0 {
     fn read(&mut self, mut buf: &mut [u8]) -> std::io::Result<usize> {

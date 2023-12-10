@@ -10,7 +10,7 @@
 //! #[typle(Tuple for 1..=3)]
 //! impl<T> MyStruct<T>
 //! where
-//!     T: Tuple(u32),
+//!     T: Tuple<Types=u32>,
 //! {
 //!     fn max(&self) -> Option<u32> {
 //!         let mut max = self.t[[0]];
@@ -102,7 +102,7 @@
 //! ```ignore
 //! impl<T, C> MyStruct<T>
 //! where
-//!     T: Tuple(C),
+//!     T: Tuple<Types=C>,
 //!     C: Extract,
 //!     C::Output: AsRef<str>,
 //! ```
@@ -133,7 +133,7 @@ use proc_macro2::{Ident, TokenStream, TokenTree};
 use proc_macro_error::{abort, abort_call_site, proc_macro_error};
 use quote::ToTokens;
 use specific::SpecificContext;
-use syn::{ExprRange, Item, Type, TypeParamBound, WherePredicate};
+use syn::Item;
 
 #[doc(hidden)]
 #[proc_macro]
@@ -168,8 +168,8 @@ pub fn typle(
 #[derive(Clone)]
 struct IterationTrait {
     ident: Ident,
-    min: usize,
-    max: usize,
+    min_len: usize,
+    max_len: usize,
 }
 
 fn parse_args(args: TokenStream) -> IterationTrait {
@@ -188,7 +188,7 @@ fn parse_args(args: TokenStream) -> IterationTrait {
     }
     // 2..=12
     let rest = args_iter.collect();
-    let range = syn::parse2::<ExprRange>(rest).unwrap_or_else(|e| abort_call_site!("{}", e));
+    let range = syn::parse2::<syn::ExprRange>(rest).unwrap_or_else(|e| abort_call_site!("{}", e));
     let min = range
         .start
         .as_ref()
@@ -211,133 +211,68 @@ fn parse_args(args: TokenStream) -> IterationTrait {
     }
     IterationTrait {
         ident: trait_ident,
-        min,
-        max,
+        min_len: min,
+        max_len: max,
     }
 }
 
 impl IterationTrait {
     fn process_item(&self, input: Item) -> Vec<Item> {
         let mut output = Vec::new();
-        match input {
-            Item::Const(_) => abort!(input, "Const unsupported"),
-            Item::Enum(item) => {
-                let typle_idents = self.typle_generics(&item.generics);
-                if typle_idents.is_empty() {
-                    output.push(Item::Enum(item));
-                } else {
-                    for count in self.min..=self.max {
-                        let mut specific = SpecificContext {
-                            trait_ident: &self.ident,
-                            count,
-                            constants: HashMap::new(),
-                            tuples: HashMap::new(),
-                        };
-                        let item_struct = specific.process_enum(&item, &typle_idents);
-                        output.push(Item::Enum(item_struct));
-                    }
-                }
+        let has_typles = match &input {
+            Item::Const(syn::ItemConst { generics, .. })
+            | Item::Enum(syn::ItemEnum { generics, .. })
+            | Item::Fn(syn::ItemFn {
+                sig: syn::Signature { generics, .. },
+                ..
+            })
+            | Item::Impl(syn::ItemImpl { generics, .. })
+            | Item::Struct(syn::ItemStruct { generics, .. })
+            | Item::Trait(syn::ItemTrait { generics, .. })
+            | Item::TraitAlias(syn::ItemTraitAlias { generics, .. })
+            | Item::Type(syn::ItemType { generics, .. })
+            | Item::Union(syn::ItemUnion { generics, .. }) => self.has_typles(generics),
+            _ => false,
+        };
+        if has_typles {
+            for typle_len in self.min_len..=self.max_len {
+                let specific = SpecificContext {
+                    typle_trait: &self.ident,
+                    typle_len,
+                    constants: HashMap::new(),
+                    typles: HashMap::new(),
+                };
+                let mut specific_item = input.clone();
+                specific.replace_item(&mut specific_item, true);
+                output.push(specific_item);
             }
-            Item::ExternCrate(_) => abort!(input, "ExternCrate unsupported"),
-            Item::Fn(_) => abort!(input, "Fn unsupported"),
-            Item::ForeignMod(_) => abort!(input, "ForeignMod unsupported"),
-            Item::Impl(item) => {
-                let typle_idents = self.typle_generics(&item.generics);
-                if typle_idents.is_empty() {
-                    output.push(Item::Impl(item));
-                } else {
-                    for count in self.min..=self.max {
-                        let mut specific = SpecificContext {
-                            trait_ident: &self.ident,
-                            count,
-                            constants: HashMap::new(),
-                            tuples: HashMap::new(),
-                        };
-                        let item = specific.process_impl(&item, &typle_idents);
-                        output.push(Item::Impl(item));
-                    }
-                }
-            }
-            Item::Macro(_) => abort!(input, "Macro unsupported"),
-            Item::Mod(_) => abort!(input, "Mod unsupported"),
-            Item::Static(_) => abort!(input, "Static unsupported"),
-            Item::Struct(item) => {
-                let typle_idents = self.typle_generics(&item.generics);
-                if typle_idents.is_empty() {
-                    output.push(Item::Struct(item));
-                } else {
-                    for count in self.min..=self.max {
-                        let mut specific = SpecificContext {
-                            trait_ident: &self.ident,
-                            count,
-                            constants: HashMap::new(),
-                            tuples: HashMap::new(),
-                        };
-                        let item_struct = specific.process_struct(&item, &typle_idents);
-                        output.push(Item::Struct(item_struct));
-                    }
-                }
-            }
-            Item::Trait(_) => abort!(input, "Trait unsupported"),
-            Item::TraitAlias(_) => abort!(input, "TraitAlias unsupported"),
-            Item::Type(item) => {
-                let typle_idents = self.typle_generics(&item.generics);
-                if typle_idents.is_empty() {
-                    output.push(Item::Type(item));
-                } else {
-                    for count in self.min..=self.max {
-                        let mut specific = SpecificContext {
-                            trait_ident: &self.ident,
-                            count,
-                            constants: HashMap::new(),
-                            tuples: HashMap::new(),
-                        };
-                        let item = specific.process_type(&item, &typle_idents);
-                        output.push(Item::Type(item));
-                    }
-                }
-            }
-            Item::Union(_) => abort!(input, "Union unsupported"),
-            Item::Use(_) => abort!(input, "Use unsupported"),
-            Item::Verbatim(_) => abort!(input, "Verbatim unsupported"),
-            item => {
-                output.push(item);
-            }
+        } else {
+            output.push(input);
         }
+
         output
     }
 
-    fn typle_generics(&self, generics: &syn::Generics) -> HashMap<Ident, bool> {
-        let mut idents = HashMap::new();
+    fn has_typles(&self, generics: &syn::Generics) -> bool {
         let Some(where_clause) = &generics.where_clause else {
-            return idents;
+            return false;
         };
         for predicate in &where_clause.predicates {
-            if let WherePredicate::Type(predicate_type) = predicate {
+            if let syn::WherePredicate::Type(predicate_type) = predicate {
                 for bound in &predicate_type.bounds {
-                    if let TypeParamBound::Trait(trait_bound) = bound {
+                    if let syn::TypeParamBound::Trait(trait_bound) = bound {
                         let trait_path = &trait_bound.path;
                         if trait_path.leading_colon.is_none()
                             && trait_path.segments.len() == 1
                             && trait_path.segments[0].ident == self.ident
                         {
-                            let Type::Path(type_path) = &predicate_type.bounded_ty else {
-                                abort!(predicate_type.bounded_ty, "expected simple identifier");
-                            };
-                            if type_path.qself.is_some() {
-                                abort!(predicate_type.bounded_ty, "expected simple identifier");
-                            }
-                            let Some(ident) = type_path.path.get_ident() else {
-                                abort!(predicate_type.bounded_ty, "expected simple identifier");
-                            };
-                            idents
-                                .insert(ident.clone(), trait_path.segments[0].arguments.is_none());
+                            return true;
                         }
                     }
                 }
             }
         }
-        idents
+        false
     }
 }
 
@@ -353,9 +288,9 @@ impl IterationTrait {
 /// Examples:
 /// ```ignore
 /// #[typle(Tuple for 0..=2)]
-/// impl<T> S<(T)>
+/// impl<T> S<T::Types>
 /// where
-///     T: Tuple(u32)
+///     T: Tuple<Types=u32>
 /// {
 ///     fn new(t: typle_for!(i in .. => &T<{i}>)) {
 ///         // Square brackets create an array
@@ -372,25 +307,25 @@ impl IterationTrait {
 /// generates
 /// ```ignore
 /// impl S0 {
-///    fn new(t: ()) {
-///        let a = [];
-///        let b = ();
-///        let init: [Option<u32>; 0] = [];
-///    }
+///     fn new(t: ()) {
+///         let a = [];
+///         let b = ();
+///         let init: [Option<u32>; 0] = [];
+///     }
 /// }
 /// impl S1<u32> {
-///    fn new(t: (&u32,)) {
-///        let a = [*t.0 * 2];
-///        let b = (*t.0 * 2,);
-///        let init: [Option<u32>; 1] = [None];
-///    }
+///     fn new(t: (&u32,)) {
+///         let a = [*t.0 * 2];
+///         let b = (*t.0 * 2,);
+///         let init: [Option<u32>; 1] = [None];
+///     }
 /// }
 /// impl S2<u32, u32> {
-///    fn new(t: (&u32, &u32)) {
-///        let a = [*t.0 * 2, *t.1 * 2];
-///        let b = (*t.0 * 2, *t.1 * 2);
-///        let init: [Option<u32>; 2] = [None, None];
-///    }
+///     fn new(t: (&u32, &u32)) {
+///         let a = [*t.0 * 2, *t.1 * 2];
+///         let b = (*t.0 * 2, *t.1 * 2);
+///         let init: [Option<u32>; 2] = [None, None];
+///     }
 /// }
 /// ```
 #[proc_macro_error]

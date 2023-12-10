@@ -24,7 +24,7 @@ where
 }
 
 #[typle(Tuple for 0..=3)]
-impl<T> Default for ProcessState<(T)>
+impl<T> Default for ProcessState<T::Types>
 where
     T: Tuple,
     T::Types: Process<Output = u64>
@@ -47,7 +47,7 @@ where
     T: Tuple,
     T::Types: Process<Output = u64>,
 {
-    type State = ProcessState<(T)>;
+    type State = ProcessState<T::Types>;
     type Output = [u64; T::LEN];
 
     fn process(state: Self::State) -> Result<Self::Output, Error> {
