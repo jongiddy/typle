@@ -53,7 +53,7 @@ trait HeadTail {
 }
 
 #[typle(Tuple for 1..=6)]
-impl<T> HeadTail for MyStruct<T>
+impl<T> HeadTail for T
 where
     T: Tuple,
     T::Types: Copy,
@@ -62,10 +62,10 @@ where
     type Tail = typle_for!(i in 1.. => T<{i}>);
 
     fn head(&self) -> Option<Self::Head> {
-        Some(self.t[[0]])
+        Some(self[[0]])
     }
 
     fn tail(&self) -> Self::Tail {
-        typle_for!(i in 1.. => self.t[[i]])
+        typle_for!(i in 1.. => self[[i]])
     }
 }

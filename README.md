@@ -78,7 +78,7 @@ where
     }
 }
 ```
-creates implementations including:
+which creates implementations including:
 ```rust
 impl<C> MyStruct<(C, C, C)>
 where
@@ -112,15 +112,8 @@ where
 Use `typle` to implement traits for tuples:
 
 ```rust
-trait HeadTail {
-    type Head;
-    type Tail;
-    fn head(&self) -> Option<Self::Head>;
-    fn tail(&self) -> Self::Tail;
-}
-
 #[typle(Tuple for 1..=6)]
-impl<T> HeadTail for MyStruct<T>
+impl<T> HeadTail for T
 where
     T: Tuple,
     T::Types: Copy,
@@ -129,17 +122,17 @@ where
     type Tail = typle_for!(i in 1.. => T<{i}>);
 
     fn head(&self) -> Option<Self::Head> {
-        Some(self.t[[0]])
+        Some(self[[0]])
     }
 
     fn tail(&self) -> Self::Tail {
-        typle_for!(i in 1.. => self.t[[i]])
+        typle_for!(i in 1.. => self[[i]])
     }
 }
 ```
 creates implementations including:
 ```rust
-impl<T0, T1, T2> HeadTail for MyStruct<(T0, T1, T2)>
+impl<T0, T1, T2> HeadTail for (T0, T1, T2)
 where
     T0: Copy,
     T1: Copy,
@@ -148,10 +141,10 @@ where
     type Head = T0;
     type Tail = (T1, T2);
     fn head(&self) -> Option<Self::Head> {
-        Some(self.t.0)
+        Some(self.0)
     }
     fn tail(&self) -> Self::Tail {
-        (self.t.1, self.t.2)
+        (self.1, self.2)
     }
 }
 ```

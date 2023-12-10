@@ -326,20 +326,20 @@ trait HeadTail {
     fn head(&self) -> Option<Self::Head>;
     fn tail(&self) -> Self::Tail;
 }
-impl<T0> HeadTail for MyStruct<(T0,)>
+impl<T0> HeadTail for (T0,)
 where
     T0: Copy,
 {
     type Head = T0;
     type Tail = ();
     fn head(&self) -> Option<Self::Head> {
-        Some(self.t.0)
+        Some(self.0)
     }
     fn tail(&self) -> Self::Tail {
         ()
     }
 }
-impl<T0, T1> HeadTail for MyStruct<(T0, T1)>
+impl<T0, T1> HeadTail for (T0, T1)
 where
     T0: Copy,
     T1: Copy,
@@ -347,13 +347,13 @@ where
     type Head = T0;
     type Tail = (T1,);
     fn head(&self) -> Option<Self::Head> {
-        Some(self.t.0)
+        Some(self.0)
     }
     fn tail(&self) -> Self::Tail {
-        (self.t.1,)
+        (self.1,)
     }
 }
-impl<T0, T1, T2> HeadTail for MyStruct<(T0, T1, T2)>
+impl<T0, T1, T2> HeadTail for (T0, T1, T2)
 where
     T0: Copy,
     T1: Copy,
@@ -362,13 +362,13 @@ where
     type Head = T0;
     type Tail = (T1, T2);
     fn head(&self) -> Option<Self::Head> {
-        Some(self.t.0)
+        Some(self.0)
     }
     fn tail(&self) -> Self::Tail {
-        (self.t.1, self.t.2)
+        (self.1, self.2)
     }
 }
-impl<T0, T1, T2, T3> HeadTail for MyStruct<(T0, T1, T2, T3)>
+impl<T0, T1, T2, T3> HeadTail for (T0, T1, T2, T3)
 where
     T0: Copy,
     T1: Copy,
@@ -378,13 +378,13 @@ where
     type Head = T0;
     type Tail = (T1, T2, T3);
     fn head(&self) -> Option<Self::Head> {
-        Some(self.t.0)
+        Some(self.0)
     }
     fn tail(&self) -> Self::Tail {
-        (self.t.1, self.t.2, self.t.3)
+        (self.1, self.2, self.3)
     }
 }
-impl<T0, T1, T2, T3, T4> HeadTail for MyStruct<(T0, T1, T2, T3, T4)>
+impl<T0, T1, T2, T3, T4> HeadTail for (T0, T1, T2, T3, T4)
 where
     T0: Copy,
     T1: Copy,
@@ -395,13 +395,13 @@ where
     type Head = T0;
     type Tail = (T1, T2, T3, T4);
     fn head(&self) -> Option<Self::Head> {
-        Some(self.t.0)
+        Some(self.0)
     }
     fn tail(&self) -> Self::Tail {
-        (self.t.1, self.t.2, self.t.3, self.t.4)
+        (self.1, self.2, self.3, self.4)
     }
 }
-impl<T0, T1, T2, T3, T4, T5> HeadTail for MyStruct<(T0, T1, T2, T3, T4, T5)>
+impl<T0, T1, T2, T3, T4, T5> HeadTail for (T0, T1, T2, T3, T4, T5)
 where
     T0: Copy,
     T1: Copy,
@@ -413,9 +413,9 @@ where
     type Head = T0;
     type Tail = (T1, T2, T3, T4, T5);
     fn head(&self) -> Option<Self::Head> {
-        Some(self.t.0)
+        Some(self.0)
     }
     fn tail(&self) -> Self::Tail {
-        (self.t.1, self.t.2, self.t.3, self.t.4, self.t.5)
+        (self.1, self.2, self.3, self.4, self.5)
     }
 }
