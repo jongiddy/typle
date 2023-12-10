@@ -84,8 +84,9 @@
 //!
 //! If the `where` clause constrains a generic type using the pseudo-trait then the generic type
 //! must be a tuple with a length `Tuple::LEN` and where each component is constrained by the
-//! argument to the trait. The component can either be an explicit type (`where T: Tuple(u32)`) or
-//! can be constrained by other traits using the `Types` associated type:
+//! argument to the trait. The component can either be an explicit type
+//! (`where T: Tuple<Types=u32>`) or can be constrained by other traits using the `Types` associated
+//! type:
 //! ```ignore
 //! impl<T> MyStruct<T>
 //! where
@@ -217,9 +218,29 @@ fn parse_args(args: TokenStream) -> IterationTrait {
 }
 
 impl IterationTrait {
-    fn process_item(&self, input: Item) -> Vec<Item> {
+    fn process_item(&self, item: Item) -> Vec<Item> {
         let mut output = Vec::new();
-        let has_typles = match &input {
+        if self.has_typles(&item) {
+            for typle_len in self.min_len..=self.max_len {
+                let context = SpecificContext {
+                    typle_trait: &self.ident,
+                    typle_len,
+                    constants: HashMap::new(),
+                    typles: HashMap::new(),
+                };
+                let mut item = item.clone();
+                context.replace_item(&mut item, true);
+                output.push(item);
+            }
+        } else {
+            output.push(item);
+        }
+
+        output
+    }
+
+    fn has_typles(&self, item: &Item) -> bool {
+        let generics = match item {
             Item::Const(syn::ItemConst { generics, .. })
             | Item::Enum(syn::ItemEnum { generics, .. })
             | Item::Fn(syn::ItemFn {
@@ -231,32 +252,16 @@ impl IterationTrait {
             | Item::Trait(syn::ItemTrait { generics, .. })
             | Item::TraitAlias(syn::ItemTraitAlias { generics, .. })
             | Item::Type(syn::ItemType { generics, .. })
-            | Item::Union(syn::ItemUnion { generics, .. }) => self.has_typles(generics),
-            _ => false,
-        };
-        if has_typles {
-            for typle_len in self.min_len..=self.max_len {
-                let specific = SpecificContext {
-                    typle_trait: &self.ident,
-                    typle_len,
-                    constants: HashMap::new(),
-                    typles: HashMap::new(),
-                };
-                let mut specific_item = input.clone();
-                specific.replace_item(&mut specific_item, true);
-                output.push(specific_item);
+            | Item::Union(syn::ItemUnion { generics, .. }) => generics,
+            _ => {
+                return false;
             }
-        } else {
-            output.push(input);
-        }
+        };
 
-        output
-    }
-
-    fn has_typles(&self, generics: &syn::Generics) -> bool {
         let Some(where_clause) = &generics.where_clause else {
             return false;
         };
+
         for predicate in &where_clause.predicates {
             if let syn::WherePredicate::Type(predicate_type) = predicate {
                 for bound in &predicate_type.bounds {
@@ -272,6 +277,7 @@ impl IterationTrait {
                 }
             }
         }
+
         false
     }
 }

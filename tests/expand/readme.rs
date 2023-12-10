@@ -1,6 +1,7 @@
 use typle::typle;
 
 use std::ops::Mul;
+
 struct MyStruct<T> {
     pub t: T,
 }

@@ -60,7 +60,7 @@ impl<'a> SpecificContext<'a> {
             None
         }
 
-        let mut specific = None;
+        let mut context = None;
         if let Some(where_clause) = where_clause.as_mut() {
             let predicates = std::mem::take(&mut where_clause.predicates);
             for predicate in predicates {
@@ -75,9 +75,9 @@ impl<'a> SpecificContext<'a> {
                                         if &segment.ident == self.typle_trait {
                                             match &segment.arguments {
                                                 PathArguments::None => {
-                                                    let specific = specific
-                                                        .get_or_insert_with(|| self.clone());
-                                                    specific.typles.insert(
+                                                    let context =
+                                                        context.get_or_insert_with(|| self.clone());
+                                                    context.typles.insert(
                                                         type_ident.clone(),
                                                         Typle::Generic(
                                                             (0..self.typle_len)
@@ -100,11 +100,11 @@ impl<'a> SpecificContext<'a> {
                                                         arguments.args.first()
                                                     {
                                                         if assoc.ident == TYPLE_ASSOC_TYPE_NAME {
-                                                            let specific = specific
+                                                            let context = context
                                                                 .get_or_insert_with(|| {
                                                                     self.clone()
                                                                 });
-                                                            specific.typles.insert(
+                                                            context.typles.insert(
                                                                 type_ident.clone(),
                                                                 Typle::Specific(assoc.ty.clone()),
                                                             );
@@ -130,7 +130,7 @@ impl<'a> SpecificContext<'a> {
                 where_clause.predicates.push(predicate);
             }
         }
-        specific
+        context
     }
 
     fn replace_block(&self, block: &mut Block) {
@@ -635,7 +635,7 @@ impl<'a> SpecificContext<'a> {
                         if type_path.qself.is_none() && type_path.path.leading_colon.is_none() {
                             let mut segments = type_path.path.segments.iter();
                             if let Some(first) = segments.next() {
-                                if let Some(Typle::Generic(type_names)) =
+                                if let Some(Typle::Generic(component_names)) =
                                     self.typles.get(&first.ident)
                                 {
                                     let Some(second) = segments.next() else {
@@ -645,8 +645,9 @@ impl<'a> SpecificContext<'a> {
                                         abort!(second, "unknown associated item");
                                     }
                                     // T::Types: AsRef<str> or T::Types::Output: AsRef<str>
-                                    for type_name in type_names {
-                                        let type_ident = Ident::new(&type_name, first.ident.span());
+                                    for component_name in component_names {
+                                        let type_ident =
+                                            Ident::new(&component_name, first.ident.span());
                                         let mut path = ident_to_path(type_ident);
                                         for segment in segments.clone() {
                                             path.segments.push(segment.clone());
@@ -675,10 +676,10 @@ impl<'a> SpecificContext<'a> {
         for generic_param in std::mem::take(&mut generics.params) {
             match generic_param {
                 GenericParam::Type(type_param) => match self.typles.get(&type_param.ident) {
-                    Some(Typle::Generic(type_names)) => {
-                        for type_name in type_names {
+                    Some(Typle::Generic(component_names)) => {
+                        for component_name in component_names {
                             let mut param = type_param.clone();
-                            param.ident = Ident::new(&type_name, type_param.ident.span());
+                            param.ident = Ident::new(&component_name, type_param.ident.span());
                             generics.params.push(GenericParam::Type(param));
                         }
                     }
@@ -713,18 +714,18 @@ impl<'a> SpecificContext<'a> {
     pub fn replace_item(&self, item: &mut Item, top_level: bool) {
         match item {
             Item::Const(r#const) => {
-                let specific = self.handle_where_clause(&mut r#const.generics.where_clause);
-                let specific = specific.as_ref().unwrap_or(self);
-                specific.replace_type(&mut r#const.ty);
-                specific.replace_expr(&mut r#const.expr);
+                let context = self.handle_where_clause(&mut r#const.generics.where_clause);
+                let context = context.as_ref().unwrap_or(self);
+                context.replace_type(&mut r#const.ty);
+                context.replace_expr(&mut r#const.expr);
             }
             Item::Enum(r#enum) => {
                 if top_level {
                     r#enum.ident = format_ident!("{}{}", r#enum.ident, self.typle_len);
                 }
-                let specific = self.handle_where_clause(&mut r#enum.generics.where_clause);
-                let specific = specific.as_ref().unwrap_or(self);
-                specific.replace_generics(&mut r#enum.generics);
+                let context = self.handle_where_clause(&mut r#enum.generics.where_clause);
+                let context = context.as_ref().unwrap_or(self);
+                context.replace_generics(&mut r#enum.generics);
                 for mut variant in std::mem::take(&mut r#enum.variants) {
                     if let Fields::Unit = variant.fields {
                         if let Some((_, discriminant)) = &mut variant.discriminant {
@@ -734,7 +735,7 @@ impl<'a> SpecificContext<'a> {
                                         let mut token_stream =
                                             std::mem::take(&mut r#macro.mac.tokens);
                                         let (pattern, range) =
-                                            specific.parse_pattern_range(&mut token_stream);
+                                            context.parse_pattern_range(&mut token_stream);
                                         let fields = match r#macro.mac.delimiter {
                                             MacroDelimiter::Paren(_) => {
                                                 let group = TokenTree::Group(Group::new(
@@ -773,7 +774,7 @@ impl<'a> SpecificContext<'a> {
                                             }
                                         };
                                         for index in range {
-                                            let mut context = specific.clone();
+                                            let mut context = context.clone();
                                             if let Some(ident) = pattern.clone() {
                                                 if ident != "_" {
                                                     context.constants.insert(ident, index);
@@ -809,9 +810,9 @@ impl<'a> SpecificContext<'a> {
                             }
                         }
                     }
-                    specific.replace_fields(&mut variant.fields);
+                    context.replace_fields(&mut variant.fields);
                     if let Some((_, discriminant)) = &mut variant.discriminant {
-                        specific.replace_expr(discriminant);
+                        context.replace_expr(discriminant);
                     }
                     r#enum.variants.push(variant);
                 }
@@ -821,38 +822,38 @@ impl<'a> SpecificContext<'a> {
                 if top_level {
                     function.sig.ident = format_ident!("{}{}", function.sig.ident, self.typle_len);
                 }
-                let specific = self.handle_where_clause(&mut function.sig.generics.where_clause);
-                let specific = specific.as_ref().unwrap_or(self);
-                specific.replace_signature(&mut function.sig);
-                specific.replace_block(&mut function.block);
+                let context = self.handle_where_clause(&mut function.sig.generics.where_clause);
+                let context = context.as_ref().unwrap_or(self);
+                context.replace_signature(&mut function.sig);
+                context.replace_block(&mut function.block);
             }
             Item::ForeignMod(_) => abort!(item, "ForeignMod unsupported"),
             Item::Impl(r#impl) => {
-                let specific = self.handle_where_clause(&mut r#impl.generics.where_clause);
-                let specific = specific.as_ref().unwrap_or(self);
-                specific.replace_generics(&mut r#impl.generics);
+                let context = self.handle_where_clause(&mut r#impl.generics.where_clause);
+                let context = context.as_ref().unwrap_or(self);
+                context.replace_generics(&mut r#impl.generics);
                 if let Some((_, path, _)) = &mut r#impl.trait_ {
-                    specific.replace_path_arguments(path);
+                    context.replace_path_arguments(path);
                 }
-                specific.replace_type(&mut *r#impl.self_ty);
+                context.replace_type(&mut *r#impl.self_ty);
                 for subitem in &mut r#impl.items {
                     match subitem {
                         ImplItem::Const(constant) => {
-                            specific.replace_type(&mut constant.ty);
-                            specific.replace_expr(&mut constant.expr);
+                            context.replace_type(&mut constant.ty);
+                            context.replace_expr(&mut constant.expr);
                         }
                         ImplItem::Fn(function) => {
-                            let inner_specific = specific
+                            let inner_context = context
                                 .handle_where_clause(&mut function.sig.generics.where_clause);
-                            let inner_specific = inner_specific.as_ref().unwrap_or(specific);
-                            inner_specific.replace_signature(&mut function.sig);
-                            inner_specific.replace_block(&mut function.block);
+                            let inner_context = inner_context.as_ref().unwrap_or(context);
+                            inner_context.replace_signature(&mut function.sig);
+                            inner_context.replace_block(&mut function.block);
                         }
                         ImplItem::Type(ty) => {
-                            specific.replace_type(&mut ty.ty);
+                            context.replace_type(&mut ty.ty);
                         }
                         ImplItem::Macro(r#macro) => {
-                            specific.replace_macro(&mut r#macro.mac, EvaluationContext::Type);
+                            context.replace_macro(&mut r#macro.mac, EvaluationContext::Type);
                         }
                         _ => {}
                     }
@@ -865,10 +866,10 @@ impl<'a> SpecificContext<'a> {
                 if top_level {
                     r#struct.ident = format_ident!("{}{}", r#struct.ident, self.typle_len);
                 }
-                let specific = self.handle_where_clause(&mut r#struct.generics.where_clause);
-                let specific = specific.as_ref().unwrap_or(self);
-                specific.replace_generics(&mut r#struct.generics);
-                specific.replace_fields(&mut r#struct.fields);
+                let context = self.handle_where_clause(&mut r#struct.generics.where_clause);
+                let context = context.as_ref().unwrap_or(self);
+                context.replace_generics(&mut r#struct.generics);
+                context.replace_fields(&mut r#struct.fields);
             }
             Item::Trait(_) => abort!(item, "Trait unsupported"),
             Item::TraitAlias(_) => abort!(item, "TraitAlias unsupported"),
@@ -876,10 +877,10 @@ impl<'a> SpecificContext<'a> {
                 if top_level {
                     r#type.ident = format_ident!("{}{}", r#type.ident, self.typle_len);
                 }
-                let specific = self.handle_where_clause(&mut r#type.generics.where_clause);
-                let specific = specific.as_ref().unwrap_or(self);
-                specific.replace_generics(&mut r#type.generics);
-                specific.replace_type(&mut r#type.ty);
+                let context = self.handle_where_clause(&mut r#type.generics.where_clause);
+                let context = context.as_ref().unwrap_or(self);
+                context.replace_generics(&mut r#type.generics);
+                context.replace_type(&mut r#type.ty);
             }
             Item::Union(_) => abort!(item, "Union unsupported"),
             Item::Use(_) => abort!(item, "Use unsupported"),
