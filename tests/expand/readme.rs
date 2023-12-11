@@ -1,38 +1,49 @@
 use typle::typle;
 
-use std::ops::Mul;
-
 struct MyStruct<T> {
-    pub t: T,
+    t: T,
 }
 
-#[typle(Tuple for 0..=6)]
+#[typle(Tuple for 0..=3)]
+impl<T> From<T> for MyStruct<T>
+where
+    T: Tuple,
+{
+    fn from(t: T) -> Self {
+        MyStruct { t }
+    }
+}
+
+use std::ops::{AddAssign, Mul};
+
+#[typle(Tuple for 1..=3)]
 impl<T> MyStruct<T>
 where
-    T: Tuple
+    T: Tuple,
+    T::Types: Copy,
 {
-    fn new(t: T) -> Self {
-        MyStruct { t }
+    fn tail(&self) -> MyStruct<typle_for!(i in 1.. => T<{i}>)> {
+        typle_for!(i in 1.. => self.t[[i]]).into()
     }
 
     fn multiply<M>(
-        &self,
-        multipliers: typle_for!(.. => M)
-    ) -> typle_for!(i in .. => <T<{i}> as Mul<M>>::Output)
+        &self, multipliers: M
+    ) -> typle_for!(i in .. => <T<{i}> as Mul<M<{i}>>>::Output)
     where
-        T::Types: Mul<M> + Copy,
+        M: Tuple,
+        T<{i}>: Mul<M<{i}>>,
     {
         typle_for!(i in .. => self.t[[i]] * multipliers[[i]])
     }
 }
 
-#[typle(Tuple for 1..=6)]
+#[typle(Tuple for 1..=3)]
 impl<T, C> MyStruct<T>
 where
     T: Tuple<Types=C>,
-    C: std::ops::AddAssign + Default + Copy,
+    C: AddAssign + Default + Copy,
 {
-    fn even_odd(&self) -> (C, C) {
+    fn interleave(&self) -> (C, C) {
         let mut even = C::default();
         let mut odd = C::default();
         for typle_const!(i) in 0..T::LEN {
@@ -46,27 +57,32 @@ where
     }
 }
 
-trait HeadTail {
-    type Head;
-    type Tail;
-    fn head(&self) -> Option<Self::Head>;
-    fn tail(&self) -> Self::Tail;
+pub trait Extract {
+    type State;
+    type Output;
 }
 
-#[typle(Tuple for 1..=6)]
-impl<T> HeadTail for T
+#[typle(Tuple for 1..=3)]
+pub enum TupleSequenceState<T>
 where
     T: Tuple,
-    T::Types: Copy,
+    T::Types: Extract,
 {
-    type Head = T<0>;
-    type Tail = typle_for!(i in 1.. => T<{i}>);
+    S = typle_variant!(i in .. =>
+        typle_for!(j in ..i => T::<{j}>::Output), Option<T<{i}>::State>
+    ),
+}
 
-    fn head(&self) -> Option<Self::Head> {
-        Some(self[[0]])
-    }
+pub struct TupleSequence<T> {
+    tuple: T,
+}
 
-    fn tail(&self) -> Self::Tail {
-        typle_for!(i in 1.. => self[[i]])
-    }
+#[typle(Tuple for 1..=3)]
+impl<T> Extract for TupleSequence<T>
+where
+    T: Tuple,
+    T::Types: Extract,
+{
+    type State = TupleSequenceState<T::Types>;
+    type Output = typle_for!(i in .. => T<{i}>::Output);
 }

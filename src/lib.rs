@@ -85,8 +85,8 @@
 //! If the `where` clause constrains a generic type using the pseudo-trait then the generic type
 //! must be a tuple with a length `Tuple::LEN` and where each component is constrained by the
 //! argument to the trait. The component can either be an explicit type
-//! (`where T: Tuple<Types=u32>`) or can be constrained by other traits using the `Types` associated
-//! type:
+//! (`where T: Tuple<Types=u32>`), or can be constrained by other traits using the `Types` associated
+//! type.
 //! ```ignore
 //! impl<T> MyStruct<T>
 //! where

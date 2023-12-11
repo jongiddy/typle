@@ -1,153 +1,87 @@
 use typle::typle;
-use std::ops::Mul;
 struct MyStruct<T> {
-    pub t: T,
+    t: T,
 }
-impl MyStruct<()> {
-    fn new(t: ()) -> Self {
+impl From<()> for MyStruct<()> {
+    fn from(t: ()) -> Self {
         MyStruct { t }
     }
-    fn multiply<M>(&self, multipliers: ()) -> () {
-        ()
-    }
 }
-impl<T0> MyStruct<(T0,)> {
-    fn new(t: (T0,)) -> Self {
+impl<T0> From<(T0,)> for MyStruct<(T0,)> {
+    fn from(t: (T0,)) -> Self {
         MyStruct { t }
     }
-    fn multiply<M>(&self, multipliers: (M,)) -> (<T0 as Mul<M>>::Output,)
+}
+impl<T0, T1> From<(T0, T1)> for MyStruct<(T0, T1)> {
+    fn from(t: (T0, T1)) -> Self {
+        MyStruct { t }
+    }
+}
+impl<T0, T1, T2> From<(T0, T1, T2)> for MyStruct<(T0, T1, T2)> {
+    fn from(t: (T0, T1, T2)) -> Self {
+        MyStruct { t }
+    }
+}
+use std::ops::{AddAssign, Mul};
+impl<T0> MyStruct<(T0,)>
+where
+    T0: Copy,
+{
+    fn tail(&self) -> MyStruct<()> {
+        ().into()
+    }
+    fn multiply<M0>(&self, multipliers: (M0,)) -> (<T0 as Mul<M0>>::Output,)
     where
-        T0: Mul<M> + Copy,
+        T0: Mul<M0>,
     {
         (self.t.0 * multipliers.0,)
     }
 }
-impl<T0, T1> MyStruct<(T0, T1)> {
-    fn new(t: (T0, T1)) -> Self {
-        MyStruct { t }
+impl<T0, T1> MyStruct<(T0, T1)>
+where
+    T0: Copy,
+    T1: Copy,
+{
+    fn tail(&self) -> MyStruct<(T1,)> {
+        (self.t.1,).into()
     }
-    fn multiply<M>(
+    fn multiply<M0, M1>(
         &self,
-        multipliers: (M, M),
-    ) -> (<T0 as Mul<M>>::Output, <T1 as Mul<M>>::Output)
+        multipliers: (M0, M1),
+    ) -> (<T0 as Mul<M0>>::Output, <T1 as Mul<M1>>::Output)
     where
-        T0: Mul<M> + Copy,
-        T1: Mul<M> + Copy,
+        T0: Mul<M0>,
+        T1: Mul<M1>,
     {
         (self.t.0 * multipliers.0, self.t.1 * multipliers.1)
     }
 }
-impl<T0, T1, T2> MyStruct<(T0, T1, T2)> {
-    fn new(t: (T0, T1, T2)) -> Self {
-        MyStruct { t }
+impl<T0, T1, T2> MyStruct<(T0, T1, T2)>
+where
+    T0: Copy,
+    T1: Copy,
+    T2: Copy,
+{
+    fn tail(&self) -> MyStruct<(T1, T2)> {
+        (self.t.1, self.t.2).into()
     }
-    fn multiply<M>(
+    fn multiply<M0, M1, M2>(
         &self,
-        multipliers: (M, M, M),
-    ) -> (<T0 as Mul<M>>::Output, <T1 as Mul<M>>::Output, <T2 as Mul<M>>::Output)
+        multipliers: (M0, M1, M2),
+    ) -> (<T0 as Mul<M0>>::Output, <T1 as Mul<M1>>::Output, <T2 as Mul<M2>>::Output)
     where
-        T0: Mul<M> + Copy,
-        T1: Mul<M> + Copy,
-        T2: Mul<M> + Copy,
+        T0: Mul<M0>,
+        T1: Mul<M1>,
+        T2: Mul<M2>,
     {
         (self.t.0 * multipliers.0, self.t.1 * multipliers.1, self.t.2 * multipliers.2)
     }
 }
-impl<T0, T1, T2, T3> MyStruct<(T0, T1, T2, T3)> {
-    fn new(t: (T0, T1, T2, T3)) -> Self {
-        MyStruct { t }
-    }
-    fn multiply<M>(
-        &self,
-        multipliers: (M, M, M, M),
-    ) -> (
-        <T0 as Mul<M>>::Output,
-        <T1 as Mul<M>>::Output,
-        <T2 as Mul<M>>::Output,
-        <T3 as Mul<M>>::Output,
-    )
-    where
-        T0: Mul<M> + Copy,
-        T1: Mul<M> + Copy,
-        T2: Mul<M> + Copy,
-        T3: Mul<M> + Copy,
-    {
-        (
-            self.t.0 * multipliers.0,
-            self.t.1 * multipliers.1,
-            self.t.2 * multipliers.2,
-            self.t.3 * multipliers.3,
-        )
-    }
-}
-impl<T0, T1, T2, T3, T4> MyStruct<(T0, T1, T2, T3, T4)> {
-    fn new(t: (T0, T1, T2, T3, T4)) -> Self {
-        MyStruct { t }
-    }
-    fn multiply<M>(
-        &self,
-        multipliers: (M, M, M, M, M),
-    ) -> (
-        <T0 as Mul<M>>::Output,
-        <T1 as Mul<M>>::Output,
-        <T2 as Mul<M>>::Output,
-        <T3 as Mul<M>>::Output,
-        <T4 as Mul<M>>::Output,
-    )
-    where
-        T0: Mul<M> + Copy,
-        T1: Mul<M> + Copy,
-        T2: Mul<M> + Copy,
-        T3: Mul<M> + Copy,
-        T4: Mul<M> + Copy,
-    {
-        (
-            self.t.0 * multipliers.0,
-            self.t.1 * multipliers.1,
-            self.t.2 * multipliers.2,
-            self.t.3 * multipliers.3,
-            self.t.4 * multipliers.4,
-        )
-    }
-}
-impl<T0, T1, T2, T3, T4, T5> MyStruct<(T0, T1, T2, T3, T4, T5)> {
-    fn new(t: (T0, T1, T2, T3, T4, T5)) -> Self {
-        MyStruct { t }
-    }
-    fn multiply<M>(
-        &self,
-        multipliers: (M, M, M, M, M, M),
-    ) -> (
-        <T0 as Mul<M>>::Output,
-        <T1 as Mul<M>>::Output,
-        <T2 as Mul<M>>::Output,
-        <T3 as Mul<M>>::Output,
-        <T4 as Mul<M>>::Output,
-        <T5 as Mul<M>>::Output,
-    )
-    where
-        T0: Mul<M> + Copy,
-        T1: Mul<M> + Copy,
-        T2: Mul<M> + Copy,
-        T3: Mul<M> + Copy,
-        T4: Mul<M> + Copy,
-        T5: Mul<M> + Copy,
-    {
-        (
-            self.t.0 * multipliers.0,
-            self.t.1 * multipliers.1,
-            self.t.2 * multipliers.2,
-            self.t.3 * multipliers.3,
-            self.t.4 * multipliers.4,
-            self.t.5 * multipliers.5,
-        )
-    }
-}
 impl<C> MyStruct<(C,)>
 where
-    C: std::ops::AddAssign + Default + Copy,
+    C: AddAssign + Default + Copy,
 {
-    fn even_odd(&self) -> (C, C) {
+    fn interleave(&self) -> (C, C) {
         let mut even = C::default();
         let mut odd = C::default();
         {
@@ -162,9 +96,9 @@ where
 }
 impl<C> MyStruct<(C, C)>
 where
-    C: std::ops::AddAssign + Default + Copy,
+    C: AddAssign + Default + Copy,
 {
-    fn even_odd(&self) -> (C, C) {
+    fn interleave(&self) -> (C, C) {
         let mut even = C::default();
         let mut odd = C::default();
         {
@@ -184,9 +118,9 @@ where
 }
 impl<C> MyStruct<(C, C, C)>
 where
-    C: std::ops::AddAssign + Default + Copy,
+    C: AddAssign + Default + Copy,
 {
-    fn even_odd(&self) -> (C, C) {
+    fn interleave(&self) -> (C, C) {
         let mut even = C::default();
         let mut odd = C::default();
         {
@@ -209,213 +143,58 @@ where
         (even, odd)
     }
 }
-impl<C> MyStruct<(C, C, C, C)>
-where
-    C: std::ops::AddAssign + Default + Copy,
-{
-    fn even_odd(&self) -> (C, C) {
-        let mut even = C::default();
-        let mut odd = C::default();
-        {
-            {
-                {
-                    even += self.t.0;
-                }
-            }
-            {
-                {
-                    odd += self.t.1;
-                }
-            }
-            {
-                {
-                    even += self.t.2;
-                }
-            }
-            {
-                {
-                    odd += self.t.3;
-                }
-            }
-        }
-        (even, odd)
-    }
+pub trait Extract {
+    type State;
+    type Output;
 }
-impl<C> MyStruct<(C, C, C, C, C)>
+pub enum TupleSequenceState1<T0>
 where
-    C: std::ops::AddAssign + Default + Copy,
+    T0: Extract,
 {
-    fn even_odd(&self) -> (C, C) {
-        let mut even = C::default();
-        let mut odd = C::default();
-        {
-            {
-                {
-                    even += self.t.0;
-                }
-            }
-            {
-                {
-                    odd += self.t.1;
-                }
-            }
-            {
-                {
-                    even += self.t.2;
-                }
-            }
-            {
-                {
-                    odd += self.t.3;
-                }
-            }
-            {
-                {
-                    even += self.t.4;
-                }
-            }
-        }
-        (even, odd)
-    }
+    S0((), Option<<T0>::State>),
 }
-impl<C> MyStruct<(C, C, C, C, C, C)>
+pub enum TupleSequenceState2<T0, T1>
 where
-    C: std::ops::AddAssign + Default + Copy,
+    T0: Extract,
+    T1: Extract,
 {
-    fn even_odd(&self) -> (C, C) {
-        let mut even = C::default();
-        let mut odd = C::default();
-        {
-            {
-                {
-                    even += self.t.0;
-                }
-            }
-            {
-                {
-                    odd += self.t.1;
-                }
-            }
-            {
-                {
-                    even += self.t.2;
-                }
-            }
-            {
-                {
-                    odd += self.t.3;
-                }
-            }
-            {
-                {
-                    even += self.t.4;
-                }
-            }
-            {
-                {
-                    odd += self.t.5;
-                }
-            }
-        }
-        (even, odd)
-    }
+    S0((), Option<<T0>::State>),
+    S1((<T0>::Output,), Option<<T1>::State>),
 }
-trait HeadTail {
-    type Head;
-    type Tail;
-    fn head(&self) -> Option<Self::Head>;
-    fn tail(&self) -> Self::Tail;
-}
-impl<T0> HeadTail for (T0,)
+pub enum TupleSequenceState3<T0, T1, T2>
 where
-    T0: Copy,
+    T0: Extract,
+    T1: Extract,
+    T2: Extract,
 {
-    type Head = T0;
-    type Tail = ();
-    fn head(&self) -> Option<Self::Head> {
-        Some(self.0)
-    }
-    fn tail(&self) -> Self::Tail {
-        ()
-    }
+    S0((), Option<<T0>::State>),
+    S1((<T0>::Output,), Option<<T1>::State>),
+    S2((<T0>::Output, <T1>::Output), Option<<T2>::State>),
 }
-impl<T0, T1> HeadTail for (T0, T1)
-where
-    T0: Copy,
-    T1: Copy,
-{
-    type Head = T0;
-    type Tail = (T1,);
-    fn head(&self) -> Option<Self::Head> {
-        Some(self.0)
-    }
-    fn tail(&self) -> Self::Tail {
-        (self.1,)
-    }
+pub struct TupleSequence<T> {
+    tuple: T,
 }
-impl<T0, T1, T2> HeadTail for (T0, T1, T2)
+impl<T0> Extract for TupleSequence<(T0,)>
 where
-    T0: Copy,
-    T1: Copy,
-    T2: Copy,
+    T0: Extract,
 {
-    type Head = T0;
-    type Tail = (T1, T2);
-    fn head(&self) -> Option<Self::Head> {
-        Some(self.0)
-    }
-    fn tail(&self) -> Self::Tail {
-        (self.1, self.2)
-    }
+    type State = TupleSequenceState1<T0>;
+    type Output = (<T0>::Output,);
 }
-impl<T0, T1, T2, T3> HeadTail for (T0, T1, T2, T3)
+impl<T0, T1> Extract for TupleSequence<(T0, T1)>
 where
-    T0: Copy,
-    T1: Copy,
-    T2: Copy,
-    T3: Copy,
+    T0: Extract,
+    T1: Extract,
 {
-    type Head = T0;
-    type Tail = (T1, T2, T3);
-    fn head(&self) -> Option<Self::Head> {
-        Some(self.0)
-    }
-    fn tail(&self) -> Self::Tail {
-        (self.1, self.2, self.3)
-    }
+    type State = TupleSequenceState2<T0, T1>;
+    type Output = (<T0>::Output, <T1>::Output);
 }
-impl<T0, T1, T2, T3, T4> HeadTail for (T0, T1, T2, T3, T4)
+impl<T0, T1, T2> Extract for TupleSequence<(T0, T1, T2)>
 where
-    T0: Copy,
-    T1: Copy,
-    T2: Copy,
-    T3: Copy,
-    T4: Copy,
+    T0: Extract,
+    T1: Extract,
+    T2: Extract,
 {
-    type Head = T0;
-    type Tail = (T1, T2, T3, T4);
-    fn head(&self) -> Option<Self::Head> {
-        Some(self.0)
-    }
-    fn tail(&self) -> Self::Tail {
-        (self.1, self.2, self.3, self.4)
-    }
-}
-impl<T0, T1, T2, T3, T4, T5> HeadTail for (T0, T1, T2, T3, T4, T5)
-where
-    T0: Copy,
-    T1: Copy,
-    T2: Copy,
-    T3: Copy,
-    T4: Copy,
-    T5: Copy,
-{
-    type Head = T0;
-    type Tail = (T1, T2, T3, T4, T5);
-    fn head(&self) -> Option<Self::Head> {
-        Some(self.0)
-    }
-    fn tail(&self) -> Self::Tail {
-        (self.1, self.2, self.3, self.4, self.5)
-    }
+    type State = TupleSequenceState3<T0, T1, T2>;
+    type Output = (<T0>::Output, <T1>::Output, <T2>::Output);
 }

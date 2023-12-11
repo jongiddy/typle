@@ -2,69 +2,86 @@
 
 A Rust macro to create items for different sized tuples.
 
-Use the `typle` macro to generate items for multiple arities.
+The `typle` macro can generate trait implementations for tuples:
 
 ```rust
 use typle::typle;
 
-use std::ops::Mul;
 struct MyStruct<T> {
-    pub t: T,
+    t: T,
 }
 
-#[typle(Tuple for 0..=6)]
+#[typle(Tuple for 0..=3)]
+impl<T> From<T> for MyStruct<T>
+where
+    T: Tuple,
+{
+    fn from(t: T) -> Self {
+        MyStruct { t }
+    }
+}
+```
+
+This generates implementations for tuples up to 3 components:
+```rust
+impl From<()> for MyStruct<()> {
+    fn from(t: ()) -> Self {
+        MyStruct { t }
+    }
+}
+
+impl<T0> From<(T0,)> for MyStruct<(T0,)> {
+    fn from(t: (T0,)) -> Self {
+        MyStruct { t }
+    }
+}
+
+impl<T0, T1> From<(T0, T1)> for MyStruct<(T0, T1)> {
+    fn from(t: (T0, T1)) -> Self {
+        MyStruct { t }
+    }
+}
+
+impl<T0, T1, T2> From<(T0, T1, T2)> for MyStruct<(T0, T1, T2)> {
+    fn from(t: (T0, T1, T2)) -> Self {
+        MyStruct { t }
+    }
+}
+```
+
+Inside the wrapped item it is possible to iterate over and select components of a tuple:
+
+```rust
+use std::ops::{AddAssign, Mul};
+
+#[typle(Tuple for 1..=3)]
 impl<T> MyStruct<T>
 where
-    T: Tuple
+    T: Tuple,
+    T::Types: Copy,
 {
-    fn new(t: T) -> Self {
-        MyStruct { t }
+    fn tail(&self) -> MyStruct<typle_for!(i in 1.. => T<{i}>)> {
+        typle_for!(i in 1.. => self.t[[i]]).into()
     }
 
     fn multiply<M>(
-        &self,
-        multipliers: typle_for!(.. => M)
-    ) -> typle_for!(i in .. => <T<{i}> as Mul<M>>::Output)
+        &self, multipliers: M
+    ) -> typle_for!(i in .. => <T<{i}> as Mul<M<{i}>>>::Output)
     where
-        T::Types: Mul<M> + Copy,
+        M: Tuple,
+        T<{i}>: Mul<M<{i}>>,
     {
         typle_for!(i in .. => self.t[[i]] * multipliers[[i]])
     }
 }
-```
 
-This code generates implementations for tuples up to 6 components, including the following for 3-tuples:
-```rust
-impl<T0, T1, T2> MyStruct<(T0, T1, T2)> {
-    fn new(t: (T0, T1, T2)) -> Self {
-        MyStruct { t }
-    }
-
-    fn multiply<M>(
-        &self,
-        multipliers: (M, M, M),
-    ) -> (<T0 as Mul<M>>::Output, <T1 as Mul<M>>::Output, <T2 as Mul<M>>::Output)
-    where
-        T0: Mul<M> + Copy,
-        T1: Mul<M> + Copy,
-        T2: Mul<M> + Copy,
-    {
-        (self.t.0 * multipliers.0, self.t.1 * multipliers.1, self.t.2 * multipliers.2)
-    }
-}
-```
-
-Each component of the tuple can be a different type, as long as they meet the constraints in the
-`where` clause. To constrain the tuple components to a single type, add another type parameter:
-
-```rust
-#[typle(Tuple for 1..=6)]
+#[typle(Tuple for 1..=3)]
 impl<T, C> MyStruct<T>
 where
     T: Tuple<Types=C>,
-    C: std::ops::AddAssign + Default + Copy,
+    C: AddAssign + Default + Copy,
 {
-    fn even_odd(&self) -> (C, C) {
+    fn interleave(&self) -> (C, C) {
         let mut even = C::default();
         let mut odd = C::default();
         for typle_const!(i) in 0..T::LEN {
@@ -78,13 +95,38 @@ where
     }
 }
 ```
-which creates implementations including:
+
+Generated implementations for 3-tuples:
+
 ```rust
+impl<T0, T1, T2> MyStruct<(T0, T1, T2)>
+where
+    T0: Copy,
+    T1: Copy,
+    T2: Copy,
+{
+    fn tail(&self) -> MyStruct<(T1, T2)> {
+        (self.t.1, self.t.2).into()
+    }
+
+    fn multiply<M0, M1, M2>(
+        &self,
+        multipliers: (M0, M1, M2),
+    ) -> (<T0 as Mul<M0>>::Output, <T1 as Mul<M1>>::Output, <T2 as Mul<M2>>::Output)
+    where
+        T0: Mul<M0>,
+        T1: Mul<M1>,
+        T2: Mul<M2>,
+    {
+        (self.t.0 * multipliers.0, self.t.1 * multipliers.1, self.t.2 * multipliers.2)
+    }
+}
+
 impl<C> MyStruct<(C, C, C)>
 where
-    C: std::ops::AddAssign + Default + Copy,
+    C: AddAssign + Default + Copy,
 {
-    fn even_odd(&self) -> (C, C) {
+    fn interleave(&self) -> (C, C) {
         let mut even = C::default();
         let mut odd = C::default();
         {
@@ -109,42 +151,60 @@ where
 }
 ```
 
-Use `typle` to implement traits for tuples:
+This example, derived from code in the `hefty` crate, shows `typle` applied to an `enum`:
 
 ```rust
-#[typle(Tuple for 1..=6)]
-impl<T> HeadTail for T
+pub trait Extract {
+    type State;
+    type Output;
+}
+
+#[typle(Tuple for 1..=3)]
+pub enum TupleSequenceState<T>
 where
     T: Tuple,
-    T::Types: Copy,
+    T::Types: Extract,
 {
-    type Head = T<0>;
-    type Tail = typle_for!(i in 1.. => T<{i}>);
+    S = typle_variant!(i in .. =>
+        typle_for!(j in ..i => T::<{j}>::Output), Option<T<{i}>::State>
+    ),
+}
 
-    fn head(&self) -> Option<Self::Head> {
-        Some(self[[0]])
-    }
+pub struct TupleSequence<T> {
+    tuple: T,
+}
 
-    fn tail(&self) -> Self::Tail {
-        typle_for!(i in 1.. => self[[i]])
-    }
+#[typle(Tuple for 1..=3)]
+impl<T> Extract for TupleSequence<T>
+where
+    T: Tuple,
+    T::Types: Extract,
+{
+    type State = TupleSequenceState<T::Types>;
+    type Output = typle_for!(i in .. => T<{i}>::Output);
 }
 ```
-creates implementations including:
+
+For 3-tuples this generates:
 ```rust
-impl<T0, T1, T2> HeadTail for (T0, T1, T2)
+pub enum TupleSequenceState3<T0, T1, T2>
 where
-    T0: Copy,
-    T1: Copy,
-    T2: Copy,
+    T0: Extract,
+    T1: Extract,
+    T2: Extract,
 {
-    type Head = T0;
-    type Tail = (T1, T2);
-    fn head(&self) -> Option<Self::Head> {
-        Some(self.0)
-    }
-    fn tail(&self) -> Self::Tail {
-        (self.1, self.2)
-    }
+    S0((), Option<<T0>::State>),
+    S1((<T0>::Output,), Option<<T1>::State>),
+    S2((<T0>::Output, <T1>::Output), Option<<T2>::State>),
+}
+
+impl<T0, T1, T2> Extract for TupleSequence<(T0, T1, T2)>
+where
+    T0: Extract,
+    T1: Extract,
+    T2: Extract,
+{
+    type State = TupleSequenceState3<T0, T1, T2>;
+    type Output = (<T0>::Output, <T1>::Output, <T2>::Output);
 }
 ```
