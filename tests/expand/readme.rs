@@ -14,7 +14,7 @@ where
     }
 }
 
-use std::ops::{AddAssign, Mul};
+use std::ops::Mul;
 
 #[typle(Tuple for 1..=3)]
 impl<T> MyStruct<T>
@@ -41,7 +41,7 @@ where
 impl<T, C> MyStruct<T>
 where
     T: Tuple<Types=C>,
-    C: AddAssign + Default + Copy,
+    C: std::ops::AddAssign + Default + Copy,
 {
     fn interleave(&self) -> (C, C) {
         let mut even = C::default();
@@ -60,6 +60,8 @@ where
 pub trait Extract {
     type State;
     type Output;
+
+    fn extract(&self, state: Option<Self::State>);
 }
 
 #[typle(Tuple for 1..=3)]
@@ -85,4 +87,8 @@ where
 {
     type State = TupleSequenceState<T::Types>;
     type Output = typle_for!(i in .. => T<{i}>::Output);
+
+    fn extract(&self, state: Option<Self::State>) {
+        let state = state.unwrap_or(Self::State::S::<typle_index!(0)>((), None));
+    }
 }

@@ -2,7 +2,7 @@
 
 A Rust macro to create items for different sized tuples.
 
-The `typle` macro can generate trait implementations for tuples:
+The `typle!` macro can generate trait implementations for multiple-arity tuples:
 
 ```rust
 use typle::typle;
@@ -22,7 +22,7 @@ where
 }
 ```
 
-This generates implementations for tuples up to 3 components:
+This generates implementations for tuples with 0 to 3 components:
 ```rust
 impl From<()> for MyStruct<()> {
     fn from(t: ()) -> Self {
@@ -49,7 +49,8 @@ impl<T0, T1, T2> From<(T0, T1, T2)> for MyStruct<(T0, T1, T2)> {
 }
 ```
 
-Inside the wrapped item it is possible to iterate over and select components of a tuple:
+Iterate over tuple components using the `typle_for!` macro.
+Select individual components using `<{i}>` for types and `[[i]]` for values.
 
 ```rust
 use std::ops::{AddAssign, Mul};
@@ -74,29 +75,9 @@ where
         typle_for!(i in .. => self.t[[i]] * multipliers[[i]])
     }
 }
-
-#[typle(Tuple for 1..=3)]
-impl<T, C> MyStruct<T>
-where
-    T: Tuple<Types=C>,
-    C: AddAssign + Default + Copy,
-{
-    fn interleave(&self) -> (C, C) {
-        let mut even = C::default();
-        let mut odd = C::default();
-        for typle_const!(i) in 0..T::LEN {
-            if typle_const!(i % 2 == 0) {
-                even += self.t[[i]];
-            } else {
-                odd += self.t[[i]];
-            }
-        }
-        (even, odd)
-    }
-}
 ```
 
-Generated implementations for 3-tuples:
+Generated implementation for 3-tuples:
 
 ```rust
 impl<T0, T1, T2> MyStruct<(T0, T1, T2)>
@@ -121,10 +102,39 @@ where
         (self.t.0 * multipliers.0, self.t.1 * multipliers.1, self.t.2 * multipliers.2)
     }
 }
+```
 
+Use the `typle_const!` macro to perform const-for and const-if. The associated constant `LEN`
+provides the length of the tuple in each generated item.
+
+```rust
+#[typle(Tuple for 1..=3)]
+impl<T, C> MyStruct<T>
+where
+    T: Tuple<Types=C>,
+    C: std::ops::AddAssign + Default + Copy,
+{
+    fn interleave(&self) -> (C, C) {
+        let mut even = C::default();
+        let mut odd = C::default();
+        for typle_const!(i) in 0..T::LEN {
+            if typle_const!(i % 2 == 0) {
+                even += self.t[[i]];
+            } else {
+                odd += self.t[[i]];
+            }
+        }
+        (even, odd)
+    }
+}
+```
+
+Generated implementation for 3-tuples:
+
+```rust
 impl<C> MyStruct<(C, C, C)>
 where
-    C: AddAssign + Default + Copy,
+    C: std::ops::AddAssign + Default + Copy,
 {
     fn interleave(&self) -> (C, C) {
         let mut even = C::default();
@@ -151,12 +161,15 @@ where
 }
 ```
 
-This example, derived from code in the `hefty` crate, shows `typle` applied to an `enum`:
+This example, derived from code in the `hefty` crate, shows `typle` applied to an `enum` using the `typle_variant!` macro.
+Note the use of `<T::Types>` and `typle_index!` when referring to another typled item.
 
 ```rust
 pub trait Extract {
     type State;
     type Output;
+
+    fn extract(&self, state: Option<Self::State>);
 }
 
 #[typle(Tuple for 1..=3)]
@@ -182,10 +195,14 @@ where
 {
     type State = TupleSequenceState<T::Types>;
     type Output = typle_for!(i in .. => T<{i}>::Output);
+
+    fn extract(&self, state: Option<Self::State>) {
+        let state = state.unwrap_or(Self::State::S::<typle_index!(0)>((), None));
+    }
 }
 ```
 
-For 3-tuples this generates:
+Generated implementation for 3-tuples:
 ```rust
 pub enum TupleSequenceState3<T0, T1, T2>
 where
@@ -206,5 +223,9 @@ where
 {
     type State = TupleSequenceState3<T0, T1, T2>;
     type Output = (<T0>::Output, <T1>::Output, <T2>::Output);
+
+    fn extract(&self, state: Option<Self::State>) {
+        let state = state.unwrap_or(Self::State::S0((), None));
+    }
 }
 ```

@@ -22,7 +22,7 @@ impl<T0, T1, T2> From<(T0, T1, T2)> for MyStruct<(T0, T1, T2)> {
         MyStruct { t }
     }
 }
-use std::ops::{AddAssign, Mul};
+use std::ops::Mul;
 impl<T0> MyStruct<(T0,)>
 where
     T0: Copy,
@@ -79,7 +79,7 @@ where
 }
 impl<C> MyStruct<(C,)>
 where
-    C: AddAssign + Default + Copy,
+    C: std::ops::AddAssign + Default + Copy,
 {
     fn interleave(&self) -> (C, C) {
         let mut even = C::default();
@@ -96,7 +96,7 @@ where
 }
 impl<C> MyStruct<(C, C)>
 where
-    C: AddAssign + Default + Copy,
+    C: std::ops::AddAssign + Default + Copy,
 {
     fn interleave(&self) -> (C, C) {
         let mut even = C::default();
@@ -118,7 +118,7 @@ where
 }
 impl<C> MyStruct<(C, C, C)>
 where
-    C: AddAssign + Default + Copy,
+    C: std::ops::AddAssign + Default + Copy,
 {
     fn interleave(&self) -> (C, C) {
         let mut even = C::default();
@@ -146,6 +146,7 @@ where
 pub trait Extract {
     type State;
     type Output;
+    fn extract(&self, state: Option<Self::State>);
 }
 pub enum TupleSequenceState1<T0>
 where
@@ -180,6 +181,9 @@ where
 {
     type State = TupleSequenceState1<T0>;
     type Output = (<T0>::Output,);
+    fn extract(&self, state: Option<Self::State>) {
+        let state = state.unwrap_or(Self::State::S0((), None));
+    }
 }
 impl<T0, T1> Extract for TupleSequence<(T0, T1)>
 where
@@ -188,6 +192,9 @@ where
 {
     type State = TupleSequenceState2<T0, T1>;
     type Output = (<T0>::Output, <T1>::Output);
+    fn extract(&self, state: Option<Self::State>) {
+        let state = state.unwrap_or(Self::State::S0((), None));
+    }
 }
 impl<T0, T1, T2> Extract for TupleSequence<(T0, T1, T2)>
 where
@@ -197,4 +204,7 @@ where
 {
     type State = TupleSequenceState3<T0, T1, T2>;
     type Output = (<T0>::Output, <T1>::Output, <T2>::Output);
+    fn extract(&self, state: Option<Self::State>) {
+        let state = state.unwrap_or(Self::State::S0((), None));
+    }
 }
