@@ -2,7 +2,7 @@
 
 A Rust macro to create items for different sized tuples.
 
-The `typle!` macro can generate trait implementations for multiple-arity tuples:
+The `typle!` macro can generate trait implementations for multiple tuple lengths:
 
 ```rust
 use typle::typle;
@@ -61,20 +61,20 @@ where
     T: Tuple,
     T::Types: Copy,
 {
-    // Return a MyStruct containing all components except the first
-    fn tail(&self) -> MyStruct<typle_for!(i in 1.. => T<{i}>)> {
-        typle_for!(i in 1.. => self.t[[i]]).into()
+    // Return a tuple containing all components except the first
+    fn tail(&self) -> typle_for!(i in 1.. => T<{i}>) {
+        typle_for!(i in 1.. => self.t[[i]])
     }
 
-    // Multiply the components of two tuples
+    // Return a MyStruct containing the product of the components of two tuples
     fn multiply<M>(
         &self, multipliers: M
-    ) -> typle_for!(i in .. => <T<{i}> as Mul<M<{i}>>>::Output)
+    ) -> MyStruct<typle_for!(i in .. => <T<{i}> as Mul<M<{i}>>>::Output)>
     where
         M: Tuple,
-        T<{i}>: Mul<M<{i}>>,
+        T::Types<i>: Mul<M<{i}>>,
     {
-        typle_for!(i in .. => self.t[[i]] * multipliers[[i]])
+        typle_for!(i in .. => self.t[[i]] * multipliers[[i]]).into()
     }
 }
 ```
@@ -88,26 +88,29 @@ where
     T1: Copy,
     T2: Copy,
 {
-    fn tail(&self) -> MyStruct<(T1, T2)> {
-        (self.t.1, self.t.2).into()
+    fn tail(&self) -> (T1, T2) {
+        (self.t.1, self.t.2)
     }
 
     fn multiply<M0, M1, M2>(
         &self,
         multipliers: (M0, M1, M2),
-    ) -> (<T0 as Mul<M0>>::Output, <T1 as Mul<M1>>::Output, <T2 as Mul<M2>>::Output)
+    ) -> MyStruct<
+        (<T0 as Mul<M0>>::Output, <T1 as Mul<M1>>::Output, <T2 as Mul<M2>>::Output),
+    >
     where
         T0: Mul<M0>,
         T1: Mul<M1>,
         T2: Mul<M2>,
     {
         (self.t.0 * multipliers.0, self.t.1 * multipliers.1, self.t.2 * multipliers.2)
+            .into()
     }
 }
 ```
 
-Use the `typle_const!` macro to perform const-for and const-if. The associated constant `LEN`
-provides the length of the tuple in each generated item.
+The associated constant `LEN` provides the length of the tuple in each generated
+item. Use the `typle_const!` macro to perform const-for and const-if.
 
 ```rust
 #[typle(Tuple for 1..=3)]
@@ -116,6 +119,11 @@ where
     T: Tuple<Types=C>,
     C: for<'a> std::ops::AddAssign<&'a C> + Default,
 {
+    // Return a reference to the last component of the tuple
+    fn last(&self) -> &T<{T::LEN - 1}> {
+        &self.t[[T::LEN - 1]]
+    }
+
     // Return the sums of all even positions and all odd positions
     fn interleave(&self) -> (C, C) {
         let mut even = C::default();
@@ -139,6 +147,10 @@ impl<C> MyStruct<(C, C, C)>
 where
     C: for<'a> std::ops::AddAssign<&'a C> + Default,
 {
+    fn last(&self) -> &C {
+        &self.t.2
+    }
+
     fn interleave(&self) -> (C, C) {
         let mut even = C::default();
         let mut odd = C::default();
@@ -165,8 +177,9 @@ where
 }
 ```
 
-This example, simplified from code in the `hefty` crate, shows `typle` applied to an `enum` using the `typle_variant!` macro.
-Note the use of `<T::Types>` and `typle_index!` when referring to another typled item.
+This example, simplified from code in the `hefty` crate, shows `typle` applied
+to an `enum` using the `typle_variant!` macro. Note the use of `<T::Types>` and
+`typle_index!` when referring to another typled item.
 
 ```rust
 pub trait Extract {

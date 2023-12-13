@@ -27,3 +27,14 @@ where
     T0: Extract<Output = Option<(S0, S1)>>,
     T1: Extract<Output = Option<(S0, S1)>>,
 {}
+impl<T0> TraitD for TupleD1<T0>
+where
+    T0: Mul<T0>,
+    T0: AsRef<str>,
+{}
+impl<T0, T1> TraitD for TupleD2<T0, T1>
+where
+    T0: Mul<T0>,
+    T1: Mul<T1>,
+    T0: AsRef<str>,
+{}

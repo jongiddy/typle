@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::ops::Range;
 
@@ -636,122 +637,89 @@ impl<'a> SpecificContext<'a> {
                         if type_path.qself.is_none() && type_path.path.leading_colon.is_none() {
                             let mut segments = type_path.path.segments.iter();
                             if let Some(first) = segments.next() {
-                                if let Some(Typle::Generic(component_names)) =
-                                    self.typles.get(&first.ident)
-                                {
-                                    // T::Types, T::Types::Output, T<i>
-                                    match &first.arguments {
-                                        PathArguments::None => {
-                                            // T::Types: AsRef<str> or T::Types::Output: AsRef<str>
-                                            let Some(second) = segments.next() else {
-                                                abort!(first, "single typle type unexpected");
-                                            };
-                                            if second.ident != TYPLE_ASSOC_TYPE_NAME {
-                                                abort!(second, "unknown associated item");
-                                            }
-                                            for component_name in component_names {
-                                                let component_ident =
-                                                    Ident::new(&component_name, first.ident.span());
-                                                let mut path = ident_to_path(component_ident);
-                                                for segment in segments.clone() {
-                                                    path.segments.push(segment.clone());
-                                                }
-                                                let bounds = predicate_type
-                                                    .bounds
-                                                    .iter()
-                                                    .map(|bound| {
-                                                        let mut bound = bound.clone();
-                                                        if let TypeParamBound::Trait(trait_bound) =
-                                                            &mut bound
-                                                        {
-                                                            self.replace_path_arguments(
-                                                                &mut trait_bound.path,
-                                                            );
-                                                        }
-                                                        bound
-                                                    })
-                                                    .collect();
-                                                where_clause.predicates.push(WherePredicate::Type(
-                                                    PredicateType {
-                                                        lifetimes: None,
-                                                        bounded_ty: Type::Path(TypePath {
-                                                            qself: None,
-                                                            path,
-                                                        }),
-                                                        colon_token: token::Colon::default(),
-                                                        bounds,
-                                                    },
-                                                ));
-                                            }
-                                        }
-                                        PathArguments::AngleBracketed(arguments) => {
-                                            // T<{i}>: Mul<M<{i}>>
-                                            if let Some(second) = segments.next() {
-                                                abort!(second, "path unexpected");
-                                            };
+                                if let (
+                                    Some(Typle::Generic(component_names)),
+                                    PathArguments::None,
+                                    Some(second),
+                                ) = (
+                                    self.typles.get(&first.ident),
+                                    &first.arguments,
+                                    segments.next(),
+                                ) {
+                                    // T::Types: AsRef<str>, T::Types::Output: AsRef<str>, T::Types<i>: Mul<M<{i}>>
+                                    if second.ident != TYPLE_ASSOC_TYPE_NAME {
+                                        abort!(second, "unknown associated item");
+                                    }
+                                    let (mut context, ident) =
+                                        if let PathArguments::AngleBracketed(arguments) =
+                                            &second.arguments
+                                        {
                                             let mut iter = arguments.args.iter();
                                             let (
-                                                Some(GenericArgument::Const(Expr::Block(expr))),
+                                                Some(GenericArgument::Type(Type::Path(type_path))),
                                                 None,
                                             ) = (iter.next(), iter.next())
                                             else {
-                                                abort!(arguments, "expected single const block");
+                                                abort!(arguments, "expected single identifier");
                                             };
-                                            let mut iter = expr.block.stmts.iter();
-                                            let (Some(Stmt::Expr(Expr::Path(expr), _)), None) =
-                                                (iter.next(), iter.next())
-                                            else {
-                                                abort!(expr, "expected single const block");
-                                            };
-                                            let (Some(ident), None) =
-                                                (expr.path.get_ident(), expr.qself.as_ref())
-                                            else {
-                                                abort!(expr, "expected single const block");
+                                            let (Some(ident), None) = (
+                                                type_path.path.get_ident(),
+                                                type_path.qself.as_ref(),
+                                            ) else {
+                                                abort!(type_path, "expected single identifier");
                                             };
                                             let mut context = self.clone();
                                             context.constants.insert(ident.clone(), 0);
-                                            for (index, component_name) in
-                                                component_names.into_iter().enumerate()
-                                            {
-                                                *context.constants.get_mut(ident).unwrap() = index;
-                                                let component_ident =
-                                                    Ident::new(&component_name, first.ident.span());
-                                                let path = ident_to_path(component_ident);
-                                                let bounds = predicate_type
-                                                    .bounds
-                                                    .iter()
-                                                    .map(|bound| {
-                                                        let mut bound = bound.clone();
-                                                        if let TypeParamBound::Trait(trait_bound) =
-                                                            &mut bound
-                                                        {
-                                                            context.replace_path_arguments(
-                                                                &mut trait_bound.path,
-                                                            );
-                                                        }
-                                                        bound
-                                                    })
-                                                    .collect();
-                                                where_clause.predicates.push(WherePredicate::Type(
-                                                    PredicateType {
-                                                        lifetimes: None,
-                                                        bounded_ty: Type::Path(TypePath {
-                                                            qself: None,
-                                                            path,
-                                                        }),
-                                                        colon_token: token::Colon::default(),
-                                                        bounds,
-                                                    },
-                                                ));
-                                            }
+                                            (Cow::Owned(context), Some(ident))
+                                        } else {
+                                            (Cow::Borrowed(self), None)
+                                        };
+                                    for (index, component_name) in
+                                        component_names.into_iter().enumerate()
+                                    {
+                                        if let Some(ident) = ident {
+                                            *context.to_mut().constants.get_mut(ident).unwrap() =
+                                                index;
                                         }
-                                        PathArguments::Parenthesized(_) => todo!(),
+                                        let component_ident =
+                                            Ident::new(&component_name, first.ident.span());
+                                        let mut path = ident_to_path(component_ident);
+                                        for segment in segments.clone() {
+                                            path.segments.push(segment.clone());
+                                        }
+                                        let bounds = predicate_type
+                                            .bounds
+                                            .iter()
+                                            .map(|bound| {
+                                                let mut bound = bound.clone();
+                                                if let TypeParamBound::Trait(trait_bound) =
+                                                    &mut bound
+                                                {
+                                                    context.replace_path_arguments(
+                                                        &mut trait_bound.path,
+                                                    );
+                                                }
+                                                bound
+                                            })
+                                            .collect();
+                                        where_clause.predicates.push(WherePredicate::Type(
+                                            PredicateType {
+                                                lifetimes: None,
+                                                bounded_ty: Type::Path(TypePath {
+                                                    qself: None,
+                                                    path,
+                                                }),
+                                                colon_token: token::Colon::default(),
+                                                bounds,
+                                            },
+                                        ));
                                     }
                                     continue;
                                 }
                             }
                         }
                     }
+                    self.replace_type(&mut predicate_type.bounded_ty);
                     for bound in &mut predicate_type.bounds {
                         // substitute any appearances of typles in the constraints
                         // (e.g. T::Types: Extract<Output = S<0>::Output>)
@@ -1187,7 +1155,7 @@ impl<'a> SpecificContext<'a> {
                                     format_ident!("{}{}", path_segment.ident, index);
                                 path_segment.arguments = PathArguments::None;
                             } else {
-                                // std::option::Some(T> -> std::option::Option<(T0, T1,...)
+                                // std::option::Some(T) -> std::option::Option<(T0, T1,...)
                                 // std::option::Option<T<3>> -> std::option::Option<T3>
                                 for arg in std::mem::take(&mut args.args) {
                                     match arg {

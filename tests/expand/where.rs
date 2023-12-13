@@ -22,3 +22,11 @@ where
     T: Tuple,
     T::Types: Extract<Output = Option<S>>,
 {}
+
+#[typle(Tuple for 1..=2)]
+impl<T> TraitD for TupleD<T::Types>
+where
+    T: Tuple,
+    T::Types<i>: Mul<T<{i}>>,
+    T<0>: AsRef<str>,
+{}

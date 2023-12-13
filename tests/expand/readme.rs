@@ -22,18 +22,20 @@ where
     T: Tuple,
     T::Types: Copy,
 {
-    fn tail(&self) -> MyStruct<typle_for!(i in 1.. => T<{i}>)> {
-        typle_for!(i in 1.. => self.t[[i]]).into()
+    // Return a tuple containing all components except the first
+    fn tail(&self) -> typle_for!(i in 1.. => T<{i}>) {
+        typle_for!(i in 1.. => self.t[[i]])
     }
 
+    // Return a MyStruct containing the product of the components of two tuples
     fn multiply<M>(
         &self, multipliers: M
-    ) -> typle_for!(i in .. => <T<{i}> as Mul<M<{i}>>>::Output)
+    ) -> MyStruct<typle_for!(i in .. => <T<{i}> as Mul<M<{i}>>>::Output)>
     where
         M: Tuple,
-        T<{i}>: Mul<M<{i}>>,
+        T::Types<i>: Mul<M<{i}>>,
     {
-        typle_for!(i in .. => self.t[[i]] * multipliers[[i]])
+        typle_for!(i in .. => self.t[[i]] * multipliers[[i]]).into()
     }
 }
 
@@ -43,6 +45,12 @@ where
     T: Tuple<Types=C>,
     C: for<'a> std::ops::AddAssign<&'a C> + Default,
 {
+    // Return a reference to the last component of the tuple
+    fn last(&self) -> &T<{T::LEN - 1}> {
+        &self.t[[T::LEN - 1]]
+    }
+
+    // Return the sums of all even positions and all odd positions
     fn interleave(&self) -> (C, C) {
         let mut even = C::default();
         let mut odd = C::default();

@@ -27,14 +27,14 @@ impl<T0> MyStruct<(T0,)>
 where
     T0: Copy,
 {
-    fn tail(&self) -> MyStruct<()> {
-        ().into()
+    fn tail(&self) -> () {
+        ()
     }
-    fn multiply<M0>(&self, multipliers: (M0,)) -> (<T0 as Mul<M0>>::Output,)
+    fn multiply<M0>(&self, multipliers: (M0,)) -> MyStruct<(<T0 as Mul<M0>>::Output,)>
     where
         T0: Mul<M0>,
     {
-        (self.t.0 * multipliers.0,)
+        (self.t.0 * multipliers.0,).into()
     }
 }
 impl<T0, T1> MyStruct<(T0, T1)>
@@ -42,18 +42,18 @@ where
     T0: Copy,
     T1: Copy,
 {
-    fn tail(&self) -> MyStruct<(T1,)> {
-        (self.t.1,).into()
+    fn tail(&self) -> (T1,) {
+        (self.t.1,)
     }
     fn multiply<M0, M1>(
         &self,
         multipliers: (M0, M1),
-    ) -> (<T0 as Mul<M0>>::Output, <T1 as Mul<M1>>::Output)
+    ) -> MyStruct<(<T0 as Mul<M0>>::Output, <T1 as Mul<M1>>::Output)>
     where
         T0: Mul<M0>,
         T1: Mul<M1>,
     {
-        (self.t.0 * multipliers.0, self.t.1 * multipliers.1)
+        (self.t.0 * multipliers.0, self.t.1 * multipliers.1).into()
     }
 }
 impl<T0, T1, T2> MyStruct<(T0, T1, T2)>
@@ -62,25 +62,31 @@ where
     T1: Copy,
     T2: Copy,
 {
-    fn tail(&self) -> MyStruct<(T1, T2)> {
-        (self.t.1, self.t.2).into()
+    fn tail(&self) -> (T1, T2) {
+        (self.t.1, self.t.2)
     }
     fn multiply<M0, M1, M2>(
         &self,
         multipliers: (M0, M1, M2),
-    ) -> (<T0 as Mul<M0>>::Output, <T1 as Mul<M1>>::Output, <T2 as Mul<M2>>::Output)
+    ) -> MyStruct<
+        (<T0 as Mul<M0>>::Output, <T1 as Mul<M1>>::Output, <T2 as Mul<M2>>::Output),
+    >
     where
         T0: Mul<M0>,
         T1: Mul<M1>,
         T2: Mul<M2>,
     {
         (self.t.0 * multipliers.0, self.t.1 * multipliers.1, self.t.2 * multipliers.2)
+            .into()
     }
 }
 impl<C> MyStruct<(C,)>
 where
     C: for<'a> std::ops::AddAssign<&'a C> + Default,
 {
+    fn last(&self) -> &C {
+        &self.t.0
+    }
     fn interleave(&self) -> (C, C) {
         let mut even = C::default();
         let mut odd = C::default();
@@ -99,6 +105,9 @@ impl<C> MyStruct<(C, C)>
 where
     C: for<'a> std::ops::AddAssign<&'a C> + Default,
 {
+    fn last(&self) -> &C {
+        &self.t.1
+    }
     fn interleave(&self) -> (C, C) {
         let mut even = C::default();
         let mut odd = C::default();
@@ -122,6 +131,9 @@ impl<C> MyStruct<(C, C, C)>
 where
     C: for<'a> std::ops::AddAssign<&'a C> + Default,
 {
+    fn last(&self) -> &C {
+        &self.t.2
+    }
     fn interleave(&self) -> (C, C) {
         let mut even = C::default();
         let mut odd = C::default();
