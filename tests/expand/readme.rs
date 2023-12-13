@@ -71,7 +71,8 @@ where
     T::Types: Extract,
 {
     S = typle_variant!(i in .. =>
-        typle_for!(j in ..i => T::<{j}>::Output), Option<T<{i}>::State>
+        typle_for!(j in ..i => T::<{j}>::Output),
+        Option<T<{i}>::State>
     ),
 }
 

@@ -173,7 +173,7 @@ pub trait Extract {
     type State;
     type Output;
 
-    fn extract(&self, state: Option<Self::State>);
+    fn extract(&self, state: Option<Self::State>) -> Self::Output;
 }
 
 #[typle(Tuple for 1..=3)]
@@ -183,7 +183,8 @@ where
     T::Types: Extract,
 {
     S = typle_variant!(i in .. =>
-        typle_for!(j in ..i => T::<{j}>::Output), Option<T<{i}>::State>
+        typle_for!(j in ..i => T::<{j}>::Output),
+        Option<T<{i}>::State>
     ),
 }
 
