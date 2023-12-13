@@ -32,7 +32,7 @@
 //! impl MyStruct<(u32,)> {
 //!     fn max(&self) -> Option<u32> {
 //!         let mut max = self.t.0;
-//!         {}
+//!         { () }
 //!         Some(max)
 //!     }
 //! }
@@ -45,6 +45,7 @@
 //!                     max = self.t.1;
 //!                 }
 //!             }
+//!             ()
 //!         }
 //!         Some(max)
 //!     }
@@ -63,6 +64,7 @@
 //!                     max = self.t.2;
 //!                 }
 //!             }
+//!             ()
 //!         }
 //!         Some(max)
 //!     }

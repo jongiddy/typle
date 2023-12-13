@@ -82,7 +82,7 @@ impl Process for () {
     type State = ProcessState0;
     type Output = [u64; 0];
     fn process(state: Self::State) -> Result<Self::Output, Error> {
-        {}
+        { () }
         if let Self::State::Done(output) = state {
             return output;
         }
@@ -117,6 +117,7 @@ where
                     }
                 }
             }
+            ()
         }
         if let Self::State::Done(output) = state {
             return output;
@@ -173,6 +174,7 @@ where
                     }
                 }
             }
+            ()
         }
         if let Self::State::Done(output) = state {
             return output;
@@ -250,6 +252,7 @@ where
                     }
                 }
             }
+            ()
         }
         if let Self::State::Done(output) = state {
             return output;

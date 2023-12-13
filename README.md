@@ -53,7 +53,7 @@ Iterate over tuple components using the `typle_for!` macro.
 Select individual components using `<{i}>` for types and `[[i]]` for values.
 
 ```rust
-use std::ops::{AddAssign, Mul};
+use std::ops::Mul;
 
 #[typle(Tuple for 1..=3)]
 impl<T> MyStruct<T>
@@ -61,10 +61,12 @@ where
     T: Tuple,
     T::Types: Copy,
 {
+    // Return a MyStruct containing all components except the first
     fn tail(&self) -> MyStruct<typle_for!(i in 1.. => T<{i}>)> {
         typle_for!(i in 1.. => self.t[[i]]).into()
     }
 
+    // Multiply the components of two tuples
     fn multiply<M>(
         &self, multipliers: M
     ) -> typle_for!(i in .. => <T<{i}> as Mul<M<{i}>>>::Output)
@@ -112,16 +114,17 @@ provides the length of the tuple in each generated item.
 impl<T, C> MyStruct<T>
 where
     T: Tuple<Types=C>,
-    C: std::ops::AddAssign + Default + Copy,
+    C: for<'a> std::ops::AddAssign<&'a C> + Default,
 {
+    // Return the sums of all even positions and all odd positions
     fn interleave(&self) -> (C, C) {
         let mut even = C::default();
         let mut odd = C::default();
         for typle_const!(i) in 0..T::LEN {
             if typle_const!(i % 2 == 0) {
-                even += self.t[[i]];
+                even += &self.t[[i]];
             } else {
-                odd += self.t[[i]];
+                odd += &self.t[[i]];
             }
         }
         (even, odd)
@@ -134,7 +137,7 @@ Generated implementation for 3-tuples:
 ```rust
 impl<C> MyStruct<(C, C, C)>
 where
-    C: std::ops::AddAssign + Default + Copy,
+    C: for<'a> std::ops::AddAssign<&'a C> + Default,
 {
     fn interleave(&self) -> (C, C) {
         let mut even = C::default();
@@ -142,26 +145,27 @@ where
         {
             {
                 {
-                    even += self.t.0;
+                    even += &self.t.0;
                 }
             }
             {
                 {
-                    odd += self.t.1;
+                    odd += &self.t.1;
                 }
             }
             {
                 {
-                    even += self.t.2;
+                    even += &self.t.2;
                 }
             }
+            ()
         }
         (even, odd)
     }
 }
 ```
 
-This example, derived from code in the `hefty` crate, shows `typle` applied to an `enum` using the `typle_variant!` macro.
+This example, simplified from code in the `hefty` crate, shows `typle` applied to an `enum` using the `typle_variant!` macro.
 Note the use of `<T::Types>` and `typle_index!` when referring to another typled item.
 
 ```rust
@@ -196,8 +200,22 @@ where
     type State = TupleSequenceState<T::Types>;
     type Output = typle_for!(i in .. => T<{i}>::Output);
 
-    fn extract(&self, state: Option<Self::State>) {
-        let state = state.unwrap_or(Self::State::S::<typle_index!(0)>((), None));
+    fn extract(&self, state: Option<Self::State>) -> Self::Output {
+        let mut state = state.unwrap_or(Self::State::S::<typle_index!(0)>((), None));
+        for typle_const!(i) in 0..T::LEN {
+            if let Self::State::S::<typle_index!(i)>(output, inner_state) = state {
+                let matched = self.tuple[[i]].extract(inner_state);
+                let output = typle_for!(j in ..=i =>
+                    if typle_const!(j != i) { output[[j]] } else { matched }
+                );
+                if typle_const!(i + 1 == T::LEN) {
+                    return output;
+                } else {
+                    state = Self::State::S::<typle_index!(i + 1)>(output, None);
+                }
+            }
+        }
+        unreachable!();
     }
 }
 ```
@@ -223,9 +241,39 @@ where
 {
     type State = TupleSequenceState3<T0, T1, T2>;
     type Output = (<T0>::Output, <T1>::Output, <T2>::Output);
-
-    fn extract(&self, state: Option<Self::State>) {
-        let state = state.unwrap_or(Self::State::S0((), None));
+    fn extract(&self, state: Option<Self::State>) -> Self::Output {
+        let mut state = state.unwrap_or(Self::State::S0((), None));
+        {
+            {
+                if let Self::State::S0(output, inner_state) = state {
+                    let matched = self.tuple.0.extract(inner_state);
+                    let output = ({ matched },);
+                    {
+                        state = Self::State::S1(output, None);
+                    }
+                }
+            }
+            {
+                if let Self::State::S1(output, inner_state) = state {
+                    let matched = self.tuple.1.extract(inner_state);
+                    let output = ({ output.0 }, { matched });
+                    {
+                        state = Self::State::S2(output, None);
+                    }
+                }
+            }
+            {
+                if let Self::State::S2(output, inner_state) = state {
+                    let matched = self.tuple.2.extract(inner_state);
+                    let output = ({ output.0 }, { output.1 }, { matched });
+                    {
+                        return output;
+                    }
+                }
+            }
+            ()
+        }
+        unreachable!();
     }
 }
 ```

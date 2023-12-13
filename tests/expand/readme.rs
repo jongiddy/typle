@@ -41,16 +41,16 @@ where
 impl<T, C> MyStruct<T>
 where
     T: Tuple<Types=C>,
-    C: std::ops::AddAssign + Default + Copy,
+    C: for<'a> std::ops::AddAssign<&'a C> + Default,
 {
     fn interleave(&self) -> (C, C) {
         let mut even = C::default();
         let mut odd = C::default();
         for typle_const!(i) in 0..T::LEN {
             if typle_const!(i % 2 == 0) {
-                even += self.t[[i]];
+                even += &self.t[[i]];
             } else {
-                odd += self.t[[i]];
+                odd += &self.t[[i]];
             }
         }
         (even, odd)
@@ -61,7 +61,7 @@ pub trait Extract {
     type State;
     type Output;
 
-    fn extract(&self, state: Option<Self::State>);
+    fn extract(&self, state: Option<Self::State>) -> Self::Output;
 }
 
 #[typle(Tuple for 1..=3)]
@@ -88,7 +88,21 @@ where
     type State = TupleSequenceState<T::Types>;
     type Output = typle_for!(i in .. => T<{i}>::Output);
 
-    fn extract(&self, state: Option<Self::State>) {
-        let state = state.unwrap_or(Self::State::S::<typle_index!(0)>((), None));
+    fn extract(&self, state: Option<Self::State>) -> Self::Output {
+        let mut state = state.unwrap_or(Self::State::S::<typle_index!(0)>((), None));
+        for typle_const!(i) in 0..T::LEN {
+            if let Self::State::S::<typle_index!(i)>(output, inner_state) = state {
+                let matched = self.tuple[[i]].extract(inner_state);
+                let output = typle_for!(j in ..=i =>
+                    if typle_const!(j != i) { output[[j]] } else { matched }
+                );
+                if typle_const!(i + 1 == T::LEN) {
+                    return output;
+                } else {
+                    state = Self::State::S::<typle_index!(i + 1)>(output, None);
+                }
+            }
+        }
+        unreachable!();
     }
 }

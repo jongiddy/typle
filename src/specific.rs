@@ -267,6 +267,14 @@ impl<'a> SpecificContext<'a> {
                                     None,
                                 ));
                             }
+                            stmts.push(Stmt::Expr(
+                                Expr::Tuple(ExprTuple {
+                                    attrs: Vec::new(),
+                                    paren_token: token::Paren::default(),
+                                    elems: Punctuated::new(),
+                                }),
+                                None,
+                            ));
                             *expr = Expr::Block(ExprBlock {
                                 attrs: std::mem::take(&mut for_loop.attrs),
                                 label: for_loop.label.take(),

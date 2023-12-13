@@ -79,7 +79,7 @@ where
 }
 impl<C> MyStruct<(C,)>
 where
-    C: std::ops::AddAssign + Default + Copy,
+    C: for<'a> std::ops::AddAssign<&'a C> + Default,
 {
     fn interleave(&self) -> (C, C) {
         let mut even = C::default();
@@ -87,16 +87,17 @@ where
         {
             {
                 {
-                    even += self.t.0;
+                    even += &self.t.0;
                 }
             }
+            ()
         }
         (even, odd)
     }
 }
 impl<C> MyStruct<(C, C)>
 where
-    C: std::ops::AddAssign + Default + Copy,
+    C: for<'a> std::ops::AddAssign<&'a C> + Default,
 {
     fn interleave(&self) -> (C, C) {
         let mut even = C::default();
@@ -104,21 +105,22 @@ where
         {
             {
                 {
-                    even += self.t.0;
+                    even += &self.t.0;
                 }
             }
             {
                 {
-                    odd += self.t.1;
+                    odd += &self.t.1;
                 }
             }
+            ()
         }
         (even, odd)
     }
 }
 impl<C> MyStruct<(C, C, C)>
 where
-    C: std::ops::AddAssign + Default + Copy,
+    C: for<'a> std::ops::AddAssign<&'a C> + Default,
 {
     fn interleave(&self) -> (C, C) {
         let mut even = C::default();
@@ -126,19 +128,20 @@ where
         {
             {
                 {
-                    even += self.t.0;
+                    even += &self.t.0;
                 }
             }
             {
                 {
-                    odd += self.t.1;
+                    odd += &self.t.1;
                 }
             }
             {
                 {
-                    even += self.t.2;
+                    even += &self.t.2;
                 }
             }
+            ()
         }
         (even, odd)
     }
@@ -146,7 +149,7 @@ where
 pub trait Extract {
     type State;
     type Output;
-    fn extract(&self, state: Option<Self::State>);
+    fn extract(&self, state: Option<Self::State>) -> Self::Output;
 }
 pub enum TupleSequenceState1<T0>
 where
@@ -181,8 +184,21 @@ where
 {
     type State = TupleSequenceState1<T0>;
     type Output = (<T0>::Output,);
-    fn extract(&self, state: Option<Self::State>) {
-        let state = state.unwrap_or(Self::State::S0((), None));
+    fn extract(&self, state: Option<Self::State>) -> Self::Output {
+        let mut state = state.unwrap_or(Self::State::S0((), None));
+        {
+            {
+                if let Self::State::S0(output, inner_state) = state {
+                    let matched = self.tuple.0.extract(inner_state);
+                    let output = ({ matched },);
+                    {
+                        return output;
+                    }
+                }
+            }
+            ()
+        }
+        ::core::panicking::panic("internal error: entered unreachable code");
     }
 }
 impl<T0, T1> Extract for TupleSequence<(T0, T1)>
@@ -192,8 +208,30 @@ where
 {
     type State = TupleSequenceState2<T0, T1>;
     type Output = (<T0>::Output, <T1>::Output);
-    fn extract(&self, state: Option<Self::State>) {
-        let state = state.unwrap_or(Self::State::S0((), None));
+    fn extract(&self, state: Option<Self::State>) -> Self::Output {
+        let mut state = state.unwrap_or(Self::State::S0((), None));
+        {
+            {
+                if let Self::State::S0(output, inner_state) = state {
+                    let matched = self.tuple.0.extract(inner_state);
+                    let output = ({ matched },);
+                    {
+                        state = Self::State::S1(output, None);
+                    }
+                }
+            }
+            {
+                if let Self::State::S1(output, inner_state) = state {
+                    let matched = self.tuple.1.extract(inner_state);
+                    let output = ({ output.0 }, { matched });
+                    {
+                        return output;
+                    }
+                }
+            }
+            ()
+        }
+        ::core::panicking::panic("internal error: entered unreachable code");
     }
 }
 impl<T0, T1, T2> Extract for TupleSequence<(T0, T1, T2)>
@@ -204,7 +242,38 @@ where
 {
     type State = TupleSequenceState3<T0, T1, T2>;
     type Output = (<T0>::Output, <T1>::Output, <T2>::Output);
-    fn extract(&self, state: Option<Self::State>) {
-        let state = state.unwrap_or(Self::State::S0((), None));
+    fn extract(&self, state: Option<Self::State>) -> Self::Output {
+        let mut state = state.unwrap_or(Self::State::S0((), None));
+        {
+            {
+                if let Self::State::S0(output, inner_state) = state {
+                    let matched = self.tuple.0.extract(inner_state);
+                    let output = ({ matched },);
+                    {
+                        state = Self::State::S1(output, None);
+                    }
+                }
+            }
+            {
+                if let Self::State::S1(output, inner_state) = state {
+                    let matched = self.tuple.1.extract(inner_state);
+                    let output = ({ output.0 }, { matched });
+                    {
+                        state = Self::State::S2(output, None);
+                    }
+                }
+            }
+            {
+                if let Self::State::S2(output, inner_state) = state {
+                    let matched = self.tuple.2.extract(inner_state);
+                    let output = ({ output.0 }, { output.1 }, { matched });
+                    {
+                        return output;
+                    }
+                }
+            }
+            ()
+        }
+        ::core::panicking::panic("internal error: entered unreachable code");
     }
 }

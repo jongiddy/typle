@@ -82,7 +82,7 @@ struct AStruct2<T0, T1> {
 }
 impl std::io::Read for AStruct0 {
     fn read(&mut self, mut buf: &mut [u8]) -> std::io::Result<usize> {
-        {}
+        { () }
     }
 }
 impl<T0> std::io::Read for AStruct1<T0>
@@ -96,6 +96,7 @@ where
                     let size = self.t.0.read(buf);
                 }
             }
+            ()
         }
     }
 }
@@ -116,6 +117,7 @@ where
                     let size = self.t.1.read(buf);
                 }
             }
+            ()
         }
     }
 }
