@@ -135,7 +135,7 @@ use constant::evaluate_usize;
 use proc_macro2::{Ident, TokenStream, TokenTree};
 use proc_macro_error::{abort, abort_call_site, proc_macro_error};
 use quote::ToTokens;
-use specific::SpecificContext;
+use specific::{BlockState, SpecificContext};
 use syn::Item;
 
 #[doc(hidden)]
@@ -231,7 +231,8 @@ impl IterationTrait {
                     typles: HashMap::new(),
                 };
                 let mut item = item.clone();
-                context.replace_item(&mut item, true);
+                let mut state = BlockState::default();
+                context.replace_item(&mut item, true, &mut state);
                 output.push(item);
             }
         } else {

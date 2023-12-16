@@ -8,9 +8,9 @@ use quote::{format_ident, ToTokens};
 use syn::punctuated::Punctuated;
 use syn::spanned::Spanned as _;
 use syn::{
-    parse2, token, Block, Expr, ExprArray, ExprBlock, ExprField, ExprLit, ExprTuple, Fields,
-    FieldsNamed, FieldsUnnamed, GenericArgument, GenericParam, Generics, ImplItem, Index, Item,
-    Lit, LitInt, Macro, MacroDelimiter, Member, Pat, Path, PathArguments, PathSegment,
+    parse2, parse_quote, token, Block, Expr, ExprArray, ExprBlock, ExprField, ExprLit, ExprTuple,
+    Fields, FieldsNamed, FieldsUnnamed, GenericArgument, GenericParam, Generics, ImplItem, Index,
+    Item, Lit, LitInt, Macro, MacroDelimiter, Member, Pat, Path, PathArguments, PathSegment,
     PredicateType, QSelf, RangeLimits, ReturnType, Stmt, Type, TypeMacro, TypeParamBound, TypePath,
     TypeTuple, Variant, WhereClause, WherePredicate,
 };
@@ -40,6 +40,11 @@ impl Typle {
             }),
         }
     }
+}
+
+#[derive(Default)]
+pub struct BlockState {
+    unlabelled_control_flow: bool,
 }
 
 #[derive(Clone)]
@@ -134,66 +139,95 @@ impl<'a> SpecificContext<'a> {
         context
     }
 
-    fn replace_block(&self, block: &mut Block) {
-        for stmt in &mut block.stmts {
+    fn replace_block(&self, block: &mut Block, state: &mut BlockState) {
+        let mut stmts = std::mem::take(&mut block.stmts).into_iter().peekable();
+        while let Some(stmt) = stmts.next() {
             match stmt {
-                Stmt::Local(local) => {
+                Stmt::Local(mut local) => {
                     self.replace_pat(&mut local.pat);
                     if let Some(init) = &mut local.init {
-                        self.replace_expr(&mut init.expr);
+                        self.replace_expr(&mut init.expr, state);
                         if let Some((_, diverge)) = &mut init.diverge {
-                            self.replace_expr(diverge);
+                            self.replace_expr(diverge, state);
                         }
                     }
+                    block.stmts.push(Stmt::Local(local));
                 }
-                Stmt::Item(item) => {
-                    self.replace_item(item, false);
+                Stmt::Item(mut item) => {
+                    self.replace_item(&mut item, false, state);
+                    block.stmts.push(Stmt::Item(item));
                 }
-                Stmt::Expr(expr, _) => self.replace_expr(expr),
-                Stmt::Macro(stmt_macro) => {
-                    self.replace_macro(&mut stmt_macro.mac, EvaluationContext::Value)
+                Stmt::Expr(mut expr, semi) => {
+                    self.replace_expr(&mut expr, state);
+                    // Remove empty blocks in blocks to allow control statements in const-for loop
+                    // to be eliminated.
+                    if let Expr::Block(ExprBlock {
+                        attrs,
+                        label,
+                        block: inner_block,
+                    }) = &expr
+                    {
+                        if attrs.is_empty()
+                            && label.is_none()
+                            && inner_block.stmts.is_empty()
+                            && (block.stmts.is_empty() || stmts.peek().is_some())
+                        {
+                            // Don't keep empty blocks inside blocks unless it affects the return value.
+                            // i.e. only remove if there have been no statements before the empty block or
+                            // if there are more statements afterwards.
+                            continue;
+                        }
+                    }
+                    block.stmts.push(Stmt::Expr(expr, semi));
+                }
+                Stmt::Macro(mut stmt_macro) => {
+                    self.replace_macro(&mut stmt_macro.mac, EvaluationContext::Value, state);
+                    block.stmts.push(Stmt::Macro(stmt_macro));
                 }
             }
         }
     }
 
-    fn replace_expr(&self, expr: &mut Expr) {
+    fn replace_expr(&self, expr: &mut Expr, state: &mut BlockState) {
         match expr {
             Expr::Array(array) => {
                 for expr in &mut array.elems {
-                    self.replace_expr(expr);
+                    self.replace_expr(expr, state);
                 }
             }
             Expr::Assign(assign) => {
-                self.replace_expr(&mut assign.left);
-                self.replace_expr(&mut assign.right);
+                self.replace_expr(&mut assign.left, state);
+                self.replace_expr(&mut assign.right, state);
             }
             Expr::Async(r#async) => {
-                self.replace_block(&mut r#async.block);
+                self.replace_block(&mut r#async.block, state);
             }
             Expr::Await(r#await) => {
-                self.replace_expr(&mut r#await.base);
+                self.replace_expr(&mut r#await.base, state);
             }
             Expr::Binary(binary) => {
-                self.replace_expr(&mut binary.left);
-                self.replace_expr(&mut binary.right);
+                self.replace_expr(&mut binary.left, state);
+                self.replace_expr(&mut binary.right, state);
             }
             Expr::Block(block) => {
-                self.replace_block(&mut block.block);
+                self.replace_block(&mut block.block, state);
             }
-            Expr::Break(r#break) => {
-                if let Some(expr) = &mut r#break.expr {
-                    self.replace_expr(expr);
+            Expr::Break(brk) => {
+                if let Some(expr) = &mut brk.expr {
+                    self.replace_expr(expr, state);
+                }
+                if brk.label.is_none() {
+                    state.unlabelled_control_flow = true;
                 }
             }
             Expr::Call(call) => {
-                self.replace_expr(&mut call.func);
+                self.replace_expr(&mut call.func, state);
                 for expr in &mut call.args {
-                    self.replace_expr(expr);
+                    self.replace_expr(expr, state);
                 }
             }
             Expr::Cast(cast) => {
-                self.replace_expr(&mut cast.expr);
+                self.replace_expr(&mut cast.expr, state);
                 self.replace_type(&mut cast.ty);
             }
             Expr::Closure(closure) => {
@@ -203,17 +237,21 @@ impl<'a> SpecificContext<'a> {
                 if let ReturnType::Type(_, ret_type) = &mut closure.output {
                     self.replace_type(ret_type);
                 }
-                self.replace_expr(&mut closure.body);
+                self.replace_expr(&mut closure.body, state);
             }
             Expr::Const(r#const) => {
-                self.replace_block(&mut r#const.block);
+                self.replace_block(&mut r#const.block, state);
             }
-            Expr::Continue(_) => {}
+            Expr::Continue(cont) => {
+                if cont.label.is_none() {
+                    state.unlabelled_control_flow = true;
+                }
+            }
             Expr::Field(field) => {
-                self.replace_expr(&mut field.base);
+                self.replace_expr(&mut field.base, state);
             }
             Expr::ForLoop(for_loop) => {
-                self.replace_expr(&mut for_loop.expr);
+                self.replace_expr(&mut for_loop.expr, state);
                 // Check for typle_const!(i)
                 if let Pat::Macro(pat_macro) = &mut *for_loop.pat {
                     if let Some(macro_ident) = pat_macro.mac.path.get_ident() {
@@ -255,18 +293,61 @@ impl<'a> SpecificContext<'a> {
                             let mut context = self.clone();
                             let mut stmts = Vec::new();
                             context.constants.insert(pat_ident.clone(), 0);
+                            let mut unlabelled_control_flow = false;
                             for index in start..end {
                                 context.constants.get_mut(&pat_ident).map(|v| *v = index);
                                 let mut block = for_loop.body.clone();
-                                context.replace_block(&mut block);
-                                stmts.push(Stmt::Expr(
-                                    Expr::Block(ExprBlock {
-                                        attrs: Vec::new(),
-                                        label: None,
-                                        block,
-                                    }),
-                                    None,
-                                ));
+                                let mut state = BlockState::default();
+                                context.replace_block(&mut block, &mut state);
+                                if block.stmts.is_empty() {
+                                    continue;
+                                }
+                                if state.unlabelled_control_flow {
+                                    if !unlabelled_control_flow {
+                                        unlabelled_control_flow = true;
+                                        stmts.push(parse_quote! {
+                                            let mut _typle_break = false;
+                                        });
+                                    }
+                                    // If a `break` occurs inside the block then the loop is exited
+                                    // with  `_typle_break = true` causing all subsequent iterations
+                                    // to be skipped.
+                                    // If a `continue` occurs inside the block, then control goes to
+                                    // the start of the loop with `_typle_break = true` which causes
+                                    // the loop to be exited with `_typle_break = false`.
+                                    let stmt = parse_quote! {
+                                        if ! _typle_break {
+                                            loop {
+                                                if _typle_break {
+                                                    _typle_break = false;
+                                                    break;
+                                                }
+                                                _typle_break = true;
+                                                #block
+                                            }
+                                        }
+                                    };
+                                    stmts.push(stmt);
+                                } else {
+                                    if unlabelled_control_flow {
+                                        // If this block does not contain a break or continue, but
+                                        // previous blocks did we need to check for the `break`
+                                        // condition before running this block.
+                                        let stmt = parse_quote! {
+                                            if ! _typle_break #block
+                                        };
+                                        stmts.push(stmt);
+                                    } else {
+                                        stmts.push(Stmt::Expr(
+                                            Expr::Block(ExprBlock {
+                                                attrs: Vec::new(),
+                                                label: None,
+                                                block,
+                                            }),
+                                            None,
+                                        ));
+                                    }
+                                }
                             }
                             stmts.push(Stmt::Expr(
                                 Expr::Tuple(ExprTuple {
@@ -290,10 +371,11 @@ impl<'a> SpecificContext<'a> {
                 }
                 // Otherwise it is a standard for loop
                 self.replace_pat(&mut for_loop.pat);
-                self.replace_block(&mut for_loop.body);
+                let mut state = BlockState::default();
+                self.replace_block(&mut for_loop.body, &mut state);
             }
             Expr::Group(group) => {
-                self.replace_expr(&mut group.expr);
+                self.replace_expr(&mut group.expr, state);
             }
             Expr::If(r#if) => {
                 // Check for if typle_const!(i == T::LEN) {}
@@ -305,7 +387,7 @@ impl<'a> SpecificContext<'a> {
                             let Ok(mut cond) = parse2::<Expr>(tokens) else {
                                 abort!(span, "expected expression");
                             };
-                            self.replace_expr(&mut cond);
+                            self.replace_expr(&mut cond, state);
                             let Some(b) = evaluate_bool(&cond) else {
                                 abort!(span, "expected boolean expression");
                             };
@@ -315,12 +397,12 @@ impl<'a> SpecificContext<'a> {
                                     label: None,
                                     block: r#if.then_branch.clone(),
                                 });
-                                self.replace_expr(expr);
+                                self.replace_expr(expr, state);
                             } else {
                                 match r#if.else_branch.take() {
                                     Some((_, branch)) => {
                                         *expr = *branch;
-                                        self.replace_expr(expr);
+                                        self.replace_expr(expr, state);
                                     }
                                     None => {
                                         *expr = Expr::Block(ExprBlock {
@@ -339,18 +421,18 @@ impl<'a> SpecificContext<'a> {
                     }
                 }
 
-                self.replace_expr(&mut r#if.cond);
-                self.replace_block(&mut r#if.then_branch);
+                self.replace_expr(&mut r#if.cond, state);
+                self.replace_block(&mut r#if.then_branch, state);
                 if let Some((_, block)) = &mut r#if.else_branch {
-                    self.replace_expr(block);
+                    self.replace_expr(block, state);
                 }
             }
             Expr::Index(index) => {
-                self.replace_expr(&mut index.expr);
+                self.replace_expr(&mut index.expr, state);
                 if let Expr::Array(array) = &mut *index.index {
                     // t[[0]]
                     assert_eq!(array.elems.len(), 1);
-                    self.replace_expr(&mut array.elems[0]);
+                    self.replace_expr(&mut array.elems[0], state);
                     let Some(i) = evaluate_usize(&array.elems[0]) else {
                         abort!(index.index, "unsupported tuple index")
                     };
@@ -364,31 +446,32 @@ impl<'a> SpecificContext<'a> {
                         }),
                     });
                 } else {
-                    self.replace_expr(&mut index.index);
+                    self.replace_expr(&mut index.index, state);
                 }
             }
             Expr::Let(r#let) => {
                 self.replace_pat(&mut r#let.pat);
-                self.replace_expr(&mut r#let.expr);
+                self.replace_expr(&mut r#let.expr, state);
             }
             Expr::Loop(r#loop) => {
-                self.replace_block(&mut r#loop.body);
+                let mut state = BlockState::default();
+                self.replace_block(&mut r#loop.body, &mut state);
             }
             Expr::Macro(r#macro) => {
-                self.replace_macro(&mut r#macro.mac, EvaluationContext::Value);
+                self.replace_macro(&mut r#macro.mac, EvaluationContext::Value, state);
             }
             Expr::Match(r#match) => {
-                self.replace_expr(&mut r#match.expr);
+                self.replace_expr(&mut r#match.expr, state);
                 for arm in &mut r#match.arms {
                     self.replace_pat(&mut arm.pat);
                     if let Some((_, expr)) = &mut arm.guard {
-                        self.replace_expr(expr);
+                        self.replace_expr(expr, state);
                     }
-                    self.replace_expr(&mut arm.body);
+                    self.replace_expr(&mut arm.body, state);
                 }
             }
             Expr::MethodCall(method_call) => {
-                self.replace_expr(&mut method_call.receiver);
+                self.replace_expr(&mut method_call.receiver, state);
                 if let Some(args) = &mut method_call.turbofish {
                     // Arc::<T>::new(t)
                     self.replace_generic_arguments(&mut args.args);
@@ -397,11 +480,11 @@ impl<'a> SpecificContext<'a> {
                     }
                 }
                 for arg in &mut method_call.args {
-                    self.replace_expr(arg);
+                    self.replace_expr(arg, state);
                 }
             }
             Expr::Paren(paren) => {
-                self.replace_expr(&mut paren.expr);
+                self.replace_expr(&mut paren.expr, state);
             }
             Expr::Path(path) => {
                 if let Some(qself) = &mut path.qself {
@@ -479,7 +562,7 @@ impl<'a> SpecificContext<'a> {
                                 match args.args.first_mut() {
                                     Some(GenericArgument::Const(expr)) => {
                                         // T<{T::LEN - 1}>
-                                        self.replace_expr(expr);
+                                        self.replace_expr(expr, state);
                                         // T<{5 - 1}>
                                         let Some(value) = evaluate_usize(expr) else {
                                             abort!(expr, "unsupported tuple type index");
@@ -558,57 +641,58 @@ impl<'a> SpecificContext<'a> {
             }
             Expr::Range(range) => {
                 if let Some(start) = &mut range.start {
-                    self.replace_expr(start);
+                    self.replace_expr(start, state);
                 }
                 if let Some(end) = &mut range.end {
-                    self.replace_expr(end);
+                    self.replace_expr(end, state);
                 }
             }
             Expr::Reference(reference) => {
-                self.replace_expr(&mut reference.expr);
+                self.replace_expr(&mut reference.expr, state);
             }
             Expr::Repeat(repeat) => {
-                self.replace_expr(&mut repeat.expr);
-                self.replace_expr(&mut repeat.len);
+                self.replace_expr(&mut repeat.expr, state);
+                self.replace_expr(&mut repeat.len, state);
             }
             Expr::Return(r#return) => {
                 if let Some(expr) = &mut r#return.expr {
-                    self.replace_expr(expr);
+                    self.replace_expr(expr, state);
                 }
             }
             Expr::Struct(r#struct) => {
                 self.replace_path_arguments(&mut r#struct.path);
                 for field in &mut r#struct.fields {
-                    self.replace_expr(&mut field.expr);
+                    self.replace_expr(&mut field.expr, state);
                 }
                 if let Some(expr) = &mut r#struct.rest {
-                    self.replace_expr(expr);
+                    self.replace_expr(expr, state);
                 }
             }
             Expr::Try(r#try) => {
-                self.replace_expr(&mut r#try.expr);
+                self.replace_expr(&mut r#try.expr, state);
             }
             Expr::TryBlock(try_block) => {
-                self.replace_block(&mut try_block.block);
+                self.replace_block(&mut try_block.block, state);
             }
             Expr::Tuple(tuple) => {
                 for expr in &mut tuple.elems {
-                    self.replace_expr(expr);
+                    self.replace_expr(expr, state);
                 }
             }
             Expr::Unary(unary) => {
-                self.replace_expr(&mut unary.expr);
+                self.replace_expr(&mut unary.expr, state);
             }
             Expr::Unsafe(r#unsafe) => {
-                self.replace_block(&mut r#unsafe.block);
+                self.replace_block(&mut r#unsafe.block, state);
             }
             Expr::While(r#while) => {
-                self.replace_expr(&mut r#while.cond);
-                self.replace_block(&mut r#while.body);
+                self.replace_expr(&mut r#while.cond, state);
+                let mut state = BlockState::default();
+                self.replace_block(&mut r#while.body, &mut state);
             }
             Expr::Yield(r#yield) => {
                 if let Some(expr) = &mut r#yield.expr {
-                    self.replace_expr(expr);
+                    self.replace_expr(expr, state);
                 }
             }
             _ => {}
@@ -769,13 +853,13 @@ impl<'a> SpecificContext<'a> {
         }
     }
 
-    pub fn replace_item(&self, item: &mut Item, top_level: bool) {
+    pub fn replace_item(&self, item: &mut Item, top_level: bool, state: &mut BlockState) {
         match item {
             Item::Const(r#const) => {
                 let context = self.handle_where_clause(&mut r#const.generics.where_clause);
                 let context = context.as_ref().unwrap_or(self);
                 context.replace_type(&mut r#const.ty);
-                context.replace_expr(&mut r#const.expr);
+                context.replace_expr(&mut r#const.expr, state);
             }
             Item::Enum(r#enum) => {
                 if top_level {
@@ -870,7 +954,7 @@ impl<'a> SpecificContext<'a> {
                     }
                     context.replace_fields(&mut variant.fields);
                     if let Some((_, discriminant)) = &mut variant.discriminant {
-                        context.replace_expr(discriminant);
+                        context.replace_expr(discriminant, state);
                     }
                     r#enum.variants.push(variant);
                 }
@@ -883,7 +967,7 @@ impl<'a> SpecificContext<'a> {
                 let context = self.handle_where_clause(&mut function.sig.generics.where_clause);
                 let context = context.as_ref().unwrap_or(self);
                 context.replace_signature(&mut function.sig);
-                context.replace_block(&mut function.block);
+                context.replace_block(&mut function.block, state);
             }
             Item::ForeignMod(_) => abort!(item, "ForeignMod unsupported"),
             Item::Impl(r#impl) => {
@@ -898,20 +982,20 @@ impl<'a> SpecificContext<'a> {
                     match subitem {
                         ImplItem::Const(constant) => {
                             context.replace_type(&mut constant.ty);
-                            context.replace_expr(&mut constant.expr);
+                            context.replace_expr(&mut constant.expr, state);
                         }
                         ImplItem::Fn(function) => {
                             let inner_context = context
                                 .handle_where_clause(&mut function.sig.generics.where_clause);
                             let inner_context = inner_context.as_ref().unwrap_or(context);
                             inner_context.replace_signature(&mut function.sig);
-                            inner_context.replace_block(&mut function.block);
+                            inner_context.replace_block(&mut function.block, state);
                         }
                         ImplItem::Type(ty) => {
                             context.replace_type(&mut ty.ty);
                         }
                         ImplItem::Macro(r#macro) => {
-                            context.replace_macro(&mut r#macro.mac, EvaluationContext::Type);
+                            context.replace_macro(&mut r#macro.mac, EvaluationContext::Type, state);
                         }
                         _ => {}
                     }
@@ -947,7 +1031,12 @@ impl<'a> SpecificContext<'a> {
         }
     }
 
-    fn replace_macro(&self, r#macro: &mut Macro, context: EvaluationContext) {
+    fn replace_macro(
+        &self,
+        r#macro: &mut Macro,
+        context: EvaluationContext,
+        state: &mut BlockState,
+    ) {
         // typle_for!(i in .. => Option<T<{i}>) -> (Option<T0>, Option<T1>)
         // typle_for!(i in .. => T::<{i}>::default()) -> (T0::default(), T1::default())
         // as opposed to
@@ -1010,7 +1099,7 @@ impl<'a> SpecificContext<'a> {
                                 }
                             }
                             let mut element = expr.clone();
-                            context.replace_expr(&mut element);
+                            context.replace_expr(&mut element, state);
                             elems.push(element);
                         }
                         r#macro.tokens = match r#macro.delimiter {
@@ -1071,7 +1160,8 @@ impl<'a> SpecificContext<'a> {
                 TokenTree::Punct(punct) if equals.is_some() && punct.as_char() == '>' => {
                     match parse2::<Expr>(TokenStream::from_iter(collect)) {
                         Ok(mut expr) => {
-                            self.replace_expr(&mut expr);
+                            let mut state = BlockState::default();
+                            self.replace_expr(&mut expr, &mut state);
                             if let Expr::Range(range) = expr {
                                 let start = range
                                     .start
@@ -1319,7 +1409,8 @@ impl<'a> SpecificContext<'a> {
         match ty {
             Type::Array(array) => {
                 self.replace_type(&mut array.elem);
-                self.replace_expr(&mut array.len);
+                let mut state = BlockState::default();
+                self.replace_expr(&mut array.len, &mut state);
             }
             Type::BareFn(bare_fn) => {
                 for arg in &mut bare_fn.inputs {
@@ -1332,7 +1423,10 @@ impl<'a> SpecificContext<'a> {
             Type::Group(group) => {
                 self.replace_type(&mut group.elem);
             }
-            Type::Macro(r#macro) => self.replace_macro(&mut r#macro.mac, EvaluationContext::Type),
+            Type::Macro(r#macro) => {
+                let mut state = BlockState::default();
+                self.replace_macro(&mut r#macro.mac, EvaluationContext::Type, &mut state);
+            }
             Type::Paren(paren) => {
                 self.replace_type(&mut paren.elem);
             }
@@ -1369,7 +1463,8 @@ impl<'a> SpecificContext<'a> {
                                         match args.args.first_mut() {
                                             Some(GenericArgument::Const(expr)) => {
                                                 // T<{T::LEN - 1}>
-                                                self.replace_expr(expr);
+                                                let mut state = BlockState::default();
+                                                self.replace_expr(expr, &mut state);
                                                 // T<{5 - 1}>
                                                 let Some(value) = evaluate_usize(expr) else {
                                                     abort!(expr, "unsupported tuple type index");
@@ -1449,7 +1544,8 @@ impl<'a> SpecificContext<'a> {
                         else {
                             abort!(mac.tokens.span(), "expect expression in typle_index macro");
                         };
-                        self.replace_expr(&mut expr);
+                        let mut state = BlockState::default();
+                        self.replace_expr(&mut expr, &mut state);
                         let Some(index) = evaluate_usize(&expr) else {
                             abort!(mac.tokens.span(), "expect constant integer");
                         };
