@@ -125,6 +125,30 @@
 //! [the test directory](https://github.com/jongiddy/typle/blob/main/tests/expand/).
 //!
 //! Also, see how `typle` is used in the [`hefty` crate](https://github.com/jongiddy/hefty/blob/main/src/tuple.rs).
+//!
+//! # Limitations
+//!
+//! - Shadowing of const variables introduced using typle macros is not supported. For example, in:
+//! ```rust ignore
+//! for typle_const!(i) in 2..4 {
+//!     let i = 1;
+//!     func(i)
+//! }
+//! ```
+//! `func` will be called with 2 and 3, never with 1. The same is true for other places where const
+//! values are introduced. For example in a `typle_for!` macro.
+//! - const-for loops do not support labelled continue.
+//! ```rust ignore
+//! 'label: for typle_const!(i) in 2..4 {
+//!     loop {
+//!         if typle_const!(i == 2) {
+//!             continue 'label;  // compile error
+//!         } else {
+//!             break 'label;  // works
+//!         }
+//!     }
+//! }
+//! ```
 
 mod constant;
 mod specific;
