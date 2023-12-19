@@ -49,8 +49,9 @@ impl<T0, T1, T2> From<(T0, T1, T2)> for MyStruct<(T0, T1, T2)> {
 }
 ```
 
-Iterate over tuple components using the `typle_for!` macro.
-Select individual components using `<{i}>` for types and `[[i]]` for values.
+Select individual components using `<{i}>` for types and `[[i]]` for values,
+where `i` is a `const` value. The `typle_for!` macro iterates a `const` value,
+to create a new tuple.
 
 ```rust
 use std::ops::Mul;
@@ -110,7 +111,8 @@ where
 ```
 
 The associated constant `LEN` provides the length of the tuple in each generated
-item. Use the `typle_const!` macro to perform const-for and const-if.
+item. Use the `typle_const!` macro to perform const-for, iterating a `const`
+value similarly to `typle_for!`.
 
 ```rust
 #[typle(Tuple for 1..=3)]
@@ -126,16 +128,11 @@ where
 
     // Return the sums of all even positions and all odd positions
     fn interleave(&self) -> (C, C) {
-        let mut even = C::default();
-        let mut odd = C::default();
+        let mut even_odd = (C::default(), C::default());
         for typle_const!(i) in 0..T::LEN {
-            if typle_const!(i % 2 == 0) {
-                even += &self.t[[i]];
-            } else {
-                odd += &self.t[[i]];
-            }
+            even_odd[[i % 2]] += &self.t[[i]];
         }
-        (even, odd)
+        even_odd
     }
 }
 ```
@@ -152,34 +149,31 @@ where
     }
 
     fn interleave(&self) -> (C, C) {
-        let mut even = C::default();
-        let mut odd = C::default();
+        let mut even_odd = (C::default(), C::default());
         {
             {
-                {
-                    even += &self.t.0;
-                }
+                even_odd.0 += &self.t.0;
             }
             {
-                {
-                    odd += &self.t.1;
-                }
+                even_odd.1 += &self.t.1;
             }
             {
-                {
-                    even += &self.t.2;
-                }
+                even_odd.0 += &self.t.2;
             }
             ()
         }
-        (even, odd)
+        even_odd
     }
 }
 ```
 
 This example, simplified from code in the `hefty` crate, shows `typle` applied
 to an `enum` using the `typle_variant!` macro. Note the use of `<T::Types>` and
-`typle_index!` when referring to another typled item.
+`typle_index!` when referring to another typled item. Use the `typle_const!`
+macro to perform const-if on an expression that evaluates to a `bool`. const-if
+allows branches that do not compile, as long as they are `false`. For example,
+this code compiles when `i + 1 == T::LEN` even though the state
+`S::<typle_index!(i + 1)>` (`S3` for 3-tuples) is not defined.
 
 ```rust
 pub trait Extract {

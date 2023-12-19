@@ -88,17 +88,14 @@ where
         &self.t.0
     }
     fn interleave(&self) -> (C, C) {
-        let mut even = C::default();
-        let mut odd = C::default();
+        let mut even_odd = (C::default(), C::default());
         {
             {
-                {
-                    even += &self.t.0;
-                }
+                even_odd.0 += &self.t.0;
             }
             ()
         }
-        (even, odd)
+        even_odd
     }
 }
 impl<C> MyStruct<(C, C)>
@@ -109,22 +106,17 @@ where
         &self.t.1
     }
     fn interleave(&self) -> (C, C) {
-        let mut even = C::default();
-        let mut odd = C::default();
+        let mut even_odd = (C::default(), C::default());
         {
             {
-                {
-                    even += &self.t.0;
-                }
+                even_odd.0 += &self.t.0;
             }
             {
-                {
-                    odd += &self.t.1;
-                }
+                even_odd.1 += &self.t.1;
             }
             ()
         }
-        (even, odd)
+        even_odd
     }
 }
 impl<C> MyStruct<(C, C, C)>
@@ -135,27 +127,20 @@ where
         &self.t.2
     }
     fn interleave(&self) -> (C, C) {
-        let mut even = C::default();
-        let mut odd = C::default();
+        let mut even_odd = (C::default(), C::default());
         {
             {
-                {
-                    even += &self.t.0;
-                }
+                even_odd.0 += &self.t.0;
             }
             {
-                {
-                    odd += &self.t.1;
-                }
+                even_odd.1 += &self.t.1;
             }
             {
-                {
-                    even += &self.t.2;
-                }
+                even_odd.0 += &self.t.2;
             }
             ()
         }
-        (even, odd)
+        even_odd
     }
 }
 pub trait Extract {

@@ -52,16 +52,11 @@ where
 
     // Return the sums of all even positions and all odd positions
     fn interleave(&self) -> (C, C) {
-        let mut even = C::default();
-        let mut odd = C::default();
+        let mut even_odd = (C::default(), C::default());
         for typle_const!(i) in 0..T::LEN {
-            if typle_const!(i % 2 == 0) {
-                even += &self.t[[i]];
-            } else {
-                odd += &self.t[[i]];
-            }
+            even_odd[[i % 2]] += &self.t[[i]];
         }
-        (even, odd)
+        even_odd
     }
 }
 
