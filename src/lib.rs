@@ -10,7 +10,7 @@
 //! #[typle(Tuple for 1..=3)]
 //! impl<T> MyStruct<T>
 //! where
-//!     T: Tuple<Types=u32>,
+//!     T: Tuple<u32>,
 //! {
 //!     fn max(&self) -> Option<u32> {
 //!         let mut max = self.t[[0]];
@@ -76,9 +76,8 @@
 //!
 //! The `Tuple` pseudo-trait is similar to a trait defined as
 //! ```
-//! trait Tuple {
+//! trait Tuple<Types> {
 //!     const LEN: usize;
-//!     type Types;
 //! }
 //! ```
 //!
@@ -86,28 +85,24 @@
 //!
 //! If the `where` clause constrains a generic type using the pseudo-trait then the generic type
 //! must be a tuple with a length `Tuple::LEN` and where each component is constrained by the
-//! argument to the trait. The component can either be an explicit type
-//! (`where T: Tuple<Types=u32>`), or can be constrained by other traits using the `Types` associated
-//! type.
+//! argument to the trait. The component can either be an explicit type (`where T: Tuple<u32>`),
+//! or each component can be constrained by other traits using `T<_>`:
 //! ```ignore
 //! impl<T> MyStruct<T>
 //! where
 //!     T: Tuple,
-//!     T::Types: Extract,
-//!     T::Types::Output: AsRef<str>,
+//!     T<_>: Extract,
+//!     T<_>::Output: AsRef<str>,
 //! ```
 //!
-//! Each component of the tuple must meet the type constraints for `T::Types` but the components can
-//! be different types. This is a special behavior for typles.
+//! Constants (`T<0>`, `T<{T::LEN - 1}>`) and ranges (`T<{1..}>`) are also supported.
 //!
-//! To force each component to be the same type, introduce an additional generic variable for the
-//! component type:
+//! The `typle_bound!` macro allows trait bounds to use the index of the bound type:
 //! ```ignore
-//! impl<T, C> MyStruct<T>
+//! impl<T> MyStruct<T>
 //! where
-//!     T: Tuple<Types=C>,
-//!     C: Extract,
-//!     C::Output: AsRef<str>,
+//!     T: Tuple,
+//!     typle_bound!(i for 1.. => T<{i}): Mul<M<{i - 1}>>,
 //! ```
 //!
 //! The components of a tuple can be iterated over using a `for` loop with an iteration variable
@@ -321,9 +316,9 @@ impl IterationTrait {
 /// Examples:
 /// ```ignore
 /// #[typle(Tuple for 0..=2)]
-/// impl<T> S<T::Types>
+/// impl<T> S<T<{..}>>
 /// where
-///     T: Tuple<Types=u32>
+///     T: Tuple<u32>
 /// {
 ///     fn new(t: typle_for!(i in .. => &T<{i}>)) {
 ///         // Square brackets create an array
@@ -390,7 +385,7 @@ pub fn typle_for(_item: proc_macro::TokenStream) -> proc_macro::TokenStream {
 /// pub enum ProcessState<T>
 /// where
 ///     T: Tuple,
-///     T::Types: Process,
+///     T<_>: Process,
 /// {
 ///     Q = typle_variant![.. =>],
 ///     R = typle_variant!{i in 0..T::LEN => r: T<{i}>},

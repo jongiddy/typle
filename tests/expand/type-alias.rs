@@ -11,5 +11,5 @@ trait Process {
 type Alias<T>
 where
     T: Tuple,
-    T::Types: Process,
+    T<_>: Process,
 = typle_for!(i in .. => Option<T<{i}>::Output>);

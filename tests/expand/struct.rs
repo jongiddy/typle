@@ -4,16 +4,16 @@ use typle::typle;
 type TupleSequenceOutput<T>
 where
     T: Tuple,
-    T::Types: Extract,
+    T<_>: Extract,
 = typle_for!(i in .. => Option<T<{i}>::Output>);
 
 #[typle(Tuple for 1..=2)]
 struct SeqIntoIter<T>
 where
     T: Tuple,
-    T::Types: Into<ByteStream>,
+    T<_>: Into<ByteStream>,
 {
-    t: TupleSequenceOutput<T::Types>,
+    t: TupleSequenceOutput<T<{..}>>,
 }
 
 #[typle(Tuple for 0..=2)]
@@ -21,7 +21,7 @@ where
 pub enum State<T>
 where
     T: Tuple,
-    T::Types: std::io::Read,
+    T<_>: std::io::Read,
 {
     #[default]
     Invalid,
@@ -33,14 +33,14 @@ struct AStruct<T>
 where
     T: Tuple {
     t: T,
-    state: State<T::Types>,
+    state: State<T<{..}>>,
 }
 
 #[typle(Tuple for 0..=2)]
-impl<T> std::io::Read for AStruct<T::Types>
+impl<T> std::io::Read for AStruct<T<{..}>>
 where
     T: Tuple,
-    T::Types: std::io::Read,
+    T<_>: std::io::Read,
 {
     fn read(&mut self, mut buf: &mut [u8]) -> std::io::Result<usize> {
         for typle_const!(i) in 0..T::LEN {

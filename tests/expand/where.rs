@@ -1,32 +1,38 @@
 use typle::typle;
 
+// Tuple with all components of the same specific type
 #[typle(Tuple for 0..=2)]
 impl<T> TupleA<T>
 where
-    T: Tuple<Types=u32>,
+    T: Tuple<u32>,
 {}
 
+// Tuple with components that can be different types, but all bound by the
+// same traits.
 #[typle(Tuple for 0..=2)]
 impl<T> TraitB for TupleB<T>
 where
     T: Tuple,
-    T::Types: Extract,
-    T::Types::Output: AsRef<str>,
+    T<_>: Extract,
+    T<_>::Output: AsRef<str>,
 {}
 
+// Tuples can have some components bound by using a range. A single component
+// can be named using a constant.
 #[typle(Tuple for 1..=2)]
 impl<S, T> Extract for TupleC<T>
 where
     S: Tuple,
-    S::Types: Extract,
+    S<{1..}>: Extract,
     T: Tuple,
-    T::Types: Extract<Output = Option<S>>,
+    T<0>: Extract<Output = Option<S>>,
 {}
 
+// typle_bound! allows the component index to be used in the trait bound
 #[typle(Tuple for 1..=2)]
-impl<T> TraitD for TupleD<T::Types>
+impl<T> TraitD for TupleD<T<{..}>>
 where
     T: Tuple,
-    T::Types<i>: Mul<T<{i}>>,
-    T<0>: AsRef<str>,
+    typle_bound!(i in .. => T<{i}>): Mul<T<{T::LEN - i - 1}>>,
+    T<{T::LEN - 1}>: AsRef<str>,
 {}

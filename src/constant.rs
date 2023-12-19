@@ -62,6 +62,23 @@ pub fn evaluate_bool(expr: &Expr) -> Option<bool> {
     None
 }
 
+pub fn evaluate_range(expr: &Expr) -> Option<&syn::ExprRange> {
+    match expr {
+        Expr::Block(block) => {
+            if block.block.stmts.len() == 1 {
+                if let Stmt::Expr(expr, _) = &block.block.stmts[0] {
+                    return evaluate_range(expr);
+                }
+            }
+        }
+        Expr::Range(range) => {
+            return Some(range);
+        }
+        _ => {}
+    }
+    None
+}
+
 pub fn evaluate_usize(expr: &Expr) -> Option<usize> {
     match expr {
         Expr::Block(block) => {

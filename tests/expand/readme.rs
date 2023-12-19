@@ -20,7 +20,7 @@ use std::ops::Mul;
 impl<T> MyStruct<T>
 where
     T: Tuple,
-    T::Types: Copy,
+    T<_>: Copy,
 {
     // Return a tuple containing all components except the first
     fn tail(&self) -> typle_for!(i in 1.. => T<{i}>) {
@@ -33,7 +33,7 @@ where
     ) -> MyStruct<typle_for!(i in .. => <T<{i}> as Mul<M<{i}>>>::Output)>
     where
         M: Tuple,
-        T::Types<i>: Mul<M<{i}>>,
+        typle_bound!(i in .. => T<{i}>): Mul<M<{i}>>,
     {
         typle_for!(i in .. => self.t[[i]] * multipliers[[i]]).into()
     }
@@ -42,7 +42,7 @@ where
 #[typle(Tuple for 1..=3)]
 impl<T, C> MyStruct<T>
 where
-    T: Tuple<Types=C>,
+    T: Tuple<C>,
     C: for<'a> std::ops::AddAssign<&'a C> + Default,
 {
     // Return a reference to the last component of the tuple
@@ -71,7 +71,7 @@ pub trait Extract {
 pub enum TupleSequenceState<T>
 where
     T: Tuple,
-    T::Types: Extract,
+    T<_>: Extract,
 {
     S = typle_variant!(i in .. =>
         typle_for!(j in ..i => T::<{j}>::Output),
@@ -87,9 +87,9 @@ pub struct TupleSequence<T> {
 impl<T> Extract for TupleSequence<T>
 where
     T: Tuple,
-    T::Types: Extract,
+    T<_>: Extract,
 {
-    type State = TupleSequenceState<T::Types>;
+    type State = TupleSequenceState<T<{..}>>;
     type Output = typle_for!(i in .. => T<{i}>::Output);
 
     fn extract(&self, state: Option<Self::State>) -> Self::Output {

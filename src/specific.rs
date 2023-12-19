@@ -1,4 +1,3 @@
-use std::borrow::Cow;
 use std::collections::HashMap;
 use std::ops::Range;
 
@@ -8,16 +7,14 @@ use quote::{format_ident, ToTokens};
 use syn::punctuated::Punctuated;
 use syn::spanned::Spanned as _;
 use syn::{
-    parse2, parse_quote, token, Block, Expr, ExprArray, ExprBlock, ExprField, ExprLit, ExprTuple,
-    Fields, FieldsNamed, FieldsUnnamed, GenericArgument, GenericParam, Generics, ImplItem, Index,
-    Item, Lit, LitInt, Macro, MacroDelimiter, Member, Pat, Path, PathArguments, PathSegment,
-    PredicateType, QSelf, RangeLimits, ReturnType, Stmt, Type, TypeMacro, TypeParamBound, TypePath,
-    TypeTuple, Variant, WhereClause, WherePredicate,
+    parse2, parse_quote, token, Block, Expr, ExprArray, ExprBlock, ExprField, ExprLit, ExprRange,
+    ExprTuple, Fields, FieldsNamed, FieldsUnnamed, GenericArgument, GenericParam, Generics,
+    ImplItem, Index, Item, Lit, LitInt, Macro, MacroDelimiter, Member, Pat, Path, PathArguments,
+    PathSegment, PredicateType, QSelf, RangeLimits, ReturnType, Stmt, Type, TypeMacro,
+    TypeParamBound, TypePath, TypeTuple, Variant, WhereClause, WherePredicate,
 };
 
-use crate::constant::{evaluate_bool, evaluate_usize};
-
-const TYPLE_ASSOC_TYPE_NAME: &str = "Types";
+use crate::constant::{evaluate_bool, evaluate_range, evaluate_usize};
 
 enum EvaluationContext {
     Type,
@@ -102,22 +99,18 @@ impl<'a> SpecificContext<'a> {
                                                             "expected single argument"
                                                         );
                                                     }
-                                                    if let Some(GenericArgument::AssocType(assoc)) =
+                                                    if let Some(GenericArgument::Type(ty)) =
                                                         arguments.args.first()
                                                     {
-                                                        if assoc.ident == TYPLE_ASSOC_TYPE_NAME {
-                                                            let context = context
-                                                                .get_or_insert_with(|| {
-                                                                    self.clone()
-                                                                });
-                                                            context.typles.insert(
-                                                                type_ident.clone(),
-                                                                Typle::Specific(assoc.ty.clone()),
-                                                            );
-                                                            continue;
-                                                        }
+                                                        let context = context
+                                                            .get_or_insert_with(|| self.clone());
+                                                        context.typles.insert(
+                                                            type_ident.clone(),
+                                                            Typle::Specific(ty.clone()),
+                                                        );
+                                                        continue;
                                                     }
-                                                    abort!(arguments, "expected Types");
+                                                    abort!(arguments, "expected type");
                                                 }
                                                 PathArguments::Parenthesized(arguments) => {
                                                     abort!(
@@ -717,60 +710,124 @@ impl<'a> SpecificContext<'a> {
         if let Some(where_clause) = &mut generics.where_clause {
             for mut predicate in std::mem::take(&mut where_clause.predicates) {
                 if let WherePredicate::Type(predicate_type) = &mut predicate {
-                    if let Type::Path(type_path) = &predicate_type.bounded_ty {
-                        if type_path.qself.is_none() && type_path.path.leading_colon.is_none() {
-                            let mut segments = type_path.path.segments.iter();
-                            if let Some(first) = segments.next() {
-                                if let (
-                                    Some(Typle::Generic(component_names)),
-                                    PathArguments::None,
-                                    Some(second),
-                                ) = (
-                                    self.typles.get(&first.ident),
-                                    &first.arguments,
-                                    segments.next(),
-                                ) {
-                                    // T::Types: AsRef<str>, T::Types::Output: AsRef<str>, T::Types<i>: Mul<M<{i}>>
-                                    if second.ident != TYPLE_ASSOC_TYPE_NAME {
-                                        abort!(second, "unknown associated item");
-                                    }
-                                    let (mut context, ident) =
-                                        if let PathArguments::AngleBracketed(arguments) =
-                                            &second.arguments
-                                        {
-                                            let mut iter = arguments.args.iter();
-                                            let (
-                                                Some(GenericArgument::Type(Type::Path(type_path))),
-                                                None,
-                                            ) = (iter.next(), iter.next())
-                                            else {
-                                                abort!(arguments, "expected single identifier");
-                                            };
-                                            let (Some(ident), None) = (
-                                                type_path.path.get_ident(),
-                                                type_path.qself.as_ref(),
-                                            ) else {
-                                                abort!(type_path, "expected single identifier");
-                                            };
-                                            let mut context = self.clone();
-                                            context.constants.insert(ident.clone(), 0);
-                                            (Cow::Owned(context), Some(ident))
-                                        } else {
-                                            (Cow::Borrowed(self), None)
-                                        };
-                                    for (index, component_name) in
-                                        component_names.into_iter().enumerate()
+                    match &mut predicate_type.bounded_ty {
+                        Type::Path(type_path) => {
+                            if type_path.qself.is_none() && type_path.path.leading_colon.is_none() {
+                                let mut segments = type_path.path.segments.iter();
+                                if let Some(first) = segments.next() {
+                                    if let Some(Typle::Generic(component_names)) =
+                                        self.typles.get(&first.ident)
                                     {
-                                        if let Some(ident) = ident {
-                                            *context.to_mut().constants.get_mut(ident).unwrap() =
-                                                index;
+                                        // T<0>: Copy, T<{..}>: Copy, T<_>::Output: Copy, T<_>: Mul<M<{_}>>
+                                        let PathArguments::AngleBracketed(arguments) =
+                                            &first.arguments
+                                        else {
+                                            abort!(first, "expected angle brackets");
+                                        };
+                                        let mut iter = arguments.args.iter();
+                                        let (Some(arg), None) = (iter.next(), iter.next()) else {
+                                            abort!(arguments, "expected constant expression");
+                                        };
+                                        let mut expr = match arg {
+                                            GenericArgument::Type(Type::Infer(_)) => {
+                                                Expr::Range(ExprRange {
+                                                    attrs: Vec::new(),
+                                                    start: None,
+                                                    limits: RangeLimits::HalfOpen(
+                                                        token::DotDot::default(),
+                                                    ),
+                                                    end: None,
+                                                })
+                                            }
+                                            GenericArgument::Const(expr) => expr.clone(),
+                                            _ => abort!(arg, "expected const expression or `_`"),
+                                        };
+                                        let mut state = BlockState::default();
+                                        self.replace_expr(&mut expr, &mut state);
+                                        if let Some(range) = evaluate_range(&expr) {
+                                            let start = range
+                                                .start
+                                                .as_deref()
+                                                .map(|start| {
+                                                    evaluate_usize(start).unwrap_or_else(|| {
+                                                        abort!(start, "expected integer")
+                                                    })
+                                                })
+                                                .unwrap_or(0);
+                                            let end = range
+                                                .end
+                                                .as_deref()
+                                                .map(|end| {
+                                                    evaluate_usize(end).unwrap_or_else(|| {
+                                                        abort!(end, "expected integer")
+                                                    })
+                                                })
+                                                .unwrap_or(self.typle_len);
+                                            let end = match range.limits {
+                                                RangeLimits::HalfOpen(_) => end,
+                                                RangeLimits::Closed(_) => end.saturating_add(1),
+                                            };
+                                            for index in start..end {
+                                                let component_ident = Ident::new(
+                                                    &component_names[index],
+                                                    first.ident.span(),
+                                                );
+                                                let mut path = ident_to_path(component_ident);
+                                                for segment in segments.clone() {
+                                                    path.segments.push(segment.clone());
+                                                }
+                                                let bounds = predicate_type
+                                                    .bounds
+                                                    .iter()
+                                                    .map(|bound| {
+                                                        let mut bound = bound.clone();
+                                                        if let TypeParamBound::Trait(trait_bound) =
+                                                            &mut bound
+                                                        {
+                                                            self.replace_path_arguments(
+                                                                &mut trait_bound.path,
+                                                            );
+                                                        }
+                                                        bound
+                                                    })
+                                                    .collect();
+                                                where_clause.predicates.push(WherePredicate::Type(
+                                                    PredicateType {
+                                                        lifetimes: None,
+                                                        bounded_ty: Type::Path(TypePath {
+                                                            qself: None,
+                                                            path,
+                                                        }),
+                                                        colon_token: token::Colon::default(),
+                                                        bounds,
+                                                    },
+                                                ));
+                                            }
+                                            continue;
                                         }
-                                        let component_ident =
-                                            Ident::new(&component_name, first.ident.span());
-                                        let mut path = ident_to_path(component_ident);
-                                        for segment in segments.clone() {
-                                            path.segments.push(segment.clone());
+                                    }
+                                }
+                            }
+                        }
+                        Type::Macro(TypeMacro { mac }) => {
+                            if let Some(ident) = mac.path.get_ident() {
+                                if ident == "typle_bound" {
+                                    let mut token_stream = std::mem::take(&mut mac.tokens);
+                                    let (pattern, range) =
+                                        self.parse_pattern_range(&mut token_stream);
+                                    let body_span = token_stream.span();
+                                    let Ok(r#type) = parse2::<Type>(token_stream) else {
+                                        abort!(body_span, "expected type, found");
+                                    };
+                                    for index in range {
+                                        let mut context = self.clone();
+                                        if let Some(ident) = pattern.clone() {
+                                            if ident != "_" {
+                                                context.constants.insert(ident, index);
+                                            }
                                         }
+                                        let mut bounded_ty = r#type.clone();
+                                        context.replace_type(&mut bounded_ty);
                                         let bounds = predicate_type
                                             .bounds
                                             .iter()
@@ -789,10 +846,7 @@ impl<'a> SpecificContext<'a> {
                                         where_clause.predicates.push(WherePredicate::Type(
                                             PredicateType {
                                                 lifetimes: None,
-                                                bounded_ty: Type::Path(TypePath {
-                                                    qself: None,
-                                                    path,
-                                                }),
+                                                bounded_ty,
                                                 colon_token: token::Colon::default(),
                                                 bounds,
                                             },
@@ -802,11 +856,12 @@ impl<'a> SpecificContext<'a> {
                                 }
                             }
                         }
+                        _ => {}
                     }
                     self.replace_type(&mut predicate_type.bounded_ty);
                     for bound in &mut predicate_type.bounds {
                         // substitute any appearances of typles in the constraints
-                        // (e.g. T::Types: Extract<Output = S<0>::Output>)
+                        // (e.g. T<_>: Extract<Output = S<0>::Output>)
                         if let TypeParamBound::Trait(trait_bound) = bound {
                             self.replace_path_arguments(&mut trait_bound.path);
                         }
@@ -1328,39 +1383,67 @@ impl<'a> SpecificContext<'a> {
                 PathArguments::AngleBracketed(args) => {
                     // WrapperType<T> -> WrapperType<(T0, T1,...)>
                     // WrapperType<T<3>> -> WrapperType<T3>
-                    // WrapperType<T::Types> -> WrapperTypeN<T0, T1,...>
+                    // WrapperType<T<{..}>> -> WrapperTypeN<T0, T1,...>
                     let mut typle_args = false;
                     for arg in std::mem::take(&mut args.args) {
                         match arg {
-                            GenericArgument::Type(Type::Path(TypePath { qself, path }))
+                            GenericArgument::Type(Type::Path(TypePath { qself, mut path }))
                                 if qself.is_none() && path.leading_colon.is_none() =>
                             {
-                                let mut segments = path.segments.iter();
+                                let mut segments = path.segments.iter_mut();
                                 if let Some(first) = segments.next() {
-                                    if let (Some(typle), Some(second)) =
-                                        (self.typles.get(&first.ident), segments.next())
-                                    {
-                                        if second.ident == TYPLE_ASSOC_TYPE_NAME {
-                                            for i in 0..self.typle_len {
-                                                args.args.push(GenericArgument::Type(
-                                                    typle.get(i, path.span()),
-                                                ));
+                                    if let (
+                                        Some(typle),
+                                        PathArguments::AngleBracketed(arguments),
+                                        None,
+                                    ) = (
+                                        self.typles.get(&first.ident),
+                                        &mut first.arguments,
+                                        segments.next(),
+                                    ) {
+                                        let mut iter = arguments.args.iter_mut();
+                                        if let (Some(GenericArgument::Const(ref mut expr)), None) =
+                                            (iter.next(), iter.next())
+                                        {
+                                            let mut state = BlockState::default();
+                                            self.replace_expr(expr, &mut state);
+                                            if let Some(range) = evaluate_range(&expr) {
+                                                let start = range
+                                                    .start
+                                                    .as_deref()
+                                                    .map(|start| {
+                                                        evaluate_usize(start).unwrap_or_else(|| {
+                                                            abort!(start, "expected integer")
+                                                        })
+                                                    })
+                                                    .unwrap_or(0);
+                                                let end = range
+                                                    .end
+                                                    .as_deref()
+                                                    .map(|end| {
+                                                        evaluate_usize(end).unwrap_or_else(|| {
+                                                            abort!(end, "expected integer")
+                                                        })
+                                                    })
+                                                    .unwrap_or(self.typle_len);
+                                                let end = match range.limits {
+                                                    RangeLimits::HalfOpen(_) => end,
+                                                    RangeLimits::Closed(_) => end.saturating_add(1),
+                                                };
+                                                for i in start..end {
+                                                    args.args.push(GenericArgument::Type(
+                                                        typle.get(i, path.span()),
+                                                    ));
+                                                }
+                                                typle_args = true;
+                                                continue;
                                             }
-                                            typle_args = true;
-                                        } else {
-                                            let mut generic_type =
-                                                Type::Path(TypePath { qself, path });
-                                            self.replace_type(&mut generic_type);
-                                            args.args.push(GenericArgument::Type(generic_type));
                                         }
-                                    } else {
-                                        let mut generic_type = Type::Path(TypePath { qself, path });
-                                        self.replace_type(&mut generic_type);
-                                        args.args.push(GenericArgument::Type(generic_type));
                                     }
-                                } else {
-                                    abort!(path, "empty path");
                                 }
+                                let mut generic_type = Type::Path(TypePath { qself, path });
+                                self.replace_type(&mut generic_type);
+                                args.args.push(GenericArgument::Type(generic_type));
                             }
                             GenericArgument::Type(mut generic_type) => {
                                 self.replace_type(&mut generic_type);
@@ -1369,6 +1452,16 @@ impl<'a> SpecificContext<'a> {
                             GenericArgument::AssocType(mut assoc_type) => {
                                 self.replace_type(&mut assoc_type.ty);
                                 args.args.push(GenericArgument::AssocType(assoc_type));
+                            }
+                            GenericArgument::Const(mut expr) => {
+                                let mut state = &mut BlockState::default();
+                                self.replace_expr(&mut expr, &mut state);
+                                args.args.push(GenericArgument::Const(expr));
+                            }
+                            GenericArgument::AssocConst(mut assoc_const) => {
+                                let mut state = &mut BlockState::default();
+                                self.replace_expr(&mut assoc_const.value, &mut state);
+                                args.args.push(GenericArgument::AssocConst(assoc_const));
                             }
                             p => {
                                 args.args.push(p);
@@ -1467,7 +1560,11 @@ impl<'a> SpecificContext<'a> {
                                                 self.replace_expr(expr, &mut state);
                                                 // T<{5 - 1}>
                                                 let Some(value) = evaluate_usize(expr) else {
-                                                    abort!(expr, "unsupported tuple type index");
+                                                    abort!(
+                                                        expr,
+                                                        "unsupported tuple type index {:?}",
+                                                        expr
+                                                    );
                                                 };
                                                 let component_type = typle.get(value, first.span());
                                                 if segments.peek().is_some() {

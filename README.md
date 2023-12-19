@@ -22,7 +22,7 @@ where
 }
 ```
 
-This generates implementations for tuples with 0 to 3 components:
+This generates implementations of the `From` trait for tuples with 0 to 3 components:
 ```rust
 impl From<()> for MyStruct<()> {
     fn from(t: ()) -> Self {
@@ -50,8 +50,14 @@ impl<T0, T1, T2> From<(T0, T1, T2)> for MyStruct<(T0, T1, T2)> {
 ```
 
 Select individual components using `<{i}>` for types and `[[i]]` for values,
-where `i` is a `const` value. The `typle_for!` macro iterates a `const` value,
-to create a new tuple.
+where `i` is a `const` value.
+
+The `typle_for!` macro iterates a `const` value to create a new tuple type or
+value.
+
+In `where` clauses, `<_>` refers to each component type of the tuple, while a
+`typle_bound!` macro acts like a `typle_for!` except that the iteration value
+can also be used in the trait bounds.
 
 ```rust
 use std::ops::Mul;
@@ -60,7 +66,7 @@ use std::ops::Mul;
 impl<T> MyStruct<T>
 where
     T: Tuple,
-    T::Types: Copy,
+    T<_>: Copy,
 {
     // Return a tuple containing all components except the first
     fn tail(&self) -> typle_for!(i in 1.. => T<{i}>) {
@@ -73,7 +79,7 @@ where
     ) -> MyStruct<typle_for!(i in .. => <T<{i}> as Mul<M<{i}>>>::Output)>
     where
         M: Tuple,
-        T::Types<i>: Mul<M<{i}>>,
+        typle_bound!(i in .. => T<{i}>): Mul<M<{i}>>,
     {
         typle_for!(i in .. => self.t[[i]] * multipliers[[i]]).into()
     }
@@ -110,15 +116,19 @@ where
 }
 ```
 
+The typle trait can take a type parameter when all components have the same type.
+
 The associated constant `LEN` provides the length of the tuple in each generated
-item. Use the `typle_const!` macro to perform const-for, iterating a `const`
-value similarly to `typle_for!`.
+item.
+
+Use the `typle_const!` macro to perform const-for, iterating a `const` value
+similarly to `typle_for!`.
 
 ```rust
 #[typle(Tuple for 1..=3)]
 impl<T, C> MyStruct<T>
 where
-    T: Tuple<Types=C>,
+    T: Tuple<C>,
     C: for<'a> std::ops::AddAssign<&'a C> + Default,
 {
     // Return a reference to the last component of the tuple
@@ -168,12 +178,13 @@ where
 ```
 
 This example, simplified from code in the `hefty` crate, shows `typle` applied
-to an `enum` using the `typle_variant!` macro. Note the use of `<T::Types>` and
-`typle_index!` when referring to another typled item. Use the `typle_const!`
-macro to perform const-if on an expression that evaluates to a `bool`. const-if
-allows branches that do not compile, as long as they are `false`. For example,
-this code compiles when `i + 1 == T::LEN` even though the state
-`S::<typle_index!(i + 1)>` (`S3` for 3-tuples) is not defined.
+to an `enum` using the `typle_variant!` macro. Note the use of `T<{..}>` and
+`typle_index!` when referring to another typled item.
+
+Use the `typle_const!` macro to perform const-if on an expression that evaluates
+to a `bool`. const-if allows branches that do not compile, as long as they are
+`false`. For example, this code compiles when `i + 1 == T::LEN` even though the
+state `S::<typle_index!(i + 1)>` (`S3` for 3-tuples) is not defined.
 
 ```rust
 pub trait Extract {
@@ -187,7 +198,7 @@ pub trait Extract {
 pub enum TupleSequenceState<T>
 where
     T: Tuple,
-    T::Types: Extract,
+    T<_>: Extract,
 {
     S = typle_variant!(i in .. =>
         typle_for!(j in ..i => T::<{j}>::Output),
@@ -203,9 +214,9 @@ pub struct TupleSequence<T> {
 impl<T> Extract for TupleSequence<T>
 where
     T: Tuple,
-    T::Types: Extract,
+    T<_>: Extract,
 {
-    type State = TupleSequenceState<T::Types>;
+    type State = TupleSequenceState<T<{..}>>;
     type Output = typle_for!(i in .. => T<{i}>::Output);
 
     fn extract(&self, state: Option<Self::State>) -> Self::Output {

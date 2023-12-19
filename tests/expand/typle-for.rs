@@ -3,15 +3,15 @@ use typle::typle;
 #[typle(Tuple for 0..=2)]
 struct S<T>
 where
-    T: Tuple<Types=u32>
+    T: Tuple<u32>
 {
     t: typle_for!(i in 0..T::LEN => Option<T<{i}>>),
 }
 
 #[typle(Tuple for 0..=2)]
-impl<'a, T> S<T::Types>
+impl<'a, T> S<T<{..}>>
 where
-    T: Tuple<Types=u32>
+    T: Tuple<u32>
 {
     fn new(t: typle_for!(i in .. => &T<{i}>)) {
         // Square brackets create an array

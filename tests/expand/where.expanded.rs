@@ -17,15 +17,12 @@ where
 {}
 impl<S0, T0> Extract for TupleC<(T0,)>
 where
-    S0: Extract,
     T0: Extract<Output = Option<(S0,)>>,
 {}
 impl<S0, S1, T0, T1> Extract for TupleC<(T0, T1)>
 where
-    S0: Extract,
     S1: Extract,
     T0: Extract<Output = Option<(S0, S1)>>,
-    T1: Extract<Output = Option<(S0, S1)>>,
 {}
 impl<T0> TraitD for TupleD1<T0>
 where
@@ -34,7 +31,7 @@ where
 {}
 impl<T0, T1> TraitD for TupleD2<T0, T1>
 where
-    T0: Mul<T0>,
-    T1: Mul<T1>,
-    T0: AsRef<str>,
+    T0: Mul<T1>,
+    T1: Mul<T0>,
+    T1: AsRef<str>,
 {}
