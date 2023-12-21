@@ -9,7 +9,7 @@ impl Hash for () {
 }
 
 #[typle(Tuple for 1..=12)]
-impl <T> Hash for T
+impl<T> Hash for T
 where
     T: Tuple,
     T<_>: Hash,

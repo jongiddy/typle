@@ -1,6 +1,78 @@
 # typle
 
-A Rust macro to create items for different sized tuples.
+Rust-ic manipulation of tuples.
+
+## An Initial Example
+
+The implementation of the `Hash` trait for tuples simply hashes each component
+of the tuple.
+
+In the standard library the implementation (without docs) looks like this:
+```rust
+macro_rules! impl_hash_tuple {
+    () => (
+        impl Hash for () {
+            #[inline]
+            fn hash<H: Hasher>(&self, _state: &mut H) {}
+        }
+    );
+
+    ( $($name:ident)+) => (
+        impl<$($name: Hash),+> Hash for ($($name,)+) where last_type!($($name,)+): ?Sized {
+            #[allow(non_snake_case)]
+            #[inline]
+            fn hash<S: Hasher>(&self, state: &mut S) {
+                let ($(ref $name,)+) = *self;
+                $($name.hash(state);)+
+            }
+        }
+    );
+}
+
+macro_rules! last_type {
+    ($a:ident,) => { $a };
+    ($a:ident, $($rest_a:ident,)+) => { last_type!($($rest_a,)+) };
+}
+
+impl_hash_tuple! {}
+impl_hash_tuple! { T }
+impl_hash_tuple! { T B }
+impl_hash_tuple! { T B C }
+impl_hash_tuple! { T B C D }
+impl_hash_tuple! { T B C D E }
+impl_hash_tuple! { T B C D E F }
+impl_hash_tuple! { T B C D E F G }
+impl_hash_tuple! { T B C D E F G H }
+impl_hash_tuple! { T B C D E F G H I }
+impl_hash_tuple! { T B C D E F G H I J }
+impl_hash_tuple! { T B C D E F G H I J K }
+impl_hash_tuple! { T B C D E F G H I J K L }
+```
+
+Using `typle` the same implementation can be made shorter and clearer:
+```rust
+impl Hash for () {
+    #[inline]
+    fn hash<H: Hasher>(&self, _state: &mut H) {}
+}
+
+#[typle(Tuple for 1..=12)]
+impl<T> Hash for T
+where
+    T: Tuple,
+    T<_>: Hash,
+    T<{T::LEN - 1}>: ?Sized,
+{
+    #[inline]
+    fn hash<S: Hasher>(&self, state: &mut S) {
+        for typle_const!(i) in 0..T::LEN {
+            self[[i]].hash(state);
+        }
+    }
+}
+```
+
+## A Quick Introduction
 
 The `typle!` macro can generate trait implementations for multiple tuple lengths:
 
@@ -49,15 +121,14 @@ impl<T0, T1, T2> From<(T0, T1, T2)> for MyStruct<(T0, T1, T2)> {
 }
 ```
 
-Select individual components using `<{i}>` for types and `[[i]]` for values,
-where `i` is a `const` value.
+Inside `typle` code, select individual components of a tuple using `<{i}>` for
+types and `[[i]]` for values.
 
-The `typle_for!` macro iterates a `const` value to create a new tuple type or
-value.
+The `typle_for!` macro creates a new tuple type or value.
 
-In `where` clauses, `<_>` refers to each component type of the tuple, while a
-`typle_bound!` macro acts like a `typle_for!` except that the iteration value
-can also be used in the trait bounds.
+In `where` clauses, `<_>` refers to each component type of the tuple. The
+`typle_bound!` macro is more general and allows the iteration value to be used
+in the trait bounds.
 
 ```rust
 use std::ops::Mul;
@@ -102,16 +173,21 @@ where
     fn multiply<M0, M1, M2>(
         &self,
         multipliers: (M0, M1, M2),
-    ) -> MyStruct<
-        (<T0 as Mul<M0>>::Output, <T1 as Mul<M1>>::Output, <T2 as Mul<M2>>::Output),
-    >
+    ) -> MyStruct<(
+        <T0 as Mul<M0>>::Output,
+        <T1 as Mul<M1>>::Output,
+        <T2 as Mul<M2>>::Output,
+    )>
     where
         T0: Mul<M0>,
         T1: Mul<M1>,
         T2: Mul<M2>,
     {
-        (self.t.0 * multipliers.0, self.t.1 * multipliers.1, self.t.2 * multipliers.2)
-            .into()
+        (
+            self.t.0 * multipliers.0,
+            self.t.1 * multipliers.1,
+            self.t.2 * multipliers.2
+        ).into()
     }
 }
 ```
@@ -121,8 +197,8 @@ The typle trait can take a type parameter when all components have the same type
 The associated constant `LEN` provides the length of the tuple in each generated
 item.
 
-Use the `typle_const!` macro to perform const-for, iterating a `const` value
-similarly to `typle_for!`.
+Use the `typle_const!` macro to perform const-for, iterating over a block of
+statements.
 
 ```rust
 #[typle(Tuple for 1..=3)]
@@ -177,14 +253,15 @@ where
 }
 ```
 
-This example, simplified from code in the `hefty` crate, shows `typle` applied
-to an `enum` using the `typle_variant!` macro. Note the use of `T<{..}>` and
-`typle_index!` when referring to another typled item.
+The following example, simplified from code in the `hefty` crate, shows `typle`
+applied to an `enum` using the `typle_variant!` macro. Note the use of `T<{..}>`
+and `typle_index!` when referring to a `typle` `struct` or `enum`.
 
-Use the `typle_const!` macro to perform const-if on an expression that evaluates
+The `typle_const!` macro also supports const-if on an expression that evaluates
 to a `bool`. const-if allows branches that do not compile, as long as they are
-`false`. For example, this code compiles when `i + 1 == T::LEN` even though the
-state `S::<typle_index!(i + 1)>` (`S3` for 3-tuples) is not defined.
+`false` at compile-time. For example, this code compiles when `i + 1 == T::LEN`
+even though the state `S::<typle_index!(i + 1)>` (`S3` for 3-tuples) is not
+defined.
 
 ```rust
 pub trait Extract {
