@@ -182,9 +182,11 @@ where
     type State = TupleSequenceState1<T0>;
     type Output = (<T0>::Output,);
     fn extract(&self, state: Option<Self::State>) -> Self::Output {
+        #[allow(unused_mut)]
         let mut state = state.unwrap_or(Self::State::S0((), None));
         {
             {
+                #[allow(irrefutable_let_patterns, unused_variables)]
                 if let Self::State::S0(output, inner_state) = state {
                     let matched = self.tuple.0.extract(inner_state);
                     let output = ({ matched },);
@@ -206,9 +208,11 @@ where
     type State = TupleSequenceState2<T0, T1>;
     type Output = (<T0>::Output, <T1>::Output);
     fn extract(&self, state: Option<Self::State>) -> Self::Output {
+        #[allow(unused_mut)]
         let mut state = state.unwrap_or(Self::State::S0((), None));
         {
             {
+                #[allow(irrefutable_let_patterns, unused_variables)]
                 if let Self::State::S0(output, inner_state) = state {
                     let matched = self.tuple.0.extract(inner_state);
                     let output = ({ matched },);
@@ -218,6 +222,7 @@ where
                 }
             }
             {
+                #[allow(irrefutable_let_patterns, unused_variables)]
                 if let Self::State::S1(output, inner_state) = state {
                     let matched = self.tuple.1.extract(inner_state);
                     let output = ({ output.0 }, { matched });
@@ -240,9 +245,11 @@ where
     type State = TupleSequenceState3<T0, T1, T2>;
     type Output = (<T0>::Output, <T1>::Output, <T2>::Output);
     fn extract(&self, state: Option<Self::State>) -> Self::Output {
+        #[allow(unused_mut)]
         let mut state = state.unwrap_or(Self::State::S0((), None));
         {
             {
+                #[allow(irrefutable_let_patterns, unused_variables)]
                 if let Self::State::S0(output, inner_state) = state {
                     let matched = self.tuple.0.extract(inner_state);
                     let output = ({ matched },);
@@ -252,6 +259,7 @@ where
                 }
             }
             {
+                #[allow(irrefutable_let_patterns, unused_variables)]
                 if let Self::State::S1(output, inner_state) = state {
                     let matched = self.tuple.1.extract(inner_state);
                     let output = ({ output.0 }, { matched });
@@ -261,6 +269,7 @@ where
                 }
             }
             {
+                #[allow(irrefutable_let_patterns, unused_variables)]
                 if let Self::State::S2(output, inner_state) = state {
                     let matched = self.tuple.2.extract(inner_state);
                     let output = ({ output.0 }, { output.1 }, { matched });

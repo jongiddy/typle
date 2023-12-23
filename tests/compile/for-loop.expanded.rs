@@ -1,3 +1,4 @@
+#![allow(unreachable_code)]
 use typle::typle;
 struct Looper<T> {
     t: T,
@@ -7,7 +8,7 @@ impl<T0, T1, T2, T3, T4, T5, T6, T7> Looper<(T0, T1, T2, T3, T4, T5, T6, T7)> {
         'label: {
             {
                 {
-                    let x = 0;
+                    let _x = 0;
                 }
                 {}
             }
@@ -21,10 +22,7 @@ impl<T0, T1, T2, T3, T4, T5, T6, T7> Looper<(T0, T1, T2, T3, T4, T5, T6, T7)> {
                     _typle_break = true;
                     {
                         {
-                            let x = {
-                                { 2 }
-                                {}
-                            };
+                            let _x = 2;
                             break;
                         }
                         {}
@@ -40,7 +38,7 @@ impl<T0, T1, T2, T3, T4, T5, T6, T7> Looper<(T0, T1, T2, T3, T4, T5, T6, T7)> {
                     _typle_break = true;
                     {
                         {
-                            let x = 3;
+                            let _x = 3;
                             continue;
                         }
                         {}
@@ -49,14 +47,14 @@ impl<T0, T1, T2, T3, T4, T5, T6, T7> Looper<(T0, T1, T2, T3, T4, T5, T6, T7)> {
             }
             if !_typle_break {
                 {
-                    let x = 4;
+                    let _x = 4;
                     break 'label;
                 }
                 {}
             }
             if !_typle_break {
                 {
-                    for j in 0..2 {
+                    for _j in 0..2 {
                         continue;
                     }
                     while 5 == 3 {

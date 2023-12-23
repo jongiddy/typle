@@ -1,10 +1,12 @@
+#![allow(type_alias_bounds)]
+
 use typle::typle;
 
 trait Process {
     type State;
     type Output;
 
-    fn process(state: Self::State) -> Result<Self::Output, Error>;
+    fn process(state: Self::State) -> Result<Self::Output, Box<dyn std::error::Error>>;
 }
 
 #[typle(Tuple for 0..=3)]

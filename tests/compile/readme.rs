@@ -93,8 +93,11 @@ where
     type Output = typle_for!(i in .. => T<{i}>::Output);
 
     fn extract(&self, state: Option<Self::State>) -> Self::Output {
+        #[allow(unused_mut)]  // For LEN = 1 `state` is never mutated
         let mut state = state.unwrap_or(Self::State::S::<typle_index!(0)>((), None));
         for typle_const!(i) in 0..T::LEN {
+            // For LEN = 1 there is only one state and the initial `output` variable is unused
+            #[allow(irrefutable_let_patterns, unused_variables)]
             if let Self::State::S::<typle_index!(i)>(output, inner_state) = state {
                 let matched = self.tuple[[i]].extract(inner_state);
                 let output = typle_for!(j in ..=i =>

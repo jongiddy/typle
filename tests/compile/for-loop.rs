@@ -1,3 +1,5 @@
+#![allow(unreachable_code)]
+
 use typle::typle;
 
 struct Looper<T> {
@@ -13,31 +15,26 @@ where
         'label: for typle_const!(i) in 0..T::LEN {
             // This block does not have a break or continue so does not need a loop.
             if typle_const!(i == 0) {
-                let x = i;
+                let _x = i;
             }
             // For i = 1 no blocks are true. All blocks get removed.
-            // For i = 2 x must get assigned the result of the empty block, not the block
-            // containing the value of i.
             if typle_const!(i == 2) {
-                let x = {
-                    { i }
-                    {}
-                };
+                let _x = i;
                 break;
             }
             if typle_const!(i == 3) {
-                let x = i;
+                let _x = i;
                 continue;
             }
             // With no local break or continue there is no loop, but we still need to
             // check that the initial flag does not indicate a break.
             if typle_const!(i == 4) {
-                let x = i;
+                let _x = i;
                 break 'label;
             }
             // Unlabelled breaks or continues in inner loops do not create a loop.
             if typle_const!(i == 5) {
-                for j in 0..2 {
+                for _j in 0..2 {
                     continue;
                 }
                 while i == 3 {

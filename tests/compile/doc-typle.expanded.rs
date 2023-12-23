@@ -4,6 +4,7 @@ struct MyStruct<T> {
 }
 impl MyStruct<(u32,)> {
     fn max(&self) -> Option<u32> {
+        #[allow(unused_mut)]
         let mut max = self.t.0;
         { () }
         Some(max)
@@ -11,6 +12,7 @@ impl MyStruct<(u32,)> {
 }
 impl MyStruct<(u32, u32)> {
     fn max(&self) -> Option<u32> {
+        #[allow(unused_mut)]
         let mut max = self.t.0;
         {
             {
@@ -25,6 +27,7 @@ impl MyStruct<(u32, u32)> {
 }
 impl MyStruct<(u32, u32, u32)> {
     fn max(&self) -> Option<u32> {
+        #[allow(unused_mut)]
         let mut max = self.t.0;
         {
             {
