@@ -1139,15 +1139,6 @@ impl<'a> SpecificContext<'a> {
                             context.replace_type(&mut component);
                             tuple.elems.push(component);
                         }
-                        {
-                            use std::io::Write;
-                            let mut f = std::fs::OpenOptions::new()
-                                .append(true)
-                                .create(true)
-                                .open("/tmp/output")
-                                .unwrap();
-                            write!(f, "{:?}\n\n", tuple.to_token_stream().to_string()).unwrap();
-                        }
                         r#macro.tokens = tuple.into_token_stream();
                     }
                     EvaluationContext::Value => {
