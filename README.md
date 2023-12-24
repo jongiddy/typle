@@ -253,9 +253,47 @@ where
 }
 ```
 
+The `typle` macro can be applied to items other than `impl`s. A standalone
+`zip` function to pair up the components of two tuples:
+```rust
+#[typle(Tuple for 0..=12)]
+fn zip<A, B>(a: A, b: B) -> typle_for!(i in .. => (A<{i}>, B<{i}>))
+where
+    A: Tuple,
+    B: Tuple,
+{
+    typle_for!(i in .. => (a[[i]], b[[i]]))
+}
+```
+
+The generated code uses a hidden trait to achieve a limited form of
+overloading:
+```rust
+#[allow(non_camel_case_types)]
+trait _typle_fn_zip {
+    type Return;
+    fn apply(self) -> Self::Return;
+}
+fn zip<A, B>(first: A, second: B) -> <(A, B) as _typle_fn_zip>::Return
+where
+    (A, B): _typle_fn_zip,
+{
+    <(A, B) as _typle_fn_zip>::apply((first, second))
+}
+impl<A0, A1, A2, B0, B1, B2> _typle_fn_zip for ((A0, A1, A2), (B0, B1, B2)) {
+    type Return = ((A0, B0), (A1, B1), (A2, B2));
+    fn apply(self) -> Self::Return {
+        let (first, second) = self;
+        { ((first.0, second.0), (first.1, second.1), (first.2, second.2)) }
+    }
+}
+```
+
 The following example, simplified from code in the `hefty` crate, shows `typle`
 applied to an `enum` using the `typle_variant!` macro. Note the use of `T<{..}>`
-and `typle_index!` when referring to a `typle` `struct` or `enum`.
+and `typle_index!` when referring to a `typle` `struct` or `enum`. This is
+required because these items require a numeric suffix: `TupleSequenceState0`,
+`TupleSequenceState1`,...
 
 The `typle_const!` macro also supports const-if on an expression that evaluates
 to a `bool`. const-if allows branches that do not compile, as long as they are

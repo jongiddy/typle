@@ -144,6 +144,22 @@
 //!     }
 //! }
 //! ```
+//! - Standalone functions require explicit lifetimes on references and cannot accept tuples with
+//! unsized components.
+//! ```rust ignore
+//! #[typle(Tuple for 1..=3)]
+//! fn hash<'a, T, S>(tuple: T, state: &'a mut S)
+//! where
+//!     T: Tuple,
+//!     T<_>: Hash,
+//!     // T<{T::LEN - 1}>: ?Sized,
+//!     S: Hasher,
+//! {
+//!     for typle_const!(i) in 0..T::LEN {
+//!         tuple[[i]].hash(state);
+//!     }
+//! }
+//! ```
 
 mod constant;
 mod specific;
@@ -151,11 +167,12 @@ mod specific;
 use std::collections::HashMap;
 
 use constant::evaluate_usize;
-use proc_macro2::{Ident, TokenStream, TokenTree};
+use proc_macro2::{Ident, Span, TokenStream, TokenTree};
 use proc_macro_error::{abort, abort_call_site, proc_macro_error};
-use quote::ToTokens;
-use specific::{BlockState, SpecificContext};
-use syn::Item;
+use quote::{format_ident, ToTokens};
+use specific::{ident_to_path, BlockState, SpecificContext};
+use syn::punctuated::Punctuated;
+use syn::{parse_quote, token, Block, Expr, Generics, Item, ItemImpl, Pat};
 
 #[doc(hidden)]
 #[proc_macro]
@@ -239,9 +256,106 @@ fn parse_args(args: TokenStream) -> IterationTrait {
 }
 
 impl IterationTrait {
-    fn process_item(&self, item: Item) -> Vec<Item> {
+    fn process_item(&self, mut item: Item) -> Vec<Item> {
         let mut output = Vec::new();
         if self.has_typles(&item) {
+            if let Item::Fn(function) = &mut item {
+                let fn_name = &function.sig.ident;
+                let fn_meta = &function.attrs;
+                let trait_name = format_ident!("_typle_fn_{}", fn_name);
+                let fn_type_params = &function.sig.generics.params;
+                let fn_input_params = &function.sig.inputs;
+                let mut type_tuple = syn::TypeTuple {
+                    paren_token: token::Paren::default(),
+                    elems: Punctuated::new(),
+                };
+                let mut pat_tuple = syn::PatTuple {
+                    attrs: Vec::new(),
+                    paren_token: token::Paren::default(),
+                    elems: Punctuated::new(),
+                };
+                let mut value_tuple = syn::ExprTuple {
+                    attrs: Vec::new(),
+                    paren_token: token::Paren::default(),
+                    elems: Punctuated::new(),
+                };
+                for arg in fn_input_params {
+                    match arg {
+                        syn::FnArg::Receiver(_) => abort!(arg, "unexepcted self"),
+                        syn::FnArg::Typed(pat_type) => {
+                            type_tuple.elems.push(pat_type.ty.as_ref().clone());
+                            pat_tuple.elems.push(pat_type.pat.as_ref().clone());
+                            value_tuple
+                                .elems
+                                .push(pat_to_tuple(pat_type.pat.as_ref().clone()));
+                        }
+                    }
+                }
+                let item1 = parse_quote!(
+                    #[allow(non_camel_case_types)]
+                    trait #trait_name {
+                        type Return;
+
+                        fn apply(self) -> Self::Return;
+                    }
+                );
+                output.push(item1);
+                let item1 = parse_quote!(
+                    #(#fn_meta)*
+                    fn #fn_name <#fn_type_params>(#fn_input_params) -> <#type_tuple as #trait_name>::Return
+                    where
+                        #type_tuple: #trait_name,
+                    {
+                        <#type_tuple as #trait_name>::apply(#value_tuple)
+                    }
+                );
+                output.push(item1);
+                let return_type =
+                    match std::mem::replace(&mut function.sig.output, syn::ReturnType::Default) {
+                        syn::ReturnType::Default => parse_quote!(()),
+                        syn::ReturnType::Type(_, t) => *t,
+                    };
+                let fn_body = std::mem::replace(
+                    &mut function.block,
+                    Box::new(Block {
+                        brace_token: token::Brace::default(),
+                        stmts: Vec::new(),
+                    }),
+                );
+                let items = vec![
+                    syn::ImplItem::Type(syn::ImplItemType {
+                        attrs: Vec::new(),
+                        vis: syn::Visibility::Inherited,
+                        defaultness: None,
+                        type_token: token::Type::default(),
+                        ident: Ident::new("Return", Span::call_site()),
+                        generics: Generics::default(),
+                        eq_token: token::Eq::default(),
+                        ty: return_type,
+                        semi_token: token::Semi::default(),
+                    }),
+                    // Following uses value_tuple instead of pat_tuple because
+                    // https://github.com/dtolnay/syn/issues/1553
+                    parse_quote!(
+                        fn apply(self) -> Self::Return {
+                            let #value_tuple = self;
+                            #fn_body
+                        }
+                    ),
+                ];
+
+                item = Item::Impl(ItemImpl {
+                    attrs: Vec::new(),
+                    defaultness: None,
+                    unsafety: None,
+                    impl_token: token::Impl::default(),
+                    generics: std::mem::take(&mut function.sig.generics),
+                    trait_: Some((None, ident_to_path(trait_name), token::For::default())),
+                    self_ty: Box::new(syn::Type::Tuple(type_tuple)),
+                    brace_token: token::Brace::default(),
+                    items,
+                });
+            }
             for typle_len in self.min_len..=self.max_len {
                 let context = SpecificContext {
                     typle_trait: &self.ident,
@@ -301,6 +415,37 @@ impl IterationTrait {
         }
 
         false
+    }
+}
+
+fn pat_to_tuple(pat: Pat) -> Expr {
+    match pat {
+        Pat::Const(p) => Expr::Const(p),
+        Pat::Ident(p) => Expr::Path(syn::ExprPath {
+            attrs: p.attrs,
+            qself: None,
+            path: ident_to_path(p.ident),
+        }),
+        Pat::Lit(p) => Expr::Lit(p),
+        Pat::Macro(p) => Expr::Macro(p),
+        Pat::Or(_) => todo!(),
+        Pat::Paren(_) => todo!(),
+        Pat::Path(_) => todo!(),
+        Pat::Range(_) => todo!(),
+        Pat::Reference(_) => todo!(),
+        Pat::Rest(_) => todo!(),
+        Pat::Slice(_) => todo!(),
+        Pat::Struct(_) => todo!(),
+        Pat::Tuple(p) => Expr::Tuple(syn::ExprTuple {
+            attrs: p.attrs,
+            paren_token: p.paren_token,
+            elems: p.elems.into_iter().map(pat_to_tuple).collect(),
+        }),
+        Pat::TupleStruct(_) => todo!(),
+        Pat::Type(_) => todo!(),
+        Pat::Verbatim(_) => todo!(),
+        Pat::Wild(_) => todo!(),
+        _ => todo!(),
     }
 }
 

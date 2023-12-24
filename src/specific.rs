@@ -817,7 +817,7 @@ impl<'a> SpecificContext<'a> {
                                         self.parse_pattern_range(&mut token_stream);
                                     let body_span = token_stream.span();
                                     let Ok(r#type) = parse2::<Type>(token_stream) else {
-                                        abort!(body_span, "expected type, found");
+                                        abort!(body_span, "expected type");
                                     };
                                     for index in range {
                                         let mut context = self.clone();
@@ -1138,6 +1138,15 @@ impl<'a> SpecificContext<'a> {
                             let mut component = r#type.clone();
                             context.replace_type(&mut component);
                             tuple.elems.push(component);
+                        }
+                        {
+                            use std::io::Write;
+                            let mut f = std::fs::OpenOptions::new()
+                                .append(true)
+                                .create(true)
+                                .open("/tmp/output")
+                                .unwrap();
+                            write!(f, "{:?}\n\n", tuple.to_token_stream().to_string()).unwrap();
                         }
                         r#macro.tokens = tuple.into_token_stream();
                     }
@@ -1549,7 +1558,7 @@ impl<'a> SpecificContext<'a> {
                                         return;
                                     }
                                     PathArguments::AngleBracketed(args) => {
-                                        // T<3> or T<i> where i comes from constants
+                                        // T<3> or T<{i}>
                                         if args.args.len() != 1 {
                                             abort!(first, "expected one type parameter");
                                         }
@@ -1655,7 +1664,7 @@ impl<'a> SpecificContext<'a> {
     }
 }
 
-fn ident_to_path(ident: Ident) -> Path {
+pub fn ident_to_path(ident: Ident) -> Path {
     let mut segments = Punctuated::new();
     segments.push(PathSegment {
         ident,
