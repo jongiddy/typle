@@ -275,18 +275,18 @@ trait _typle_fn_zip {
     fn apply(self) -> Self::Return;
 }
 
-fn zip<A, B>(first: A, second: B) -> <(A, B) as _typle_fn_zip>::Return
+fn zip<A, B>(a: A, b: B) -> <(A, B) as _typle_fn_zip>::Return
 where
     (A, B): _typle_fn_zip,
 {
-    <(A, B) as _typle_fn_zip>::apply((first, second))
+    <(A, B) as _typle_fn_zip>::apply((a, b))
 }
 
 impl<A0, A1, A2, B0, B1, B2> _typle_fn_zip for ((A0, A1, A2), (B0, B1, B2)) {
     type Return = ((A0, B0), (A1, B1), (A2, B2));
     fn apply(self) -> Self::Return {
-        let (first, second) = self;
-        { ((first.0, second.0), (first.1, second.1), (first.2, second.2)) }
+        let (a, b) = self;
+        { ((a.0, b.0), (a.1, b.1), (a.2, b.2)) }
     }
 }
 ```
