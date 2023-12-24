@@ -256,8 +256,8 @@ where
 The `typle` macro can be applied to items other than `impl`s. A standalone
 `zip` function to pair up the components of two tuples:
 ```rust
-#[typle(Tuple for 0..=12)]
-fn zip<A, B>(a: A, b: B) -> typle_for!(i in .. => (A<{i}>, B<{i}>))
+#[typle(Tuple for 1..=3)]
+pub fn zip<A, B>(a: A, b: B) -> typle_for!(i in .. => (A<{i}>, B<{i}>))
 where
     A: Tuple,
     B: Tuple,
@@ -266,8 +266,7 @@ where
 }
 ```
 
-The generated code uses a hidden trait to achieve a limited form of
-overloading:
+The generated code uses an extra trait to achieve a limited form of overloading:
 ```rust
 #[allow(non_camel_case_types)]
 trait _typle_fn_zip {
@@ -275,7 +274,7 @@ trait _typle_fn_zip {
     fn apply(self) -> Self::Return;
 }
 
-fn zip<A, B>(a: A, b: B) -> <(A, B) as _typle_fn_zip>::Return
+pub fn zip<A, B>(a: A, b: B) -> <(A, B) as _typle_fn_zip>::Return
 where
     (A, B): _typle_fn_zip,
 {

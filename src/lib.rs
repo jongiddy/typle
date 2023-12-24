@@ -289,6 +289,7 @@ impl IterationTrait {
                 if self.has_typles(generics) {
                     let fn_name = &function.sig.ident;
                     let fn_meta = &function.attrs;
+                    let fn_vis = &function.vis;
                     let trait_name = format_ident!("_typle_fn_{}", fn_name);
                     let fn_type_params = &function.sig.generics.params;
                     let fn_input_params = &function.sig.inputs;
@@ -329,7 +330,7 @@ impl IterationTrait {
                     output.push(trait_item);
                     let fn_item = parse_quote!(
                         #(#fn_meta)*
-                        fn #fn_name <#fn_type_params>(#fn_input_params) -> <#type_tuple as #trait_name>::Return
+                        #fn_vis fn #fn_name <#fn_type_params>(#fn_input_params) -> <#type_tuple as #trait_name>::Return
                         where
                             #type_tuple: #trait_name,
                         {

@@ -61,6 +61,15 @@ where
 }
 
 #[typle(Tuple for 1..=3)]
+pub fn zip<A, B>(a: A, b: B) -> typle_for!(i in .. => (A<{i}>, B<{i}>))
+where
+    A: Tuple,
+    B: Tuple,
+{
+    typle_for!(i in .. => (a[[i]], b[[i]]))
+}
+
+#[typle(Tuple for 1..=3)]
 mod tuple {
     pub trait Extract {
         type State;
