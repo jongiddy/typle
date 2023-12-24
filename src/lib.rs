@@ -172,7 +172,7 @@ use proc_macro_error::{abort, abort_call_site, proc_macro_error};
 use quote::{format_ident, ToTokens};
 use specific::{ident_to_path, BlockState, SpecificContext};
 use syn::punctuated::Punctuated;
-use syn::{parse_quote, token, Block, Expr, Generics, Item, ItemImpl, Pat};
+use syn::{parse_quote, token, Expr, Generics, Item, ItemImpl, Pat};
 
 #[doc(hidden)]
 #[proc_macro]
@@ -256,144 +256,158 @@ fn parse_args(args: TokenStream) -> IterationTrait {
 }
 
 impl IterationTrait {
-    fn process_item(&self, mut item: Item) -> Vec<Item> {
+    fn process_item(&self, item: Item) -> Vec<Item> {
         let mut output = Vec::new();
-        if self.has_typles(&item) {
-            if let Item::Fn(function) = &mut item {
-                let fn_name = &function.sig.ident;
-                let fn_meta = &function.attrs;
-                let trait_name = format_ident!("_typle_fn_{}", fn_name);
-                let fn_type_params = &function.sig.generics.params;
-                let fn_input_params = &function.sig.inputs;
-                let mut type_tuple = syn::TypeTuple {
-                    paren_token: token::Paren::default(),
-                    elems: Punctuated::new(),
-                };
-                let mut pat_tuple = syn::PatTuple {
-                    attrs: Vec::new(),
-                    paren_token: token::Paren::default(),
-                    elems: Punctuated::new(),
-                };
-                let mut value_tuple = syn::ExprTuple {
-                    attrs: Vec::new(),
-                    paren_token: token::Paren::default(),
-                    elems: Punctuated::new(),
-                };
-                for arg in fn_input_params {
-                    match arg {
-                        syn::FnArg::Receiver(_) => abort!(arg, "unexepcted self"),
-                        syn::FnArg::Typed(pat_type) => {
-                            type_tuple.elems.push(pat_type.ty.as_ref().clone());
-                            pat_tuple.elems.push(pat_type.pat.as_ref().clone());
-                            value_tuple
-                                .elems
-                                .push(pat_to_tuple(pat_type.pat.as_ref().clone()));
+        match item {
+            Item::Const(syn::ItemConst { ref generics, .. })
+            | Item::Enum(syn::ItemEnum { ref generics, .. })
+            | Item::Impl(syn::ItemImpl { ref generics, .. })
+            | Item::Struct(syn::ItemStruct { ref generics, .. })
+            | Item::Trait(syn::ItemTrait { ref generics, .. })
+            | Item::TraitAlias(syn::ItemTraitAlias { ref generics, .. })
+            | Item::Type(syn::ItemType { ref generics, .. })
+            | Item::Union(syn::ItemUnion { ref generics, .. }) => {
+                if self.has_typles(generics) {
+                    for typle_len in self.min_len..=self.max_len {
+                        let context = SpecificContext {
+                            typle_trait: &self.ident,
+                            typle_len,
+                            constants: HashMap::new(),
+                            typles: HashMap::new(),
+                        };
+                        let mut item = item.clone();
+                        let mut state = BlockState::default();
+                        context.replace_item(&mut item, true, &mut state);
+                        output.push(item);
+                    }
+                } else {
+                    output.push(item);
+                }
+            }
+            Item::Fn(function) => {
+                let generics = &function.sig.generics;
+                if self.has_typles(generics) {
+                    let fn_name = &function.sig.ident;
+                    let fn_meta = &function.attrs;
+                    let trait_name = format_ident!("_typle_fn_{}", fn_name);
+                    let fn_type_params = &function.sig.generics.params;
+                    let fn_input_params = &function.sig.inputs;
+                    let mut type_tuple = syn::TypeTuple {
+                        paren_token: token::Paren::default(),
+                        elems: Punctuated::new(),
+                    };
+                    let mut pat_tuple = syn::PatTuple {
+                        attrs: Vec::new(),
+                        paren_token: token::Paren::default(),
+                        elems: Punctuated::new(),
+                    };
+                    let mut value_tuple = syn::ExprTuple {
+                        attrs: Vec::new(),
+                        paren_token: token::Paren::default(),
+                        elems: Punctuated::new(),
+                    };
+                    for arg in fn_input_params {
+                        match arg {
+                            syn::FnArg::Receiver(_) => abort!(arg, "unexpected self"),
+                            syn::FnArg::Typed(pat_type) => {
+                                type_tuple.elems.push(pat_type.ty.as_ref().clone());
+                                pat_tuple.elems.push(pat_type.pat.as_ref().clone());
+                                value_tuple
+                                    .elems
+                                    .push(pat_to_tuple(pat_type.pat.as_ref().clone()));
+                            }
                         }
                     }
-                }
-                let item1 = parse_quote!(
-                    #[allow(non_camel_case_types)]
-                    trait #trait_name {
-                        type Return;
+                    let trait_item = parse_quote!(
+                        #[allow(non_camel_case_types)]
+                        trait #trait_name {
+                            type Return;
 
-                        fn apply(self) -> Self::Return;
-                    }
-                );
-                output.push(item1);
-                let item1 = parse_quote!(
-                    #(#fn_meta)*
-                    fn #fn_name <#fn_type_params>(#fn_input_params) -> <#type_tuple as #trait_name>::Return
-                    where
-                        #type_tuple: #trait_name,
-                    {
-                        <#type_tuple as #trait_name>::apply(#value_tuple)
-                    }
-                );
-                output.push(item1);
-                let return_type =
-                    match std::mem::replace(&mut function.sig.output, syn::ReturnType::Default) {
+                            fn apply(self) -> Self::Return;
+                        }
+                    );
+                    output.push(trait_item);
+                    let fn_item = parse_quote!(
+                        #(#fn_meta)*
+                        fn #fn_name <#fn_type_params>(#fn_input_params) -> <#type_tuple as #trait_name>::Return
+                        where
+                            #type_tuple: #trait_name,
+                        {
+                            <#type_tuple as #trait_name>::apply(#value_tuple)
+                        }
+                    );
+                    output.push(fn_item);
+                    let return_type = match function.sig.output {
                         syn::ReturnType::Default => parse_quote!(()),
                         syn::ReturnType::Type(_, t) => *t,
                     };
-                let fn_body = std::mem::replace(
-                    &mut function.block,
-                    Box::new(Block {
-                        brace_token: token::Brace::default(),
-                        stmts: Vec::new(),
-                    }),
-                );
-                let items = vec![
-                    syn::ImplItem::Type(syn::ImplItemType {
-                        attrs: Vec::new(),
-                        vis: syn::Visibility::Inherited,
-                        defaultness: None,
-                        type_token: token::Type::default(),
-                        ident: Ident::new("Return", Span::call_site()),
-                        generics: Generics::default(),
-                        eq_token: token::Eq::default(),
-                        ty: return_type,
-                        semi_token: token::Semi::default(),
-                    }),
-                    // Following uses value_tuple instead of pat_tuple because
-                    // https://github.com/dtolnay/syn/issues/1553
-                    parse_quote!(
-                        fn apply(self) -> Self::Return {
-                            let #value_tuple = self;
-                            #fn_body
-                        }
-                    ),
-                ];
+                    let fn_body = function.block;
+                    let items = vec![
+                        syn::ImplItem::Type(syn::ImplItemType {
+                            attrs: Vec::new(),
+                            vis: syn::Visibility::Inherited,
+                            defaultness: None,
+                            type_token: token::Type::default(),
+                            ident: Ident::new("Return", Span::call_site()),
+                            generics: Generics::default(),
+                            eq_token: token::Eq::default(),
+                            ty: return_type,
+                            semi_token: token::Semi::default(),
+                        }),
+                        // Following uses value_tuple instead of pat_tuple because
+                        // https://github.com/dtolnay/syn/issues/1553
+                        parse_quote!(
+                            fn apply(self) -> Self::Return {
+                                let #value_tuple = self;
+                                #fn_body
+                            }
+                        ),
+                    ];
 
-                item = Item::Impl(ItemImpl {
-                    attrs: Vec::new(),
-                    defaultness: None,
-                    unsafety: None,
-                    impl_token: token::Impl::default(),
-                    generics: std::mem::take(&mut function.sig.generics),
-                    trait_: Some((None, ident_to_path(trait_name), token::For::default())),
-                    self_ty: Box::new(syn::Type::Tuple(type_tuple)),
-                    brace_token: token::Brace::default(),
-                    items,
-                });
+                    let item = Item::Impl(ItemImpl {
+                        attrs: Vec::new(),
+                        defaultness: None,
+                        unsafety: None,
+                        impl_token: token::Impl::default(),
+                        generics: function.sig.generics,
+                        trait_: Some((None, ident_to_path(trait_name), token::For::default())),
+                        self_ty: Box::new(syn::Type::Tuple(type_tuple)),
+                        brace_token: token::Brace::default(),
+                        items,
+                    });
+
+                    for typle_len in self.min_len..=self.max_len {
+                        let context = SpecificContext {
+                            typle_trait: &self.ident,
+                            typle_len,
+                            constants: HashMap::new(),
+                            typles: HashMap::new(),
+                        };
+                        let mut item = item.clone();
+                        let mut state = BlockState::default();
+                        context.replace_item(&mut item, true, &mut state);
+                        output.push(item);
+                    }
+                } else {
+                    output.push(Item::Fn(function));
+                }
             }
-            for typle_len in self.min_len..=self.max_len {
-                let context = SpecificContext {
-                    typle_trait: &self.ident,
-                    typle_len,
-                    constants: HashMap::new(),
-                    typles: HashMap::new(),
-                };
-                let mut item = item.clone();
-                let mut state = BlockState::default();
-                context.replace_item(&mut item, true, &mut state);
+            Item::Mod(mut module) => {
+                if let Some((_, items)) = &mut module.content {
+                    for item in std::mem::take(items) {
+                        items.extend(self.process_item(item));
+                    }
+                }
+                output.push(Item::Mod(module));
+            }
+            item => {
                 output.push(item);
             }
-        } else {
-            output.push(item);
         }
-
         output
     }
 
-    fn has_typles(&self, item: &Item) -> bool {
-        let generics = match item {
-            Item::Const(syn::ItemConst { generics, .. })
-            | Item::Enum(syn::ItemEnum { generics, .. })
-            | Item::Fn(syn::ItemFn {
-                sig: syn::Signature { generics, .. },
-                ..
-            })
-            | Item::Impl(syn::ItemImpl { generics, .. })
-            | Item::Struct(syn::ItemStruct { generics, .. })
-            | Item::Trait(syn::ItemTrait { generics, .. })
-            | Item::TraitAlias(syn::ItemTraitAlias { generics, .. })
-            | Item::Type(syn::ItemType { generics, .. })
-            | Item::Union(syn::ItemUnion { generics, .. }) => generics,
-            _ => {
-                return false;
-            }
-        };
-
+    fn has_typles(&self, generics: &Generics) -> bool {
         let Some(where_clause) = &generics.where_clause else {
             return false;
         };

@@ -274,12 +274,14 @@ trait _typle_fn_zip {
     type Return;
     fn apply(self) -> Self::Return;
 }
+
 fn zip<A, B>(first: A, second: B) -> <(A, B) as _typle_fn_zip>::Return
 where
     (A, B): _typle_fn_zip,
 {
     <(A, B) as _typle_fn_zip>::apply((first, second))
 }
+
 impl<A0, A1, A2, B0, B1, B2> _typle_fn_zip for ((A0, A1, A2), (B0, B1, B2)) {
     type Return = ((A0, B0), (A1, B1), (A2, B2));
     fn apply(self) -> Self::Return {
@@ -302,54 +304,58 @@ even though the state `S::<typle_index!(i + 1)>` (`S3` for 3-tuples) is not
 defined.
 
 ```rust
-pub trait Extract {
-    type State;
-    type Output;
-
-    fn extract(&self, state: Option<Self::State>) -> Self::Output;
-}
-
 #[typle(Tuple for 1..=3)]
-pub enum TupleSequenceState<T>
-where
-    T: Tuple,
-    T<_>: Extract,
-{
-    S = typle_variant!(i in .. =>
-        typle_for!(j in ..i => T::<{j}>::Output),
-        Option<T<{i}>::State>
-    ),
-}
+mod tuple {
+    pub trait Extract {
+        type State;
+        type Output;
 
-pub struct TupleSequence<T> {
-    tuple: T,
-}
+        fn extract(&self, state: Option<Self::State>) -> Self::Output;
+    }
 
-#[typle(Tuple for 1..=3)]
-impl<T> Extract for TupleSequence<T>
-where
-    T: Tuple,
-    T<_>: Extract,
-{
-    type State = TupleSequenceState<T<{..}>>;
-    type Output = typle_for!(i in .. => T<{i}>::Output);
+    pub enum TupleSequenceState<T>
+    where
+        T: Tuple,
+        T<_>: Extract,
+    {
+        S = typle_variant!(i in .. =>
+            typle_for!(j in ..i => T::<{j}>::Output),
+            Option<T<{i}>::State>
+        ),
+    }
 
-    fn extract(&self, state: Option<Self::State>) -> Self::Output {
-        let mut state = state.unwrap_or(Self::State::S::<typle_index!(0)>((), None));
-        for typle_const!(i) in 0..T::LEN {
-            if let Self::State::S::<typle_index!(i)>(output, inner_state) = state {
-                let matched = self.tuple[[i]].extract(inner_state);
-                let output = typle_for!(j in ..=i =>
-                    if typle_const!(j != i) { output[[j]] } else { matched }
-                );
-                if typle_const!(i + 1 == T::LEN) {
-                    return output;
-                } else {
-                    state = Self::State::S::<typle_index!(i + 1)>(output, None);
+    pub struct TupleSequence<T> {
+        tuple: T,
+    }
+
+    impl<T> Extract for TupleSequence<T>
+    where
+        T: Tuple,
+        T<_>: Extract,
+    {
+        type State = TupleSequenceState<T<{..}>>;
+        type Output = typle_for!(i in .. => T<{i}>::Output);
+
+        fn extract(&self, state: Option<Self::State>) -> Self::Output {
+            #[allow(unused_mut)]  // For LEN = 1 `state` is never mutated
+            let mut state = state.unwrap_or(Self::State::S::<typle_index!(0)>((), None));
+            for typle_const!(i) in 0..T::LEN {
+                // For LEN = 1 there is only one state and the initial `output` variable is unused
+                #[allow(irrefutable_let_patterns, unused_variables)]
+                if let Self::State::S::<typle_index!(i)>(output, inner_state) = state {
+                    let matched = self.tuple[[i]].extract(inner_state);
+                    let output = typle_for!(j in ..=i =>
+                        if typle_const!(j != i) { output[[j]] } else { matched }
+                    );
+                    if typle_const!(i + 1 == T::LEN) {
+                        return output;
+                    } else {
+                        state = Self::State::S::<typle_index!(i + 1)>(output, None);
+                    }
                 }
             }
+            unreachable!();
         }
-        unreachable!();
     }
 }
 ```
@@ -376,9 +382,11 @@ where
     type State = TupleSequenceState3<T0, T1, T2>;
     type Output = (<T0>::Output, <T1>::Output, <T2>::Output);
     fn extract(&self, state: Option<Self::State>) -> Self::Output {
+        #[allow(unused_mut)]
         let mut state = state.unwrap_or(Self::State::S0((), None));
         {
             {
+                #[allow(irrefutable_let_patterns, unused_variables)]
                 if let Self::State::S0(output, inner_state) = state {
                     let matched = self.tuple.0.extract(inner_state);
                     let output = ({ matched },);
@@ -388,6 +396,7 @@ where
                 }
             }
             {
+                #[allow(irrefutable_let_patterns, unused_variables)]
                 if let Self::State::S1(output, inner_state) = state {
                     let matched = self.tuple.1.extract(inner_state);
                     let output = ({ output.0 }, { matched });
@@ -397,6 +406,7 @@ where
                 }
             }
             {
+                #[allow(irrefutable_let_patterns, unused_variables)]
                 if let Self::State::S2(output, inner_state) = state {
                     let matched = self.tuple.2.extract(inner_state);
                     let output = ({ output.0 }, { output.1 }, { matched });
