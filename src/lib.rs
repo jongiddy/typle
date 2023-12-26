@@ -355,11 +355,9 @@ impl IterationTrait {
                             ty: return_type,
                             semi_token: token::Semi::default(),
                         }),
-                        // Following uses value_tuple instead of pat_tuple because
-                        // https://github.com/dtolnay/syn/issues/1553
                         parse_quote!(
                             fn apply(self) -> Self::Return {
-                                let #value_tuple = self;
+                                let #pat_tuple = self;
                                 #fn_body
                             }
                         ),
