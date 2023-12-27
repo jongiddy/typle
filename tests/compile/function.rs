@@ -34,13 +34,13 @@ where
 #[typle(Tuple for 1..=3)]
 fn heapify<T>(params: T) -> typle_for!(i in .. => Box<T<{i}>>)
 where
-    T: Tuple
+    T: Tuple,
 {
     typle_for!(i in .. => Box::new(params[[i]]))
 }
 
 #[typle(Tuple for 1..=3)]
-fn zip<A, B>(first: A, second: B) -> typle_for!(i in .. => (A<{i}>, B<{i}>))
+pub fn zip<A, B>(first: A, second: B) -> typle_for!(i in .. => (A<{i}>, B<{i}>))
 where
     A: Tuple,
     B: Tuple,

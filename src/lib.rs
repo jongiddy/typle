@@ -321,7 +321,7 @@ impl IterationTrait {
                     }
                     let trait_item = parse_quote!(
                         #[allow(non_camel_case_types)]
-                        trait #trait_name {
+                        #fn_vis trait #trait_name {
                             type Return;
 
                             fn apply(self) -> Self::Return;

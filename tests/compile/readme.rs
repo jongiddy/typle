@@ -1,6 +1,6 @@
 use typle::typle;
 
-struct MyStruct<T> {
+pub struct MyStruct<T> {
     t: T,
 }
 
@@ -23,17 +23,18 @@ where
     T<_>: Copy,
 {
     // Return a tuple containing all components except the first
-    fn tail(&self) -> typle_for!(i in 1.. => T<{i}>) {
+    pub fn tail(&self) -> typle_for!(i in 1.. => T<{i}>) {
         typle_for!(i in 1.. => self.t[[i]])
     }
 
     // Return a MyStruct containing the product of the components of two tuples
-    fn multiply<M>(
-        &self, multipliers: M
+    pub fn multiply<M>(
+        &self,
+        multipliers: M,
     ) -> MyStruct<typle_for!(i in .. => <T<{i}> as Mul<M<{i}>>>::Output)>
     where
         M: Tuple,
-        typle_bound!(i in .. => T<{i}>): Mul<M<{i}>>,
+        typle_bound!(i in .. => T<{i}>): Mul<M<{ i }>>,
     {
         typle_for!(i in .. => self.t[[i]] * multipliers[[i]]).into()
     }
@@ -46,7 +47,7 @@ where
     C: for<'a> std::ops::AddAssign<&'a C> + Default,
 {
     // Return a reference to the last component of the tuple
-    fn last(&self) -> &T<{T::LEN - 1}> {
+    fn last(&self) -> &T<{ T::LEN - 1 }> {
         &self.t[[T::LEN - 1]]
     }
 
@@ -98,11 +99,11 @@ mod tuple {
         T: Tuple,
         T<_>: Extract,
     {
-        type State = TupleSequenceState<T<{..}>>;
+        type State = TupleSequenceState<T<{ .. }>>;
         type Output = typle_for!(i in .. => T<{i}>::Output);
 
         fn extract(&self, state: Option<Self::State>) -> Self::Output {
-            #[allow(unused_mut)]  // For LEN = 1 `state` is never mutated
+            #[allow(unused_mut)] // For LEN = 1 `state` is never mutated
             let mut state = state.unwrap_or(Self::State::S::<typle_index!(0)>((), None));
             for typle_const!(i) in 0..T::LEN {
                 // For LEN = 1 there is only one state and the initial `output` variable is unused

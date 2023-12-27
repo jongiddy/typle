@@ -1,50 +1,32 @@
-use std::os::unix::ffi::OsStrExt as _;
-use std::path::PathBuf;
-use std::process::Command;
+use crate::compile::readme::{zip, MyStruct};
+
+mod compile;
 
 #[test]
 fn test_expand() {
     macrotest::expand("tests/expand/*.rs");
+    macrotest::expand("tests/compile/mod.rs");
 }
 
 #[test]
-fn test_compile() {
-    macrotest::expand("tests/compile/*.rs");
+fn test_tail() {
+    let m = MyStruct::from(('a', 2, "test"));
+    let tail = m.tail();
+    assert_eq!(tail, (2, "test"));
+    let m = MyStruct::from(tail);
+    let tail = m.tail();
+    assert_eq!(tail, ("test",));
+    let m = MyStruct::from(tail);
+    let tail = m.tail();
+    assert_eq!(tail, ());
+}
 
-    let typle_package = format!("typle-{}", std::env::var("CARGO_PKG_VERSION").unwrap());
-    let mut lib_path = PathBuf::from(std::env::var_os("CARGO_MANIFEST_DIR").unwrap().to_owned());
-    lib_path.extend([
-        "target",
-        "package",
-        &typle_package,
-        "target",
-        "debug",
-        "libtyple.so",
-    ]);
-    for path in std::fs::read_dir("tests/compile").unwrap() {
-        let entry = path.unwrap();
-        let file_name = entry.file_name();
-        if let Some(fname) = file_name.to_str() {
-            if fname.ends_with(".rs") && !fname.ends_with(".expanded.rs") {
-                // Compile source code
-                let status = Command::new("rustc")
-                    .args([
-                        std::str::from_utf8(entry.path().as_os_str().as_bytes()).unwrap(),
-                        "--edition",
-                        "2021",
-                        "--crate-name",
-                        "test",
-                        "--crate-type",
-                        "lib",
-                        "--allow",
-                        "dead_code",
-                        "--extern",
-                        &format!("typle={}", lib_path.to_str().unwrap()),
-                    ])
-                    .status()
-                    .unwrap();
-                assert!(status.success())
-            }
-        }
-    }
+#[test]
+fn test_zip() {
+    let s = ('a', 'b', 'c');
+    let t = (1, 2, 3);
+    assert_eq!(zip(s, t), (('a', 1), ('b', 2), ('c', 3)));
+    let s = (2.0, "test".to_string());
+    let t = (9u8, ());
+    assert_eq!(zip(s, t), ((2.0, 9u8), ("test".to_string(), ())));
 }

@@ -10,7 +10,7 @@ where
     T: Tuple<u32>,
 {
     fn max(&self) -> Option<u32> {
-        #[allow(unused_mut)]  // For LEN=1 `max` does not get mutated
+        #[allow(unused_mut)] // For LEN=1 `max` does not get mutated
         let mut max = self.t[[0]];
         for typle_const!(i) in 1..T::LEN {
             if self.t[[i]] > max {
