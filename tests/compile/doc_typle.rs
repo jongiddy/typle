@@ -6,10 +6,7 @@ struct MyStruct<T> {
 }
 
 #[typle(Tuple for 1..=3)]
-impl<T> MyStruct<T>
-where
-    T: Tuple<u32>,
-{
+impl<T: Tuple<u32>> MyStruct<T> {
     fn max(&self) -> Option<u32> {
         #[allow(unused_mut)] // For LEN=1 `max` does not get mutated
         let mut max = self.t[[0]];

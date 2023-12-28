@@ -7,15 +7,12 @@ A function to zip a pair of tuples into a tuple of pairs:
 
 ```rust
 #[typle(Tuple for 1..=12)]
-pub fn zip<A, B>(
-    a: A,
-    b: B
+pub fn zip<A: Tuple, B: Tuple>(
+    first: A,
+    second: B
 ) -> typle_for!(i in .. => (A<{i}>, B<{i}>))
-where
-    A: Tuple,
-    B: Tuple,
 {
-    typle_for!(i in .. => (a[[i]], b[[i]]))
+    typle_for!(i in .. => (first[[i]], second[[i]]))
 }
 
 let s = ("LHR", "FCO", "ZRH");

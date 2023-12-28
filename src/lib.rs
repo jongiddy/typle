@@ -8,9 +8,7 @@
 //! }
 //!
 //! #[typle(Tuple for 0..=3)]
-//! impl<T> From<T> for MyStruct<T>
-//! where
-//!     T: Tuple,
+//! impl<T: Tuple> From<T> for MyStruct<T>
 //! {
 //!     fn from(t: T) -> Self {
 //!         MyStruct { t }
@@ -60,11 +58,9 @@
 //! # use typle::typle;
 //! // Split off the last component
 //! #[typle(Tuple for 1..=3)]
-//! fn split_last<T>(
+//! fn split_last<T: Tuple>(
 //!     t: T
 //! ) -> (typle_for!(i in ..T::LEN - 1 => T<{i}>), T<{T::LEN - 1}>)
-//! where
-//!     T: Tuple,
 //! {
 //!     (typle_for!(i in ..T::LEN - 1 => t[[i]]), t[[T::LEN - 1]])
 //! }
@@ -74,7 +70,8 @@
 //! assert_eq!(split_last((1,)), ((), 1));
 //! ```
 
-//! Specify constraints on the tuple components:
+//! Specify constraints on the tuple components using one of the following
+//! forms. These constraints can only appear in the `where` clause.
 //! - `T: Tuple<C>` - each component of the tuple has type `C`
 //! - `T<_>: Copy` - each component of the tuple implements `Copy`
 //! - `T<0>: Copy` - the first component of the tuple implements `Copy`
@@ -88,12 +85,10 @@
 //!
 //! // Return the product of the components of two tuples
 //! #[typle(Tuple for 1..=3)]
-//! fn multiply<S, T>(
+//! fn multiply<S: Tuple, T: Tuple>(
 //!     s: S, t: T
 //! ) -> typle_for!(i in .. => <S<{i}> as Mul<T<{i}>>>::Output)
 //! where
-//!     S: Tuple,
-//!     T: Tuple,
 //!     typle_bound!(i in .. => S<{i}>): Mul<T<{i}>>,
 //! {
 //!     typle_for!(i in .. => s[[i]] * t[[i]])
@@ -282,12 +277,6 @@
 //!
 //! # Limitations
 //!
-//! - A typle constraint can only appear in the `where` clause. This includes the constraint on the
-//! tuple type (`T: Tuple`) and any constraints on the tuple components.
-//! ```rust ignore
-//! #[typle(Tuple for 0..=12)]
-//! fn f<T: Tuple>(t: T) -> T { t }  // invalid
-//! ```
 //! - Standalone `async` and `unsafe` functions are not supported.
 //! - Standalone functions require explicit lifetimes on references
 //! ```rust ignore
@@ -336,7 +325,7 @@ use proc_macro_error::{abort, abort_call_site, proc_macro_error};
 use quote::{format_ident, ToTokens};
 use specific::{ident_to_path, BlockState, SpecificContext};
 use syn::punctuated::Punctuated;
-use syn::{parse_quote, token, Expr, Generics, Item, ItemImpl, Pat};
+use syn::{parse_quote, token, Expr, GenericParam, Generics, Item, ItemImpl, Pat, TypeParam};
 
 #[doc(hidden)]
 #[proc_macro]
@@ -456,6 +445,7 @@ impl IterationTrait {
                     let fn_vis = &function.vis;
                     let trait_name = format_ident!("_typle_fn_{}", fn_name);
                     let fn_type_params = &function.sig.generics.params;
+                    let fn_type_params_no_constraints = remove_constraints(fn_type_params);
                     let fn_input_params = &function.sig.inputs;
                     let mut type_tuple = syn::TypeTuple {
                         paren_token: token::Paren::default(),
@@ -494,7 +484,7 @@ impl IterationTrait {
                     output.push(trait_item);
                     let fn_item = parse_quote!(
                         #(#fn_meta)*
-                        #fn_vis fn #fn_name <#fn_type_params>(#fn_input_params) -> <#type_tuple as #trait_name>::Return
+                        #fn_vis fn #fn_name <#fn_type_params_no_constraints>(#fn_input_params) -> <#type_tuple as #trait_name>::Return
                         where
                             #type_tuple: #trait_name,
                         {
@@ -571,13 +561,9 @@ impl IterationTrait {
     }
 
     fn has_typles(&self, generics: &Generics) -> bool {
-        let Some(where_clause) = &generics.where_clause else {
-            return false;
-        };
-
-        for predicate in &where_clause.predicates {
-            if let syn::WherePredicate::Type(predicate_type) = predicate {
-                for bound in &predicate_type.bounds {
+        for param in &generics.params {
+            if let GenericParam::Type(type_param) = param {
+                for bound in &type_param.bounds {
                     if let syn::TypeParamBound::Trait(trait_bound) = bound {
                         let trait_path = &trait_bound.path;
                         if trait_path.leading_colon.is_none()
@@ -591,8 +577,43 @@ impl IterationTrait {
             }
         }
 
+        if let Some(where_clause) = &generics.where_clause {
+            for predicate in &where_clause.predicates {
+                if let syn::WherePredicate::Type(predicate_type) = predicate {
+                    for bound in &predicate_type.bounds {
+                        if let syn::TypeParamBound::Trait(trait_bound) = bound {
+                            let trait_path = &trait_bound.path;
+                            if trait_path.leading_colon.is_none()
+                                && trait_path.segments.len() == 1
+                                && trait_path.segments[0].ident == self.ident
+                            {
+                                return true;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         false
     }
+}
+
+fn remove_constraints(
+    fn_type_params: &Punctuated<GenericParam, token::Comma>,
+) -> Punctuated<GenericParam, token::Comma> {
+    let mut output = Punctuated::new();
+    for param in fn_type_params.into_iter() {
+        if let GenericParam::Type(ref type_param) = param {
+            output.push(GenericParam::Type(TypeParam {
+                bounds: Punctuated::new(),
+                ..type_param.clone()
+            }));
+        } else {
+            output.push(param.clone());
+        }
+    }
+    output
 }
 
 fn pat_to_tuple(pat: Pat) -> Expr {

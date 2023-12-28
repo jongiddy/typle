@@ -11,7 +11,7 @@ use syn::{
     ExprTuple, Fields, FieldsNamed, FieldsUnnamed, GenericArgument, GenericParam, Generics,
     ImplItem, Index, Item, Lit, LitInt, Macro, MacroDelimiter, Member, Pat, Path, PathArguments,
     PathSegment, PredicateType, QSelf, RangeLimits, ReturnType, Stmt, Type, TypeMacro,
-    TypeParamBound, TypePath, TypeTuple, Variant, WhereClause, WherePredicate,
+    TypeParamBound, TypePath, TypeTuple, Variant, WherePredicate,
 };
 
 use crate::constant::{evaluate_bool, evaluate_range, evaluate_usize};
@@ -53,7 +53,7 @@ pub struct SpecificContext<'a> {
 }
 
 impl<'a> SpecificContext<'a> {
-    pub fn handle_where_clause(&self, where_clause: &mut Option<WhereClause>) -> Option<Self> {
+    pub fn handle_typle_constraints(&self, generics: &mut Generics) -> Option<Self> {
         fn get_type_ident(predicate_type: &PredicateType) -> Option<&Ident> {
             if let Type::Path(type_path) = &predicate_type.bounded_ty {
                 if type_path.qself.is_none() {
@@ -64,65 +64,27 @@ impl<'a> SpecificContext<'a> {
         }
 
         let mut context = None;
-        if let Some(where_clause) = where_clause.as_mut() {
+
+        for param in &mut generics.params {
+            if let GenericParam::Type(type_param) = param {
+                let type_ident = &type_param.ident;
+                if let Some(typle) = self.typle_bounds(&type_param.bounds, type_ident) {
+                    let context = context.get_or_insert_with(|| self.clone());
+                    context.typles.insert(type_ident.clone(), typle);
+                    type_param.bounds = Punctuated::new();
+                }
+            }
+        }
+
+        if let Some(where_clause) = generics.where_clause.as_mut() {
             let predicates = std::mem::take(&mut where_clause.predicates);
             for predicate in predicates {
                 if let WherePredicate::Type(predicate_type) = &predicate {
                     if let Some(type_ident) = get_type_ident(predicate_type) {
-                        let mut bounds = predicate_type.bounds.iter();
-                        if let Some(TypeParamBound::Trait(trait_bound)) = bounds.next() {
-                            if bounds.next().is_none() {
-                                let path = &trait_bound.path;
-                                if path.leading_colon.is_none() && path.segments.len() == 1 {
-                                    if let Some(segment) = path.segments.first() {
-                                        if &segment.ident == self.typle_trait {
-                                            match &segment.arguments {
-                                                PathArguments::None => {
-                                                    let context =
-                                                        context.get_or_insert_with(|| self.clone());
-                                                    context.typles.insert(
-                                                        type_ident.clone(),
-                                                        Typle::Generic(
-                                                            (0..self.typle_len)
-                                                                .map(|i| {
-                                                                    format!("{}{}", &type_ident, i)
-                                                                })
-                                                                .collect(),
-                                                        ),
-                                                    );
-                                                    continue;
-                                                }
-                                                PathArguments::AngleBracketed(arguments) => {
-                                                    if arguments.args.len() != 1 {
-                                                        abort!(
-                                                            arguments,
-                                                            "expected single argument"
-                                                        );
-                                                    }
-                                                    if let Some(GenericArgument::Type(ty)) =
-                                                        arguments.args.first()
-                                                    {
-                                                        let context = context
-                                                            .get_or_insert_with(|| self.clone());
-                                                        context.typles.insert(
-                                                            type_ident.clone(),
-                                                            Typle::Specific(ty.clone()),
-                                                        );
-                                                        continue;
-                                                    }
-                                                    abort!(arguments, "expected type");
-                                                }
-                                                PathArguments::Parenthesized(arguments) => {
-                                                    abort!(
-                                                        arguments,
-                                                        "parenthesized arguments not supported"
-                                                    )
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
+                        if let Some(typle) = self.typle_bounds(&predicate_type.bounds, type_ident) {
+                            let context = context.get_or_insert_with(|| self.clone());
+                            context.typles.insert(type_ident.clone(), typle);
+                            continue;
                         }
                     }
                 }
@@ -130,6 +92,48 @@ impl<'a> SpecificContext<'a> {
             }
         }
         context
+    }
+
+    fn typle_bounds(
+        &self,
+        bounds: &Punctuated<TypeParamBound, token::Plus>,
+        type_ident: &Ident,
+    ) -> Option<Typle> {
+        let mut bounds = bounds.iter();
+        if let Some(TypeParamBound::Trait(trait_bound)) = bounds.next() {
+            if bounds.next().is_none() {
+                let path = &trait_bound.path;
+                if path.leading_colon.is_none() && path.segments.len() == 1 {
+                    if let Some(segment) = path.segments.first() {
+                        if &segment.ident == self.typle_trait {
+                            match &segment.arguments {
+                                PathArguments::None => {
+                                    return Some(Typle::Generic(
+                                        (0..self.typle_len)
+                                            .map(|i| format!("{}{}", &type_ident, i))
+                                            .collect(),
+                                    ));
+                                }
+                                PathArguments::AngleBracketed(arguments) => {
+                                    if arguments.args.len() != 1 {
+                                        abort!(arguments, "expected single argument");
+                                    }
+                                    if let Some(GenericArgument::Type(ty)) = arguments.args.first()
+                                    {
+                                        return Some(Typle::Specific(ty.clone()));
+                                    }
+                                    abort!(arguments, "expected type");
+                                }
+                                PathArguments::Parenthesized(arguments) => {
+                                    abort!(arguments, "parenthesized arguments not supported")
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        None
     }
 
     fn replace_block(&self, block: &mut Block, state: &mut BlockState) {
@@ -911,7 +915,7 @@ impl<'a> SpecificContext<'a> {
     pub fn replace_item(&self, item: &mut Item, top_level: bool, state: &mut BlockState) {
         match item {
             Item::Const(r#const) => {
-                let context = self.handle_where_clause(&mut r#const.generics.where_clause);
+                let context = self.handle_typle_constraints(&mut r#const.generics);
                 let context = context.as_ref().unwrap_or(self);
                 context.replace_type(&mut r#const.ty);
                 context.replace_expr(&mut r#const.expr, state);
@@ -920,7 +924,7 @@ impl<'a> SpecificContext<'a> {
                 if top_level {
                     r#enum.ident = format_ident!("{}{}", r#enum.ident, self.typle_len);
                 }
-                let context = self.handle_where_clause(&mut r#enum.generics.where_clause);
+                let context = self.handle_typle_constraints(&mut r#enum.generics);
                 let context = context.as_ref().unwrap_or(self);
                 context.replace_generics(&mut r#enum.generics);
                 for mut variant in std::mem::take(&mut r#enum.variants) {
@@ -1019,14 +1023,14 @@ impl<'a> SpecificContext<'a> {
                 if top_level {
                     function.sig.ident = format_ident!("{}{}", function.sig.ident, self.typle_len);
                 }
-                let context = self.handle_where_clause(&mut function.sig.generics.where_clause);
+                let context = self.handle_typle_constraints(&mut function.sig.generics);
                 let context = context.as_ref().unwrap_or(self);
                 context.replace_signature(&mut function.sig);
                 context.replace_block(&mut function.block, state);
             }
             Item::ForeignMod(_) => abort!(item, "ForeignMod unsupported"),
             Item::Impl(r#impl) => {
-                let context = self.handle_where_clause(&mut r#impl.generics.where_clause);
+                let context = self.handle_typle_constraints(&mut r#impl.generics);
                 let context = context.as_ref().unwrap_or(self);
                 context.replace_generics(&mut r#impl.generics);
                 if let Some((_, path, _)) = &mut r#impl.trait_ {
@@ -1040,8 +1044,8 @@ impl<'a> SpecificContext<'a> {
                             context.replace_expr(&mut constant.expr, state);
                         }
                         ImplItem::Fn(function) => {
-                            let inner_context = context
-                                .handle_where_clause(&mut function.sig.generics.where_clause);
+                            let inner_context =
+                                context.handle_typle_constraints(&mut function.sig.generics);
                             let inner_context = inner_context.as_ref().unwrap_or(context);
                             inner_context.replace_signature(&mut function.sig);
                             inner_context.replace_block(&mut function.block, state);
@@ -1063,7 +1067,7 @@ impl<'a> SpecificContext<'a> {
                 if top_level {
                     r#struct.ident = format_ident!("{}{}", r#struct.ident, self.typle_len);
                 }
-                let context = self.handle_where_clause(&mut r#struct.generics.where_clause);
+                let context = self.handle_typle_constraints(&mut r#struct.generics);
                 let context = context.as_ref().unwrap_or(self);
                 context.replace_generics(&mut r#struct.generics);
                 context.replace_fields(&mut r#struct.fields);
@@ -1074,7 +1078,7 @@ impl<'a> SpecificContext<'a> {
                 if top_level {
                     r#type.ident = format_ident!("{}{}", r#type.ident, self.typle_len);
                 }
-                let context = self.handle_where_clause(&mut r#type.generics.where_clause);
+                let context = self.handle_typle_constraints(&mut r#type.generics);
                 let context = context.as_ref().unwrap_or(self);
                 context.replace_generics(&mut r#type.generics);
                 context.replace_type(&mut r#type.ty);

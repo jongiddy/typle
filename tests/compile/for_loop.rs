@@ -7,10 +7,7 @@ struct Looper<T> {
 }
 
 #[typle(Tuple for 8..=8)]
-impl<T> Looper<T>
-where
-    T: Tuple,
-{
+impl<T: Tuple> Looper<T> {
     fn for_loop(&self) {
         'label: for typle_const!(i) in 0..T::LEN {
             // This block does not have a break or continue so does not need a loop.

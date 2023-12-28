@@ -29,18 +29,16 @@ where
 // `heapify` and `zip` as described at
 // https://gist.github.com/soqb/9ce3d4502cc16957b80c388c390baafc#syntax-for-type-transformations
 #[typle(Tuple for 1..=3)]
-fn heapify<T>(params: T) -> typle_for!(i in .. => Box<T<{i}>>)
-where
-    T: Tuple,
-{
+fn heapify<T: Tuple>(params: T) -> typle_for!(i in .. => Box<T<{i}>>) {
     typle_for!(i in .. => Box::new(params[[i]]))
 }
 
-#[typle(Tuple for 1..=3)]
-pub fn zip<A, B>(first: A, second: B) -> typle_for!(i in .. => (A<{i}>, B<{i}>))
-where
-    A: Tuple,
-    B: Tuple,
+#[rustfmt::skip]
+#[typle(Tuple for 1..=12)]
+pub fn zip<A: Tuple, B: Tuple>(
+    first: A,
+    second: B
+) -> typle_for!(i in .. => (A<{i}>, B<{i}>))
 {
     typle_for!(i in .. => (first[[i]], second[[i]]))
 }

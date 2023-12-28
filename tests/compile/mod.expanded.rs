@@ -130,7 +130,7 @@ pub mod function {
         type Return;
         fn apply(self) -> Self::Return;
     }
-    pub fn hash<'a, T, S: Hasher>(
+    pub fn hash<'a, T, S>(
         tuple: &'a T,
         state: &'a mut S,
     ) -> <(&'a T, &'a mut S) as _typle_fn_hash>::Return
@@ -293,6 +293,7 @@ pub mod function {
         type Return;
         fn apply(self) -> Self::Return;
     }
+    #[rustfmt::skip]
     pub fn zip<A, B>(first: A, second: B) -> <(A, B) as _typle_fn_zip>::Return
     where
         (A, B): _typle_fn_zip,
@@ -318,6 +319,337 @@ pub mod function {
         fn apply(self) -> Self::Return {
             let (first, second) = self;
             { ((first.0, second.0), (first.1, second.1), (first.2, second.2)) }
+        }
+    }
+    impl<A0, A1, A2, A3, B0, B1, B2, B3> _typle_fn_zip
+    for ((A0, A1, A2, A3), (B0, B1, B2, B3)) {
+        type Return = ((A0, B0), (A1, B1), (A2, B2), (A3, B3));
+        fn apply(self) -> Self::Return {
+            let (first, second) = self;
+            {
+                (
+                    (first.0, second.0),
+                    (first.1, second.1),
+                    (first.2, second.2),
+                    (first.3, second.3),
+                )
+            }
+        }
+    }
+    impl<A0, A1, A2, A3, A4, B0, B1, B2, B3, B4> _typle_fn_zip
+    for ((A0, A1, A2, A3, A4), (B0, B1, B2, B3, B4)) {
+        type Return = ((A0, B0), (A1, B1), (A2, B2), (A3, B3), (A4, B4));
+        fn apply(self) -> Self::Return {
+            let (first, second) = self;
+            {
+                (
+                    (first.0, second.0),
+                    (first.1, second.1),
+                    (first.2, second.2),
+                    (first.3, second.3),
+                    (first.4, second.4),
+                )
+            }
+        }
+    }
+    impl<A0, A1, A2, A3, A4, A5, B0, B1, B2, B3, B4, B5> _typle_fn_zip
+    for ((A0, A1, A2, A3, A4, A5), (B0, B1, B2, B3, B4, B5)) {
+        type Return = ((A0, B0), (A1, B1), (A2, B2), (A3, B3), (A4, B4), (A5, B5));
+        fn apply(self) -> Self::Return {
+            let (first, second) = self;
+            {
+                (
+                    (first.0, second.0),
+                    (first.1, second.1),
+                    (first.2, second.2),
+                    (first.3, second.3),
+                    (first.4, second.4),
+                    (first.5, second.5),
+                )
+            }
+        }
+    }
+    impl<A0, A1, A2, A3, A4, A5, A6, B0, B1, B2, B3, B4, B5, B6> _typle_fn_zip
+    for ((A0, A1, A2, A3, A4, A5, A6), (B0, B1, B2, B3, B4, B5, B6)) {
+        type Return = (
+            (A0, B0),
+            (A1, B1),
+            (A2, B2),
+            (A3, B3),
+            (A4, B4),
+            (A5, B5),
+            (A6, B6),
+        );
+        fn apply(self) -> Self::Return {
+            let (first, second) = self;
+            {
+                (
+                    (first.0, second.0),
+                    (first.1, second.1),
+                    (first.2, second.2),
+                    (first.3, second.3),
+                    (first.4, second.4),
+                    (first.5, second.5),
+                    (first.6, second.6),
+                )
+            }
+        }
+    }
+    impl<A0, A1, A2, A3, A4, A5, A6, A7, B0, B1, B2, B3, B4, B5, B6, B7> _typle_fn_zip
+    for ((A0, A1, A2, A3, A4, A5, A6, A7), (B0, B1, B2, B3, B4, B5, B6, B7)) {
+        type Return = (
+            (A0, B0),
+            (A1, B1),
+            (A2, B2),
+            (A3, B3),
+            (A4, B4),
+            (A5, B5),
+            (A6, B6),
+            (A7, B7),
+        );
+        fn apply(self) -> Self::Return {
+            let (first, second) = self;
+            {
+                (
+                    (first.0, second.0),
+                    (first.1, second.1),
+                    (first.2, second.2),
+                    (first.3, second.3),
+                    (first.4, second.4),
+                    (first.5, second.5),
+                    (first.6, second.6),
+                    (first.7, second.7),
+                )
+            }
+        }
+    }
+    impl<
+        A0,
+        A1,
+        A2,
+        A3,
+        A4,
+        A5,
+        A6,
+        A7,
+        A8,
+        B0,
+        B1,
+        B2,
+        B3,
+        B4,
+        B5,
+        B6,
+        B7,
+        B8,
+    > _typle_fn_zip
+    for ((A0, A1, A2, A3, A4, A5, A6, A7, A8), (B0, B1, B2, B3, B4, B5, B6, B7, B8)) {
+        type Return = (
+            (A0, B0),
+            (A1, B1),
+            (A2, B2),
+            (A3, B3),
+            (A4, B4),
+            (A5, B5),
+            (A6, B6),
+            (A7, B7),
+            (A8, B8),
+        );
+        fn apply(self) -> Self::Return {
+            let (first, second) = self;
+            {
+                (
+                    (first.0, second.0),
+                    (first.1, second.1),
+                    (first.2, second.2),
+                    (first.3, second.3),
+                    (first.4, second.4),
+                    (first.5, second.5),
+                    (first.6, second.6),
+                    (first.7, second.7),
+                    (first.8, second.8),
+                )
+            }
+        }
+    }
+    impl<
+        A0,
+        A1,
+        A2,
+        A3,
+        A4,
+        A5,
+        A6,
+        A7,
+        A8,
+        A9,
+        B0,
+        B1,
+        B2,
+        B3,
+        B4,
+        B5,
+        B6,
+        B7,
+        B8,
+        B9,
+    > _typle_fn_zip
+    for (
+        (A0, A1, A2, A3, A4, A5, A6, A7, A8, A9),
+        (B0, B1, B2, B3, B4, B5, B6, B7, B8, B9),
+    ) {
+        type Return = (
+            (A0, B0),
+            (A1, B1),
+            (A2, B2),
+            (A3, B3),
+            (A4, B4),
+            (A5, B5),
+            (A6, B6),
+            (A7, B7),
+            (A8, B8),
+            (A9, B9),
+        );
+        fn apply(self) -> Self::Return {
+            let (first, second) = self;
+            {
+                (
+                    (first.0, second.0),
+                    (first.1, second.1),
+                    (first.2, second.2),
+                    (first.3, second.3),
+                    (first.4, second.4),
+                    (first.5, second.5),
+                    (first.6, second.6),
+                    (first.7, second.7),
+                    (first.8, second.8),
+                    (first.9, second.9),
+                )
+            }
+        }
+    }
+    impl<
+        A0,
+        A1,
+        A2,
+        A3,
+        A4,
+        A5,
+        A6,
+        A7,
+        A8,
+        A9,
+        A10,
+        B0,
+        B1,
+        B2,
+        B3,
+        B4,
+        B5,
+        B6,
+        B7,
+        B8,
+        B9,
+        B10,
+    > _typle_fn_zip
+    for (
+        (A0, A1, A2, A3, A4, A5, A6, A7, A8, A9, A10),
+        (B0, B1, B2, B3, B4, B5, B6, B7, B8, B9, B10),
+    ) {
+        type Return = (
+            (A0, B0),
+            (A1, B1),
+            (A2, B2),
+            (A3, B3),
+            (A4, B4),
+            (A5, B5),
+            (A6, B6),
+            (A7, B7),
+            (A8, B8),
+            (A9, B9),
+            (A10, B10),
+        );
+        fn apply(self) -> Self::Return {
+            let (first, second) = self;
+            {
+                (
+                    (first.0, second.0),
+                    (first.1, second.1),
+                    (first.2, second.2),
+                    (first.3, second.3),
+                    (first.4, second.4),
+                    (first.5, second.5),
+                    (first.6, second.6),
+                    (first.7, second.7),
+                    (first.8, second.8),
+                    (first.9, second.9),
+                    (first.10, second.10),
+                )
+            }
+        }
+    }
+    impl<
+        A0,
+        A1,
+        A2,
+        A3,
+        A4,
+        A5,
+        A6,
+        A7,
+        A8,
+        A9,
+        A10,
+        A11,
+        B0,
+        B1,
+        B2,
+        B3,
+        B4,
+        B5,
+        B6,
+        B7,
+        B8,
+        B9,
+        B10,
+        B11,
+    > _typle_fn_zip
+    for (
+        (A0, A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11),
+        (B0, B1, B2, B3, B4, B5, B6, B7, B8, B9, B10, B11),
+    ) {
+        type Return = (
+            (A0, B0),
+            (A1, B1),
+            (A2, B2),
+            (A3, B3),
+            (A4, B4),
+            (A5, B5),
+            (A6, B6),
+            (A7, B7),
+            (A8, B8),
+            (A9, B9),
+            (A10, B10),
+            (A11, B11),
+        );
+        fn apply(self) -> Self::Return {
+            let (first, second) = self;
+            {
+                (
+                    (first.0, second.0),
+                    (first.1, second.1),
+                    (first.2, second.2),
+                    (first.3, second.3),
+                    (first.4, second.4),
+                    (first.5, second.5),
+                    (first.6, second.6),
+                    (first.7, second.7),
+                    (first.8, second.8),
+                    (first.9, second.9),
+                    (first.10, second.10),
+                    (first.11, second.11),
+                )
+            }
         }
     }
 }
