@@ -78,7 +78,7 @@
 //! - `T: Tuple<C>` - each component of the tuple has type `C`
 //! - `T<_>: Copy` - each component of the tuple implements `Copy`
 //! - `T<0>: Copy` - the first component of the tuple implements `Copy`
-//! - `T<1..=2>: Copy` - the second and third components implement `Copy`
+//! - `T<{1..=2}>: Copy` - the second and third components implement `Copy`
 //! - `typle_bound!` - the most general way to bound components,
 //! allowing the iteration value to be used in the trait bounds
 //!
@@ -124,7 +124,8 @@
 //!     T: Tuple<C>,
 //!     C: for<'a> std::ops::AddAssign<&'a C> + Default,
 //! {
-//!     // Return the sums of all even positions and all odd positions
+//!     // Return the sums of all even positions and all odd positions, using
+//!     // 0-indexing so the first position is even and second position is odd.
 //!     fn interleave(&self) -> (C, C) {
 //!         let mut even_odd = (C::default(), C::default());
 //!         for typle_const!(i) in 0..T::LEN {
@@ -281,9 +282,30 @@
 //!
 //! # Limitations
 //!
+//! - A typle constraint can only appear in the `where` clause. This includes the constraint on the
+//! tuple type (`T: Tuple`) and any constraints on the tuple components.
+//! ```rust ignore
+//! #[typle(Tuple for 0..=12)]
+//! fn f<T: Tuple>(t: T) -> T { t }  // invalid
+//! ```
+//! - Standalone `async` and `unsafe` functions are not supported.
+//! - Standalone functions require explicit lifetimes on references
+//! ```rust ignore
+//! #[typle(Tuple for 1..=3)]
+//! pub fn hash<'a, T, S: Hasher>(tuple: &'a T, state: &'a mut S)
+//! where
+//!     T: Tuple,
+//!     T<_>: Hash,
+//!     T<{T::LEN - 1}>: ?Sized,
+//! {
+//!     for typle_const!(i) in 0..T::LEN {
+//!         tuple[[i]].hash(state);
+//!     }
+//! }
+//! ```
 //! - Shadowing of const variables introduced using typle macros is not supported. For example, in:
 //! ```rust ignore
-//! for typle_const!(i) in 2..4 {
+//! for typle_const!(i) in 2..=3 {
 //!     let i = 1;
 //!     func(i)
 //! }
@@ -292,27 +314,13 @@
 //! values are introduced. For example in a `typle_for!` macro.
 //! - const-for loops do not support labelled continue.
 //! ```rust ignore
-//! 'label: for typle_const!(i) in 2..4 {
+//! 'label: for typle_const!(i) in 2..=3 {
 //!     loop {
 //!         if typle_const!(i == 2) {
 //!             continue 'label;  // compile error
 //!         } else {
 //!             break 'label;  // works
 //!         }
-//!     }
-//! }
-//! ```
-//! - Standalone functions require explicit lifetimes on references
-//! ```rust ignore
-//! #[typle(Tuple for 1..=3)]
-//! fn hash<'a, T, S>(tuple: T, state: &'a mut S)
-//! where
-//!     T: Tuple,
-//!     T<_>: Hash,
-//!     S: Hasher,
-//! {
-//!     for typle_const!(i) in 0..T::LEN {
-//!         tuple[[i]].hash(state);
 //!     }
 //! }
 //! ```

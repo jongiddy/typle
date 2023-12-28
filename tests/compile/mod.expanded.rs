@@ -126,23 +126,23 @@ pub mod function {
     use std::hash::{Hash, Hasher};
     use std::ops::Mul;
     #[allow(non_camel_case_types)]
-    trait _typle_fn_hash {
+    pub trait _typle_fn_hash {
         type Return;
         fn apply(self) -> Self::Return;
     }
-    fn hash<'a, T, S>(
-        tuple: T,
+    pub fn hash<'a, T, S: Hasher>(
+        tuple: &'a T,
         state: &'a mut S,
-    ) -> <(T, &'a mut S) as _typle_fn_hash>::Return
+    ) -> <(&'a T, &'a mut S) as _typle_fn_hash>::Return
     where
-        (T, &'a mut S): _typle_fn_hash,
+        (&'a T, &'a mut S): _typle_fn_hash,
     {
-        <(T, &'a mut S) as _typle_fn_hash>::apply((tuple, state))
+        <(&'a T, &'a mut S) as _typle_fn_hash>::apply((tuple, state))
     }
-    impl<'a, T0, S> _typle_fn_hash for ((T0,), &'a mut S)
+    impl<'a, T0, S: Hasher> _typle_fn_hash for (&'a (T0,), &'a mut S)
     where
         T0: Hash,
-        S: Hasher,
+        T0: ?Sized,
     {
         type Return = ();
         fn apply(self) -> Self::Return {
@@ -157,11 +157,11 @@ pub mod function {
             }
         }
     }
-    impl<'a, T0, T1, S> _typle_fn_hash for ((T0, T1), &'a mut S)
+    impl<'a, T0, T1, S: Hasher> _typle_fn_hash for (&'a (T0, T1), &'a mut S)
     where
         T0: Hash,
         T1: Hash,
-        S: Hasher,
+        T1: ?Sized,
     {
         type Return = ();
         fn apply(self) -> Self::Return {
@@ -179,12 +179,12 @@ pub mod function {
             }
         }
     }
-    impl<'a, T0, T1, T2, S> _typle_fn_hash for ((T0, T1, T2), &'a mut S)
+    impl<'a, T0, T1, T2, S: Hasher> _typle_fn_hash for (&'a (T0, T1, T2), &'a mut S)
     where
         T0: Hash,
         T1: Hash,
         T2: Hash,
-        S: Hasher,
+        T2: ?Sized,
     {
         type Return = ();
         fn apply(self) -> Self::Return {

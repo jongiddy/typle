@@ -1,4 +1,6 @@
-use crate::compile::function::zip;
+use std::hash::Hasher as _;
+
+use crate::compile::function::{hash, zip};
 
 mod compile;
 
@@ -6,6 +8,17 @@ mod compile;
 fn test_expand() {
     macrotest::expand("tests/expand/*.rs");
     macrotest::expand("tests/compile/mod.rs");
+}
+
+#[test]
+fn test_hash() {
+    let t = (1, 2, 3);
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    hash(&t, &mut hasher);
+    assert_eq!(hasher.finish(), 646939227381880718);
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    hash(&("one", "two"), &mut hasher);
+    assert_eq!(hasher.finish(), 15995114744266341102);
 }
 
 #[test]

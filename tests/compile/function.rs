@@ -3,16 +3,13 @@ use typle::typle;
 use std::hash::{Hash, Hasher};
 use std::ops::Mul;
 
-// Implementation of standalone functions requires explicit lifetimes and does
-// not permit unsized types in tuples. Compare with trait implementation in
-// `hash.rs`
+// Implementation of standalone functions requires explicit lifetimes.
 #[typle(Tuple for 1..=3)]
-fn hash<'a, T, S>(tuple: T, state: &'a mut S)
+pub fn hash<'a, T, S: Hasher>(tuple: &'a T, state: &'a mut S)
 where
     T: Tuple,
     T<_>: Hash,
-    // T<{T::LEN - 1}>: ?Sized,
-    S: Hasher,
+    T<{ T::LEN - 1 }>: ?Sized,
 {
     for typle_const!(i) in 0..T::LEN {
         tuple[[i]].hash(state);
