@@ -6,7 +6,7 @@ multiple lengths.
 A function to zip a pair of tuples into a tuple of pairs:
 
 ```rust
-#[typle(Tuple for 1..=12)]
+#[typle(Tuple for 0..=12)]
 pub fn zip<A: Tuple, B: Tuple>(
     first: A,
     second: B
@@ -17,7 +17,11 @@ pub fn zip<A: Tuple, B: Tuple>(
 
 let s = ("LHR", "FCO", "ZRH");
 let t = (51.5, 41.8, 47.5);
-assert_eq!(zip(s, t), (("LHR", 51.5), ("FCO", 41.8), ("ZRH", 47.5)));
+assert_eq!(
+    zip(s, t),
+    (("LHR", 51.5), ("FCO", 41.8), ("ZRH", 47.5))
+);
+assert_eq!(zip((), ()), ());
 ```
 
 The implementation of the `Hash` trait for tuples simply hashes each component

@@ -216,6 +216,17 @@ pub mod function {
     {
         <(T, M) as _typle_fn_multiply>::apply((t, m))
     }
+    impl<M> _typle_fn_multiply for ((), M)
+    where
+        M: Copy,
+    {
+        type Return = ();
+        fn apply(self) -> Self::Return {
+            #[allow(unused_variables)]
+            let (t, m) = self;
+            { () }
+        }
+    }
     impl<T0, M> _typle_fn_multiply for ((T0,), M)
     where
         T0: Mul<M>,
@@ -223,6 +234,7 @@ pub mod function {
     {
         type Return = (<T0 as Mul<M>>::Output,);
         fn apply(self) -> Self::Return {
+            #[allow(unused_variables)]
             let (t, m) = self;
             { (t.0 * m,) }
         }
@@ -235,6 +247,7 @@ pub mod function {
     {
         type Return = (<T0 as Mul<M>>::Output, <T1 as Mul<M>>::Output);
         fn apply(self) -> Self::Return {
+            #[allow(unused_variables)]
             let (t, m) = self;
             { (t.0 * m, t.1 * m) }
         }
@@ -252,6 +265,7 @@ pub mod function {
             <T2 as Mul<M>>::Output,
         );
         fn apply(self) -> Self::Return {
+            #[allow(unused_variables)]
             let (t, m) = self;
             { (t.0 * m, t.1 * m, t.2 * m) }
         }
@@ -267,9 +281,18 @@ pub mod function {
     {
         <(T,) as _typle_fn_heapify>::apply((params,))
     }
+    impl _typle_fn_heapify for ((),) {
+        type Return = ();
+        fn apply(self) -> Self::Return {
+            #[allow(unused_variables)]
+            let (params,) = self;
+            { () }
+        }
+    }
     impl<T0> _typle_fn_heapify for ((T0,),) {
         type Return = (Box<T0>,);
         fn apply(self) -> Self::Return {
+            #[allow(unused_variables)]
             let (params,) = self;
             { (Box::new(params.0),) }
         }
@@ -277,6 +300,7 @@ pub mod function {
     impl<T0, T1> _typle_fn_heapify for ((T0, T1),) {
         type Return = (Box<T0>, Box<T1>);
         fn apply(self) -> Self::Return {
+            #[allow(unused_variables)]
             let (params,) = self;
             { (Box::new(params.0), Box::new(params.1)) }
         }
@@ -284,6 +308,7 @@ pub mod function {
     impl<T0, T1, T2> _typle_fn_heapify for ((T0, T1, T2),) {
         type Return = (Box<T0>, Box<T1>, Box<T2>);
         fn apply(self) -> Self::Return {
+            #[allow(unused_variables)]
             let (params,) = self;
             { (Box::new(params.0), Box::new(params.1), Box::new(params.2)) }
         }
@@ -300,9 +325,18 @@ pub mod function {
     {
         <(A, B) as _typle_fn_zip>::apply((first, second))
     }
+    impl _typle_fn_zip for ((), ()) {
+        type Return = ();
+        fn apply(self) -> Self::Return {
+            #[allow(unused_variables)]
+            let (first, second) = self;
+            { () }
+        }
+    }
     impl<A0, B0> _typle_fn_zip for ((A0,), (B0,)) {
         type Return = ((A0, B0),);
         fn apply(self) -> Self::Return {
+            #[allow(unused_variables)]
             let (first, second) = self;
             { ((first.0, second.0),) }
         }
@@ -310,6 +344,7 @@ pub mod function {
     impl<A0, A1, B0, B1> _typle_fn_zip for ((A0, A1), (B0, B1)) {
         type Return = ((A0, B0), (A1, B1));
         fn apply(self) -> Self::Return {
+            #[allow(unused_variables)]
             let (first, second) = self;
             { ((first.0, second.0), (first.1, second.1)) }
         }
@@ -317,6 +352,7 @@ pub mod function {
     impl<A0, A1, A2, B0, B1, B2> _typle_fn_zip for ((A0, A1, A2), (B0, B1, B2)) {
         type Return = ((A0, B0), (A1, B1), (A2, B2));
         fn apply(self) -> Self::Return {
+            #[allow(unused_variables)]
             let (first, second) = self;
             { ((first.0, second.0), (first.1, second.1), (first.2, second.2)) }
         }
@@ -325,6 +361,7 @@ pub mod function {
     for ((A0, A1, A2, A3), (B0, B1, B2, B3)) {
         type Return = ((A0, B0), (A1, B1), (A2, B2), (A3, B3));
         fn apply(self) -> Self::Return {
+            #[allow(unused_variables)]
             let (first, second) = self;
             {
                 (
@@ -340,6 +377,7 @@ pub mod function {
     for ((A0, A1, A2, A3, A4), (B0, B1, B2, B3, B4)) {
         type Return = ((A0, B0), (A1, B1), (A2, B2), (A3, B3), (A4, B4));
         fn apply(self) -> Self::Return {
+            #[allow(unused_variables)]
             let (first, second) = self;
             {
                 (
@@ -356,6 +394,7 @@ pub mod function {
     for ((A0, A1, A2, A3, A4, A5), (B0, B1, B2, B3, B4, B5)) {
         type Return = ((A0, B0), (A1, B1), (A2, B2), (A3, B3), (A4, B4), (A5, B5));
         fn apply(self) -> Self::Return {
+            #[allow(unused_variables)]
             let (first, second) = self;
             {
                 (
@@ -381,6 +420,7 @@ pub mod function {
             (A6, B6),
         );
         fn apply(self) -> Self::Return {
+            #[allow(unused_variables)]
             let (first, second) = self;
             {
                 (
@@ -408,6 +448,7 @@ pub mod function {
             (A7, B7),
         );
         fn apply(self) -> Self::Return {
+            #[allow(unused_variables)]
             let (first, second) = self;
             {
                 (
@@ -456,6 +497,7 @@ pub mod function {
             (A8, B8),
         );
         fn apply(self) -> Self::Return {
+            #[allow(unused_variables)]
             let (first, second) = self;
             {
                 (
@@ -511,6 +553,7 @@ pub mod function {
             (A9, B9),
         );
         fn apply(self) -> Self::Return {
+            #[allow(unused_variables)]
             let (first, second) = self;
             {
                 (
@@ -570,6 +613,7 @@ pub mod function {
             (A10, B10),
         );
         fn apply(self) -> Self::Return {
+            #[allow(unused_variables)]
             let (first, second) = self;
             {
                 (
@@ -633,6 +677,7 @@ pub mod function {
             (A11, B11),
         );
         fn apply(self) -> Self::Return {
+            #[allow(unused_variables)]
             let (first, second) = self;
             {
                 (

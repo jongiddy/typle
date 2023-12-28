@@ -49,25 +49,22 @@
 //! Inside `typle` code, individual components of a tuple can be selected using
 //! `<{i}>` for types and `[[i]]` for values.
 //!
-//! The associated constant `LEN` provides the length of the tuple in each
-//! generated item.
-//!
 //! The `typle_for!` macro creates a new variable-length tuple type or value.
 //!
 //! ```rust
 //! # use typle::typle;
-//! // Split off the last component
+//! // Split off the first component
 //! #[typle(Tuple for 1..=3)]
-//! fn split_last<T: Tuple>(
-//!     t: T
-//! ) -> (typle_for!(i in ..T::LEN - 1 => T<{i}>), T<{T::LEN - 1}>)
+//! fn split<T: Tuple>(
+//!     t: T  // t: (T0, T1, T2,...)
+//! ) -> (T<0>, typle_for!(i in 1.. => T<{i}>))   // (T0, (T1, T2,...))
 //! {
-//!     (typle_for!(i in ..T::LEN - 1 => t[[i]]), t[[T::LEN - 1]])
+//!     (t[[0]], typle_for!(i in 1.. => t[[i]]))  // (t.0, (t.1, t.2,...))
 //! }
 //!
-//! assert_eq!(split_last((1, 2, 3)), ((1, 2), 3));
-//! assert_eq!(split_last((1, 2)), ((1,), 2));
-//! assert_eq!(split_last((1,)), ((), 1));
+//! assert_eq!(split((1, 2, 3)), (1, (2, 3)));
+//! assert_eq!(split((2, 3)), (2, (3,)));
+//! assert_eq!(split((3,)), (3, ()));
 //! ```
 
 //! Specify constraints on the tuple components using one of the following
@@ -77,21 +74,22 @@
 //! - `T<0>: Copy` - the first component of the tuple implements `Copy`
 //! - `T<{1..=2}>: Copy` - the second and third components implement `Copy`
 //! - `typle_bound!` - the most general way to bound components,
-//! allowing the iteration value to be used in the trait bounds
+//! allowing the iteration value to be used in the trait bounds, as shown below:
 //!
 //! ```rust
 //! # use typle::typle;
 //! use std::ops::Mul;
 //!
 //! // Return the product of the components of two tuples
-//! #[typle(Tuple for 1..=3)]
+//! #[typle(Tuple for 0..=3)]
 //! fn multiply<S: Tuple, T: Tuple>(
-//!     s: S, t: T
-//! ) -> typle_for!(i in .. => <S<{i}> as Mul<T<{i}>>>::Output)
+//!     s: S,  // s: (S0,...)
+//!     t: T,  // t: (T0,...)
+//! ) -> typle_for!(i in .. => <S<{i}> as Mul<T<{i}>>>::Output)  // (<S0 as Mul<T0>>::Output,...)
 //! where
-//!     typle_bound!(i in .. => S<{i}>): Mul<T<{i}>>,
+//!     typle_bound!(i in .. => S<{i}>): Mul<T<{i}>>,  // S0: Mul<T0>,...
 //! {
-//!     typle_for!(i in .. => s[[i]] * t[[i]])
+//!     typle_for!(i in .. => s[[i]] * t[[i]])  // (s.0 * t.0,...)
 //! }
 //!
 //! assert_eq!(
@@ -99,6 +97,9 @@
 //!     (std::time::Duration::from_secs(20), 6)
 //! )
 //! ```
+//!
+//! The associated constant `LEN` provides the length of the tuple in each
+//! generated item.
 //!
 //! Use the `typle_const!` macro to perform const-for, iterating over a block of
 //! statements.
@@ -497,6 +498,14 @@ impl IterationTrait {
                         syn::ReturnType::Type(_, t) => *t,
                     };
                     let fn_body = function.block;
+                    let let_stmt: syn::Stmt = if self.min_len == 0 {
+                        parse_quote!(
+                            #[allow(unused_variables)]
+                            let #pat_tuple = self;
+                        )
+                    } else {
+                        parse_quote!(let #pat_tuple = self;)
+                    };
                     let items = vec![
                         syn::ImplItem::Type(syn::ImplItemType {
                             attrs: Vec::new(),
@@ -511,7 +520,7 @@ impl IterationTrait {
                         }),
                         parse_quote!(
                             fn apply(self) -> Self::Return {
-                                let #pat_tuple = self;
+                                #let_stmt
                                 #fn_body
                             }
                         ),
