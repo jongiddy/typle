@@ -1,4 +1,4 @@
-use crate::compile::readme::{zip, MyStruct};
+use crate::compile::function::zip;
 
 mod compile;
 
@@ -9,20 +9,10 @@ fn test_expand() {
 }
 
 #[test]
-fn test_tail() {
-    let m = MyStruct::from(('a', 2, "test"));
-    let tail = m.tail();
-    assert_eq!(tail, (2, "test"));
-    let m = MyStruct::from(tail);
-    let tail = m.tail();
-    assert_eq!(tail, ("test",));
-    let m = MyStruct::from(tail);
-    let tail = m.tail();
-    assert_eq!(tail, ());
-}
-
-#[test]
 fn test_zip() {
+    let s = ("LHR", "FCO", "ZRH");
+    let t = (51.5, 41.8, 47.5);
+    assert_eq!(zip(s, t), (("LHR", 51.5), ("FCO", 41.8), ("ZRH", 47.5)));
     let s = ('a', 'b', 'c');
     let t = (1, 2, 3);
     assert_eq!(zip(s, t), (('a', 1), ('b', 2), ('c', 3)));

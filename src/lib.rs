@@ -1,125 +1,283 @@
-//! A proc macro to generate multiple items for tuples. Example code:
+//! The `typle!` macro generates code for multiple tuple lengths:
 //!
-//! ```
+//! ```rust
 //! use typle::typle;
 //!
 //! struct MyStruct<T> {
-//!     pub t: T,
+//!     t: T,
 //! }
+//!
+//! #[typle(Tuple for 0..=3)]
+//! impl<T> From<T> for MyStruct<T>
+//! where
+//!     T: Tuple,
+//! {
+//!     fn from(t: T) -> Self {
+//!         MyStruct { t }
+//!     }
+//! }
+//! ```
+//!
+//! This generates implementations of the `From` trait for tuples with 0 to 3 components:
+//! ```rust
+//! # struct MyStruct<T> {
+//! #     t: T,
+//! # }
+//! impl From<()> for MyStruct<()> {
+//!     fn from(t: ()) -> Self {
+//!         MyStruct { t }
+//!     }
+//! }
+//!
+//! impl<T0> From<(T0,)> for MyStruct<(T0,)> {
+//!     fn from(t: (T0,)) -> Self {
+//!         MyStruct { t }
+//!     }
+//! }
+//!
+//! impl<T0, T1> From<(T0, T1)> for MyStruct<(T0, T1)> {
+//!     fn from(t: (T0, T1)) -> Self {
+//!         MyStruct { t }
+//!     }
+//! }
+//!
+//! impl<T0, T1, T2> From<(T0, T1, T2)> for MyStruct<(T0, T1, T2)> {
+//!     fn from(t: (T0, T1, T2)) -> Self {
+//!         MyStruct { t }
+//!     }
+//! }
+//! ```
+//!
+//! Inside `typle` code, individual components of a tuple can be selected using
+//! `<{i}>` for types and `[[i]]` for values.
+//!
+//! The associated constant `LEN` provides the length of the tuple in each
+//! generated item.
+//!
+//! The `typle_for!` macro creates a new variable-length tuple type or value.
+//!
+//! ```rust
+//! # use typle::typle;
+//! // Split off the last component
+//! #[typle(Tuple for 1..=3)]
+//! fn split_last<T>(
+//!     t: T
+//! ) -> (typle_for!(i in ..T::LEN - 1 => T<{i}>), T<{T::LEN - 1}>)
+//! where
+//!     T: Tuple,
+//! {
+//!     (typle_for!(i in ..T::LEN - 1 => t[[i]]), t[[T::LEN - 1]])
+//! }
+//!
+//! assert_eq!(split_last((1, 2, 3)), ((1, 2), 3));
+//! assert_eq!(split_last((1, 2)), ((1,), 2));
+//! assert_eq!(split_last((1,)), ((), 1));
+//! ```
+
+//! Specify constraints on the tuple components:
+//! - `T: Tuple<C>` - each component of the tuple has type `C`
+//! - `T<_>: Copy` - each component of the tuple implements `Copy`
+//! - `T<0>: Copy` - the first component of the tuple implements `Copy`
+//! - `T<1..=2>: Copy` - the second and third components implement `Copy`
+//! - `typle_bound!` - the most general way to bound components,
+//! allowing the iteration value to be used in the trait bounds
+//!
+//! ```rust
+//! # use typle::typle;
+//! use std::ops::Mul;
+//!
+//! // Return the product of the components of two tuples
+//! #[typle(Tuple for 1..=3)]
+//! fn multiply<S, T>(
+//!     s: S, t: T
+//! ) -> typle_for!(i in .. => <S<{i}> as Mul<T<{i}>>>::Output)
+//! where
+//!     S: Tuple,
+//!     T: Tuple,
+//!     typle_bound!(i in .. => S<{i}>): Mul<T<{i}>>,
+//! {
+//!     typle_for!(i in .. => s[[i]] * t[[i]])
+//! }
+//!
+//! assert_eq!(
+//!     multiply((std::time::Duration::from_secs(5), 2), (4, 3)),
+//!     (std::time::Duration::from_secs(20), 6)
+//! )
+//! ```
+//!
+//! Use the `typle_const!` macro to perform const-for, iterating over a block of
+//! statements.
+//!
+//! ```rust
+//! # use typle::typle;
+//! # struct MyStruct<T> {
+//! #     t: T,
+//! # }
+//! # impl<T0, T1, T2> From<(T0, T1, T2)> for MyStruct<(T0, T1, T2)> {
+//! #     fn from(t: (T0, T1, T2)) -> Self {
+//! #         MyStruct { t }
+//! #     }
+//! # }
+//! #[typle(Tuple for 1..=3)]
+//! impl<T, C> MyStruct<T>
+//! where
+//!     T: Tuple<C>,
+//!     C: for<'a> std::ops::AddAssign<&'a C> + Default,
+//! {
+//!     // Return the sums of all even positions and all odd positions
+//!     fn interleave(&self) -> (C, C) {
+//!         let mut even_odd = (C::default(), C::default());
+//!         for typle_const!(i) in 0..T::LEN {
+//!             even_odd[[i % 2]] += &self.t[[i]];
+//!         }
+//!         even_odd
+//!     }
+//! }
+//!
+//! let m = MyStruct::from((1, 2, 3));
+//! assert_eq!(m.interleave(), (4, 2));
+//! ```
+//!
+//! The following example, simplified from code in the `hefty` crate, shows `typle`
+//! applied to an `enum` using the `typle_variant!` macro. Note the use of `T<{..}>`
+//! and `typle_index!` when referring to a `typle` `struct` or `enum`. This is
+//! required because these items require a numeric suffix: `TupleSequenceState0`,
+//! `TupleSequenceState1`,...
+//!
+//! The `typle_const!` macro also supports const-if on an expression that evaluates
+//! to a `bool`. const-if allows branches that do not compile, as long as they are
+//! `false` at compile-time. For example, this code compiles when `i + 1 == T::LEN`
+//! even though the state `S::<typle_index!(i + 1)>` (`S3` for 3-tuples) is not
+//! defined.
+//!
+//! ```rust
+//! use typle::typle;
 //!
 //! #[typle(Tuple for 1..=3)]
-//! impl<T> MyStruct<T>
+//! mod tuple {
+//!     pub trait Extract {
+//!         type State;
+//!         type Output;
+//!
+//!         fn extract(&self, state: Option<Self::State>) -> Self::Output;
+//!     }
+//!
+//!     pub enum TupleSequenceState<T>
+//!     where
+//!         T: Tuple,
+//!         T<_>: Extract,
+//!     {
+//!         S = typle_variant!(i in .. =>
+//!             typle_for!(j in ..i => T::<{j}>::Output),
+//!             Option<T<{i}>::State>
+//!         ),
+//!     }
+//!
+//!     pub struct TupleSequence<T> {
+//!         tuple: T,
+//!     }
+//!
+//!     impl<T> Extract for TupleSequence<T>
+//!     where
+//!         T: Tuple,
+//!         T<_>: Extract,
+//!     {
+//!         type State = TupleSequenceState<T<{..}>>;
+//!         type Output = typle_for!(i in .. => T<{i}>::Output);
+//!
+//!         fn extract(&self, state: Option<Self::State>) -> Self::Output {
+//!             #[allow(unused_mut)]  // For LEN = 1 `state` is never mutated
+//!             let mut state = state.unwrap_or(Self::State::S::<typle_index!(0)>((), None));
+//!             for typle_const!(i) in 0..T::LEN {
+//!                 // For LEN = 1 there is only one state and the initial `output` variable is unused
+//!                 #[allow(irrefutable_let_patterns, unused_variables)]
+//!                 if let Self::State::S::<typle_index!(i)>(output, inner_state) = state {
+//!                     let matched = self.tuple[[i]].extract(inner_state);
+//!                     let output = typle_for!(j in ..=i =>
+//!                         if typle_const!(j != i) { output[[j]] } else { matched }
+//!                     );
+//!                     if typle_const!(i + 1 == T::LEN) {
+//!                         return output;
+//!                     } else {
+//!                         state = Self::State::S::<typle_index!(i + 1)>(output, None);
+//!                     }
+//!                 }
+//!             }
+//!             unreachable!();
+//!         }
+//!     }
+//! }
+//! ```
+//!
+//! Generated implementation for 3-tuples:
+//! ```rust
+//! # pub trait Extract {
+//! #     type State;
+//! #     type Output;
+//! #     fn extract(&self, state: Option<Self::State>) -> Self::Output;
+//! # }
+//! # pub struct TupleSequence<T> {
+//! #     tuple: T,
+//! # }
+//! pub enum TupleSequenceState3<T0, T1, T2>
 //! where
-//!     T: Tuple<u32>,
+//!     T0: Extract,
+//!     T1: Extract,
+//!     T2: Extract,
 //! {
-//!     fn max(&self) -> Option<u32> {
-//!         let mut max = self.t[[0]];
-//!         for typle_const!(i) in 1..T::LEN {
-//!             if self.t[[i]] > max {
-//!                 max = self.t[[i]];
-//!             }
-//!         }
-//!         Some(max)
-//!     }
+//!     S0((), Option<<T0>::State>),
+//!     S1((<T0>::Output,), Option<<T1>::State>),
+//!     S2((<T0>::Output, <T1>::Output), Option<<T2>::State>),
 //! }
-//! ```
 //!
-//! This code creates implementations for 1-, 2-, and 3-tuples where each component of the tuple is
-//! a `u32`.
-//!
-//! ```
-//! # struct MyStruct<T> {t: T}
-//! impl MyStruct<(u32,)> {
-//!     fn max(&self) -> Option<u32> {
-//!         let mut max = self.t.0;
-//!         { () }
-//!         Some(max)
-//!     }
-//! }
-//! impl MyStruct<(u32, u32)> {
-//!     fn max(&self) -> Option<u32> {
-//!         let mut max = self.t.0;
+//! impl<T0, T1, T2> Extract for TupleSequence<(T0, T1, T2)>
+//! where
+//!     T0: Extract,
+//!     T1: Extract,
+//!     T2: Extract,
+//! {
+//!     type State = TupleSequenceState3<T0, T1, T2>;
+//!     type Output = (<T0>::Output, <T1>::Output, <T2>::Output);
+//!     fn extract(&self, state: Option<Self::State>) -> Self::Output {
+//!         #[allow(unused_mut)]
+//!         let mut state = state.unwrap_or(Self::State::S0((), None));
 //!         {
 //!             {
-//!                 if self.t.1 > max {
-//!                     max = self.t.1;
+//!                 #[allow(irrefutable_let_patterns, unused_variables)]
+//!                 if let Self::State::S0(output, inner_state) = state {
+//!                     let matched = self.tuple.0.extract(inner_state);
+//!                     let output = ({ matched },);
+//!                     {
+//!                         state = Self::State::S1(output, None);
+//!                     }
+//!                 }
+//!             }
+//!             {
+//!                 #[allow(irrefutable_let_patterns, unused_variables)]
+//!                 if let Self::State::S1(output, inner_state) = state {
+//!                     let matched = self.tuple.1.extract(inner_state);
+//!                     let output = ({ output.0 }, { matched });
+//!                     {
+//!                         state = Self::State::S2(output, None);
+//!                     }
+//!                 }
+//!             }
+//!             {
+//!                 #[allow(irrefutable_let_patterns, unused_variables)]
+//!                 if let Self::State::S2(output, inner_state) = state {
+//!                     let matched = self.tuple.2.extract(inner_state);
+//!                     let output = ({ output.0 }, { output.1 }, { matched });
+//!                     {
+//!                         return output;
+//!                     }
 //!                 }
 //!             }
 //!             ()
 //!         }
-//!         Some(max)
-//!     }
-//! }
-//! impl MyStruct<(u32, u32, u32)> {
-//!     fn max(&self) -> Option<u32> {
-//!         let mut max = self.t.0;
-//!         {
-//!             {
-//!                 if self.t.1 > max {
-//!                     max = self.t.1;
-//!                 }
-//!             }
-//!             {
-//!                 if self.t.2 > max {
-//!                     max = self.t.2;
-//!                 }
-//!             }
-//!             ()
-//!         }
-//!         Some(max)
+//!         unreachable!();
 //!     }
 //! }
 //! ```
-//!
-//! The macro arguments `Tuple for 1..=3` consist of an identifier (`Tuple`) to use as a pseudo-trait
-//! in the `where` clause, and a range of tuple lengths `1..=3` for which the item will be created.
-//!
-//! The `Tuple` pseudo-trait is similar to a trait defined as
-//! ```
-//! trait Tuple<Types> {
-//!     const LEN: usize;
-//! }
-//! ```
-//!
-//! `Tuple::LEN` or `T::LEN` provides the number of components for the tuple in the current item.
-//!
-//! If the `where` clause constrains a generic type using the pseudo-trait then the generic type
-//! must be a tuple with a length `Tuple::LEN` and where each component is constrained by the
-//! argument to the trait. The component can either be an explicit type (`where T: Tuple<u32>`),
-//! or each component can be constrained by other traits using `T<_>`:
-//! ```ignore
-//! impl<T> MyStruct<T>
-//! where
-//!     T: Tuple,
-//!     T<_>: Extract,
-//!     T<_>::Output: AsRef<str>,
-//! ```
-//!
-//! Constants (`T<0>`, `T<{T::LEN - 1}>`) and ranges (`T<{1..}>`) are also supported.
-//!
-//! The `typle_bound!` macro allows trait bounds to use the index of the bound type:
-//! ```ignore
-//! impl<T> MyStruct<T>
-//! where
-//!     T: Tuple,
-//!     typle_bound!(i for 1.. => T<{i}): Mul<M<{i - 1}>>,
-//! ```
-//!
-//! The components of a tuple can be iterated over using a `for` loop with an iteration variable
-//! enclosed in `typle_const!` macro. As shown above, this executes the `for` loop body for each
-//! component in the tuple.
-//!
-//! Tuple components are referenced using a double-bracketed index and a constant value, including an
-//! index created using `typle_const!`. Hence `self.t[[i]]` will be replaced by
-//! `self.t.0, self.t.1,...`.
-//!
-//! Other features include using `T<{i}>` to name component types, a `typle_for!` macro to perform
-//! component-by-component operations, support for enums with a `typle_variant!()` macro, and
-//! constant-if for conditional compilation based on constant values including a `typle_const!`
-//! iteration variable. See the [README](https://github.com/jongiddy/typle#readme) and
-//! [the test directory](https://github.com/jongiddy/typle/blob/main/tests/expand/).
-//!
-//! Also, see how `typle` is used in the [`hefty` crate](https://github.com/jongiddy/hefty/blob/main/src/tuple.rs).
 //!
 //! # Limitations
 //!
@@ -144,15 +302,13 @@
 //!     }
 //! }
 //! ```
-//! - Standalone functions require explicit lifetimes on references and cannot accept tuples with
-//! unsized components.
+//! - Standalone functions require explicit lifetimes on references
 //! ```rust ignore
 //! #[typle(Tuple for 1..=3)]
 //! fn hash<'a, T, S>(tuple: T, state: &'a mut S)
 //! where
 //!     T: Tuple,
 //!     T<_>: Hash,
-//!     // T<{T::LEN - 1}>: ?Sized,
 //!     S: Hasher,
 //! {
 //!     for typle_const!(i) in 0..T::LEN {

@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use typle::typle;
 
 struct MyStruct<T> {

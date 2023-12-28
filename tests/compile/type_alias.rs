@@ -1,4 +1,4 @@
-#![allow(type_alias_bounds)]
+#![allow(type_alias_bounds, unused)]
 
 use typle::typle;
 

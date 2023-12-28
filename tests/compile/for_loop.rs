@@ -1,4 +1,4 @@
-#![allow(unreachable_code)]
+#![allow(unreachable_code, unused)]
 
 use typle::typle;
 
