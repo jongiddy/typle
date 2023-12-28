@@ -47,9 +47,10 @@
 //! ```
 //!
 //! Inside `typle` code, individual components of a tuple can be selected using
-//! `<{i}>` for types and `[[i]]` for values.
+//! `<{i}>` for types and `[[i]]` for values. The value `i` must be a constant.
 //!
 //! The `typle_for!` macro creates a new variable-length tuple type or value.
+//! Inside the macro the iteration variable is a constant for each component.
 //!
 //! ```rust
 //! # use typle::typle;
@@ -68,7 +69,8 @@
 //! ```
 
 //! Specify constraints on the tuple components using one of the following
-//! forms. These constraints can only appear in the `where` clause.
+//! forms. Except for the first form, these constraints can only appear in the
+//! `where` clause.
 //! - `T: Tuple<C>` - each component of the tuple has type `C`
 //! - `T<_>: Copy` - each component of the tuple implements `Copy`
 //! - `T<0>: Copy` - the first component of the tuple implements `Copy`
@@ -131,8 +133,8 @@
 //!     }
 //! }
 //!
-//! let m = MyStruct::from((1, 2, 3));
-//! assert_eq!(m.interleave(), (4, 2));
+//! let m = MyStruct::from((3, 9, 11));
+//! assert_eq!(m.interleave(), (14, 9));
 //! ```
 //!
 //! The following example, simplified from code in the `hefty` crate, shows `typle`

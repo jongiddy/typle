@@ -1,9 +1,10 @@
 # typle
 
-The `typle` crate provides a `typle!` macro to create items for tuples of
+The `typle` crate provides a macro to create items for tuples of
 multiple lengths.
 
-A function to zip a pair of tuples into a tuple of pairs:
+For example it can define a function, for tuples up to length 12, to zip a pair
+of tuples into a tuple of pairs:
 
 ```rust
 #[typle(Tuple for 0..=12)]
@@ -24,8 +25,7 @@ assert_eq!(
 assert_eq!(zip((), ()), ());
 ```
 
-The implementation of the `Hash` trait for tuples simply hashes each component
-of the tuple.
+The `Hash` trait for tuples hashes each component of the tuple.
 
 Using `typle` this can be written as:
 
@@ -38,9 +38,9 @@ impl Hash for () {
 #[typle(Tuple for 1..=12)]
 impl<T> Hash for T
 where
-    T: Tuple,
-    T<_>: Hash,
-    T<{T::LEN - 1}>: ?Sized,
+    T: Tuple,                 // `T` must be a tuple with 1-12 components.
+    T<_>: Hash,               // Each component must implement `Hash`.
+    T<{T::LEN - 1}>: ?Sized,  // The last component may be unsized.
 {
     #[inline]
     fn hash<S: Hasher>(&self, state: &mut S) {
@@ -51,7 +51,8 @@ where
 }
 ```
 
-Compare this implementation to the actual implementation (without docs) in the standard library:
+Compare the `typle` implementation above to the current implementation
+(excluding docs) in the standard library:
 
 ```rust
 macro_rules! impl_hash_tuple {

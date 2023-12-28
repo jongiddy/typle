@@ -2,9 +2,7 @@ use typle::typle;
 
 // Tuple with all components of the same specific type
 #[typle(Tuple for 0..=2)]
-impl<T> TupleA<T>
-where
-    T: Tuple<u32>,
+impl<T: Tuple<u32>> TupleA<T>
 {}
 
 // Tuple with components that can be different types, but all bound by the
