@@ -741,7 +741,7 @@ pub fn typle_for(_item: proc_macro::TokenStream) -> proc_macro::TokenStream {
 ///     T: Tuple,
 ///     T<_>: Process,
 /// {
-///     Q = typle_variant![.. =>],
+///     Q = typle_variant![..],
 ///     R = typle_variant!{i in 0..T::LEN => r: T<{i}>},
 ///     S = typle_variant!(i in .. => Option<T<{i}>::State>, [u64; i]),
 ///     Done([u64; Tuple::LEN])
@@ -761,8 +761,8 @@ pub fn typle_for(_item: proc_macro::TokenStream) -> proc_macro::TokenStream {
 ///     Q1,
 ///     R0 { r: T0 },
 ///     R1 { r: T1 },
-///     S0(Option<T0::State>, [u64; 0]),
-///     S1(Option<T1::State>, [u64; 1]),
+///     S0(Option<<T0>::State>, [u64; 0]),
+///     S1(Option<<T1>::State>, [u64; 1]),
 ///     Done([u64; 2]),
 /// }
 /// ```

@@ -1193,7 +1193,6 @@ impl<'a> SpecificContext<'a> {
         let mut tokens = std::mem::take(token_stream).into_iter();
         let mut collect = Vec::new();
         let mut pattern = None;
-        let mut startend = None;
         let mut equals = None;
         while let Some(token) = tokens.next() {
             match token {
@@ -1217,54 +1216,9 @@ impl<'a> SpecificContext<'a> {
                     equals = Some(punct);
                 }
                 TokenTree::Punct(punct) if equals.is_some() && punct.as_char() == '>' => {
-                    match parse2::<Expr>(TokenStream::from_iter(collect)) {
-                        Ok(mut expr) => {
-                            let mut state = BlockState::default();
-                            self.replace_expr(&mut expr, &mut state);
-                            if let Expr::Range(range) = expr {
-                                let start = range
-                                    .start
-                                    .as_ref()
-                                    .map(|expr| {
-                                        evaluate_usize(&expr)
-                                            .unwrap_or_else(|| abort!(expr, "range start invalid"))
-                                    })
-                                    .unwrap_or(0);
-                                let end = range
-                                    .end
-                                    .as_ref()
-                                    .map(|expr| {
-                                        evaluate_usize(expr).unwrap_or_else(|| {
-                                            abort!(range.end, "range end invalid")
-                                        })
-                                    })
-                                    .unwrap_or(self.typle_len)
-                                    .checked_add(match range.limits {
-                                        RangeLimits::HalfOpen(_) => 0,
-                                        RangeLimits::Closed(_) => 1,
-                                    })
-                                    .unwrap_or_else(|| {
-                                        abort!(
-                                            range,
-                                            "for length {} range contains no values",
-                                            self.typle_len
-                                        )
-                                    });
-                                if end < start {
-                                    abort!(
-                                        range,
-                                        "for length {} range contains no values",
-                                        self.typle_len
-                                    );
-                                }
-                                startend = Some(start..end);
-                                break;
-                            } else {
-                                abort!(expr, "expected range");
-                            }
-                        }
-                        Err(e) => abort!(default_span, "not an expression: {}", e),
-                    }
+                    equals = None;
+                    *token_stream = TokenStream::from_iter(tokens);
+                    break;
                 }
                 tt => {
                     if let Some(punct) = equals.take() {
@@ -1274,11 +1228,58 @@ impl<'a> SpecificContext<'a> {
                 }
             }
         }
-        let Some(range) = startend else {
-            abort!(default_span, "expected `=>`");
-        };
-        *token_stream = TokenStream::from_iter(tokens);
-        (pattern, range)
+        if let Some(punct) = equals.take() {
+            collect.push(TokenTree::Punct(punct))
+        }
+        if collect.is_empty() {
+            abort!(default_span, "expected range");
+        }
+        match parse2::<Expr>(TokenStream::from_iter(collect)) {
+            Ok(mut expr) => {
+                let mut state = BlockState::default();
+                self.replace_expr(&mut expr, &mut state);
+                if let Expr::Range(range) = expr {
+                    let start = range
+                        .start
+                        .as_ref()
+                        .map(|expr| {
+                            evaluate_usize(&expr)
+                                .unwrap_or_else(|| abort!(expr, "range start invalid"))
+                        })
+                        .unwrap_or(0);
+                    let end = range
+                        .end
+                        .as_ref()
+                        .map(|expr| {
+                            evaluate_usize(expr)
+                                .unwrap_or_else(|| abort!(range.end, "range end invalid"))
+                        })
+                        .unwrap_or(self.typle_len)
+                        .checked_add(match range.limits {
+                            RangeLimits::HalfOpen(_) => 0,
+                            RangeLimits::Closed(_) => 1,
+                        })
+                        .unwrap_or_else(|| {
+                            abort!(
+                                range,
+                                "for length {} range contains no values",
+                                self.typle_len
+                            )
+                        });
+                    if end < start {
+                        abort!(
+                            range,
+                            "for length {} range contains no values",
+                            self.typle_len
+                        );
+                    }
+                    (pattern, start..end)
+                } else {
+                    abort!(expr, "expected range");
+                }
+            }
+            Err(e) => abort!(default_span, "{}", e),
+        }
     }
 
     fn replace_pat(&self, pat: &mut Pat) {
