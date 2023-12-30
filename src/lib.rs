@@ -49,7 +49,7 @@
 //! Inside `typle` code, individual components of a tuple can be selected using
 //! `<{i}>` for types and `[[i]]` for values. The value `i` must be a constant.
 //!
-//! The `typle_for!` macro creates a new variable-length tuple type or value.
+//! The [`typle_for!`] macro creates a new variable-length tuple type or value.
 //! Inside the macro the iteration variable is a constant for each component.
 //!
 //! ```rust
@@ -137,16 +137,25 @@
 //! assert_eq!(m.interleave(), (14, 9));
 //! ```
 //!
-//! The following example, simplified from code in the `hefty` crate, shows `typle`
-//! applied to an `enum` using the `typle_variant!` macro. Note the use of `T<{..}>`
-//! and `typle_index!` when referring to a `typle` `struct` or `enum`. This is
-//! required because these items require a numeric suffix: `TupleSequenceState0`,
-//! `TupleSequenceState1`,...
+//! The next example is simplified from code in the
+//! [`hefty` crate](https://github.com/jongiddy/hefty/blob/main/src/tuple.rs).
 //!
-//! The `typle_const!` macro also supports const-if on an expression that evaluates
+//! The [`typle_variant!`] macro creates multiple enum variants by looping
+//! similarly to `typle_for!`.
+//!
+//! Typled `struct`s and `enum`s require a separate identifier for each tuple length. Hence
+//! they have the tuple length added to their original name. For example
+//! `enum TupleSequenceState<T>` expands to `enum TupleSequenceState3<T0, T1, T2>`
+//! for 3-tuples. When referring to these types from other typled items, use
+//! `TupleSequenceState<T<{..}>>`.
+//!
+//! Use the `typle_index!` macro to concatenate a number to an identifier. For
+//! example `S::<typle_index!(3)>` becomes the identifer `S3`.
+//!
+//! The `typle_const!` macro supports const-if on an expression that evaluates
 //! to a `bool`. const-if allows branches that do not compile, as long as they are
 //! `false` at compile-time. For example, this code compiles when `i + 1 == T::LEN`
-//! even though the state `S::<typle_index!(i + 1)>` (`S3` for 3-tuples) is not
+//! even though the identifier `S::<typle_index!(T::LEN)>` (`S3` for 3-tuples) is not
 //! defined.
 //!
 //! ```rust
@@ -280,6 +289,8 @@
 //!
 //! # Limitations
 //!
+//! - The typle trait (`Tuple` in the examples) cannot be combined with other constraints. To
+//! support `?Sized` tuples constrain the last component using `T<{T::LEN - 1}>: ?Sized`.
 //! - Standalone `async` and `unsafe` functions are not supported.
 //! - Standalone functions require explicit lifetimes on references
 //! ```rust ignore
