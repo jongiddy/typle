@@ -76,7 +76,7 @@
 //! - `T<0>: Copy` - the first component of the tuple implements `Copy`
 //! - `T<{1..=2}>: Copy` - the second and third components implement `Copy`
 //! - `typle_bound!` - the most general way to bound components,
-//! allowing the iteration value to be used in the trait bounds, as shown below:
+//! allowing the iteration variable to be used in the trait bounds, as shown below:
 //!
 //! ```rust
 //! # use typle::typle;
@@ -138,14 +138,15 @@
 //! ```
 //!
 //! The next example is simplified from code in the
-//! [`hefty` crate](https://github.com/jongiddy/hefty/blob/main/src/tuple.rs).
+//! [`hefty` crate](https://github.com/jongiddy/hefty/blob/main/src/tuple.rs) and
+//! demonstrates the use of `typle`` with `enum`s.
 //!
 //! The [`typle_variant!`] macro creates multiple enum variants by looping
 //! similarly to `typle_for!`.
 //!
-//! Typled `struct`s and `enum`s require a separate identifier for each tuple length. Hence
-//! they have the tuple length added to their original name. For example
-//! `enum TupleSequenceState<T>` expands to `enum TupleSequenceState3<T0, T1, T2>`
+//! Typled `enum`s and `struct`s require a separate identifier for each tuple
+//! length. The `typle` macro adds the tuple length to their original name. For
+//! example `enum TupleSequenceState<T>` expands to `enum TupleSequenceState3<T0, T1, T2>`
 //! for 3-tuples. When referring to these types from other typled items, use
 //! `TupleSequenceState<T<{..}>>`.
 //!
@@ -305,6 +306,12 @@
 //!         tuple[[i]].hash(state);
 //!     }
 //! }
+//! ```
+//! - The `const` values used to index tuples can only be created in const-for expressions or other
+//! typle macros. Other `const` values cannot be used.
+//! ```rust ignore
+//! const i: usize = 3;
+//! let a = self.tuple[[i]];  // compile error
 //! ```
 //! - Shadowing of const variables introduced using typle macros is not supported. For example, in:
 //! ```rust ignore
