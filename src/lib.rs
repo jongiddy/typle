@@ -139,7 +139,7 @@
 //!
 //! The next example is simplified from code in the
 //! [`hefty` crate](https://github.com/jongiddy/hefty/blob/main/src/tuple.rs) and
-//! demonstrates the use of `typle`` with `enum`s.
+//! demonstrates the use of `typle` with `enum`s.
 //!
 //! The [`typle_variant!`] macro creates multiple enum variants by looping
 //! similarly to `typle_for!`.
@@ -294,7 +294,9 @@
 //! support `?Sized` tuples constrain the last component using `T<{T::LEN - 1}>: ?Sized`.
 //! - Standalone `async` and `unsafe` functions are not supported.
 //! - Standalone functions require explicit lifetimes on references
-//! ```rust ignore
+//! ```rust
+//! # use std::hash::{Hash, Hasher};
+//! # use typle::typle;
 //! #[typle(Tuple for 1..=3)]
 //! pub fn hash<'a, T, S: Hasher>(tuple: &'a T, state: &'a mut S)
 //! where
