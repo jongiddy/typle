@@ -7,11 +7,11 @@ use quote::{format_ident, ToTokens};
 use syn::punctuated::Punctuated;
 use syn::spanned::Spanned as _;
 use syn::{
-    parse2, parse_quote, token, Block, Expr, ExprArray, ExprBlock, ExprField, ExprLit, ExprRange,
-    ExprTuple, Fields, FieldsNamed, FieldsUnnamed, GenericArgument, GenericParam, Generics,
-    ImplItem, Index, Item, Lit, LitInt, Macro, MacroDelimiter, Member, Pat, Path, PathArguments,
-    PathSegment, PredicateType, QSelf, RangeLimits, ReturnType, Stmt, Type, TypeMacro,
-    TypeParamBound, TypePath, TypeTuple, Variant, WherePredicate,
+    parse2, parse_quote, token, AttrStyle, Attribute, Block, Expr, ExprArray, ExprBlock, ExprField,
+    ExprLit, ExprRange, ExprTuple, Fields, FieldsNamed, FieldsUnnamed, GenericArgument,
+    GenericParam, Generics, ImplItem, Index, Item, Lit, LitInt, Macro, MacroDelimiter, Member,
+    Meta, Pat, Path, PathArguments, PathSegment, PredicateType, QSelf, RangeLimits, ReturnType,
+    Stmt, Token, Type, TypeMacro, TypeParamBound, TypePath, TypeTuple, Variant, WherePredicate,
 };
 
 use crate::constant::{evaluate_bool, evaluate_range, evaluate_usize};
@@ -136,11 +136,66 @@ impl<'a> SpecificContext<'a> {
         None
     }
 
+    // Replace #[typle_attr_if(T::LEN == 1, unused_mut)]
+    fn replace_attrs(&self, attrs: &mut Vec<Attribute>) {
+        if attrs.iter().any(|attr| {
+            if let Some(ident) = attr.path().get_ident() {
+                ident == "typle_attr_if"
+            } else {
+                false
+            }
+        }) {
+            for mut attr in std::mem::replace(attrs, Vec::with_capacity(attrs.len())) {
+                if let (AttrStyle::Outer, Meta::List(meta_list)) = (&attr.style, &mut attr.meta) {
+                    if let Some(ident) = meta_list.path.get_ident() {
+                        if ident == "typle_attr_if" {
+                            let mut tokens = std::mem::take(&mut meta_list.tokens).into_iter();
+                            let expr_tokens = tokens
+                                .by_ref()
+                                .take_while(
+                                    |tt| !matches!(tt, TokenTree::Punct(p) if p.as_char() == ','),
+                                )
+                                .collect();
+                            dbg!(&expr_tokens);
+                            let Ok(mut expr) = parse2::<Expr>(expr_tokens) else {
+                                abort!(ident, "expected expression");
+                            };
+                            let mut state = BlockState::default();
+                            self.replace_expr(&mut expr, &mut state);
+                            let Some(cond) = evaluate_bool(&expr) else {
+                                abort!(ident, "expected boolean expression");
+                            };
+                            if cond {
+                                meta_list.tokens = tokens.collect();
+                                let Ok(nested) = attr.parse_args_with(
+                                    Punctuated::<Meta, Token![,]>::parse_terminated,
+                                ) else {
+                                    abort!(attr, "expected attributes");
+                                };
+                                for meta in nested {
+                                    attrs.push(Attribute {
+                                        pound_token: attr.pound_token,
+                                        style: attr.style,
+                                        bracket_token: attr.bracket_token,
+                                        meta,
+                                    });
+                                }
+                            }
+                            continue;
+                        }
+                    }
+                }
+                attrs.push(attr);
+            }
+        }
+    }
+
     fn replace_block(&self, block: &mut Block, state: &mut BlockState) {
         let mut stmts = std::mem::take(&mut block.stmts).into_iter().peekable();
         while let Some(stmt) = stmts.next() {
             match stmt {
                 Stmt::Local(mut local) => {
+                    self.replace_attrs(&mut local.attrs);
                     self.replace_pat(&mut local.pat);
                     if let Some(init) = &mut local.init {
                         self.replace_expr(&mut init.expr, state);
@@ -178,6 +233,7 @@ impl<'a> SpecificContext<'a> {
                     block.stmts.push(Stmt::Expr(expr, semi));
                 }
                 Stmt::Macro(mut stmt_macro) => {
+                    self.replace_attrs(&mut stmt_macro.attrs);
                     self.replace_macro(&mut stmt_macro.mac, EvaluationContext::Value, state);
                     block.stmts.push(Stmt::Macro(stmt_macro));
                 }
@@ -188,28 +244,35 @@ impl<'a> SpecificContext<'a> {
     fn replace_expr(&self, expr: &mut Expr, state: &mut BlockState) {
         match expr {
             Expr::Array(array) => {
+                self.replace_attrs(&mut array.attrs);
                 for expr in &mut array.elems {
                     self.replace_expr(expr, state);
                 }
             }
             Expr::Assign(assign) => {
+                self.replace_attrs(&mut assign.attrs);
                 self.replace_expr(&mut assign.left, state);
                 self.replace_expr(&mut assign.right, state);
             }
             Expr::Async(r#async) => {
+                self.replace_attrs(&mut r#async.attrs);
                 self.replace_block(&mut r#async.block, state);
             }
             Expr::Await(r#await) => {
+                self.replace_attrs(&mut r#await.attrs);
                 self.replace_expr(&mut r#await.base, state);
             }
             Expr::Binary(binary) => {
+                self.replace_attrs(&mut binary.attrs);
                 self.replace_expr(&mut binary.left, state);
                 self.replace_expr(&mut binary.right, state);
             }
             Expr::Block(block) => {
+                self.replace_attrs(&mut block.attrs);
                 self.replace_block(&mut block.block, state);
             }
             Expr::Break(brk) => {
+                self.replace_attrs(&mut brk.attrs);
                 if let Some(expr) = &mut brk.expr {
                     self.replace_expr(expr, state);
                 }
@@ -218,16 +281,19 @@ impl<'a> SpecificContext<'a> {
                 }
             }
             Expr::Call(call) => {
+                self.replace_attrs(&mut call.attrs);
                 self.replace_expr(&mut call.func, state);
                 for expr in &mut call.args {
                     self.replace_expr(expr, state);
                 }
             }
             Expr::Cast(cast) => {
+                self.replace_attrs(&mut cast.attrs);
                 self.replace_expr(&mut cast.expr, state);
                 self.replace_type(&mut cast.ty);
             }
             Expr::Closure(closure) => {
+                self.replace_attrs(&mut closure.attrs);
                 for pat in &mut closure.inputs {
                     self.replace_pat(pat);
                 }
@@ -237,17 +303,21 @@ impl<'a> SpecificContext<'a> {
                 self.replace_expr(&mut closure.body, state);
             }
             Expr::Const(r#const) => {
+                self.replace_attrs(&mut r#const.attrs);
                 self.replace_block(&mut r#const.block, state);
             }
             Expr::Continue(cont) => {
+                self.replace_attrs(&mut cont.attrs);
                 if cont.label.is_none() {
                     state.unlabelled_control_flow = true;
                 }
             }
             Expr::Field(field) => {
+                self.replace_attrs(&mut field.attrs);
                 self.replace_expr(&mut field.base, state);
             }
             Expr::ForLoop(for_loop) => {
+                self.replace_attrs(&mut for_loop.attrs);
                 self.replace_expr(&mut for_loop.expr, state);
                 // Check for typle_const!(i)
                 if let Pat::Macro(pat_macro) = &mut *for_loop.pat {
@@ -372,9 +442,11 @@ impl<'a> SpecificContext<'a> {
                 self.replace_block(&mut for_loop.body, &mut state);
             }
             Expr::Group(group) => {
+                self.replace_attrs(&mut group.attrs);
                 self.replace_expr(&mut group.expr, state);
             }
             Expr::If(r#if) => {
+                self.replace_attrs(&mut r#if.attrs);
                 // Check for if typle_const!(i == T::LEN) {}
                 if let Expr::Macro(expr_macro) = &mut *r#if.cond {
                     if let Some(macro_ident) = expr_macro.mac.path.get_ident() {
@@ -425,6 +497,7 @@ impl<'a> SpecificContext<'a> {
                 }
             }
             Expr::Index(index) => {
+                self.replace_attrs(&mut index.attrs);
                 self.replace_expr(&mut index.expr, state);
                 if let Expr::Array(array) = &mut *index.index {
                     // t[[0]]
@@ -447,17 +520,21 @@ impl<'a> SpecificContext<'a> {
                 }
             }
             Expr::Let(r#let) => {
+                self.replace_attrs(&mut r#let.attrs);
                 self.replace_pat(&mut r#let.pat);
                 self.replace_expr(&mut r#let.expr, state);
             }
             Expr::Loop(r#loop) => {
+                self.replace_attrs(&mut r#loop.attrs);
                 let mut state = BlockState::default();
                 self.replace_block(&mut r#loop.body, &mut state);
             }
             Expr::Macro(r#macro) => {
+                self.replace_attrs(&mut r#macro.attrs);
                 self.replace_macro(&mut r#macro.mac, EvaluationContext::Value, state);
             }
             Expr::Match(r#match) => {
+                self.replace_attrs(&mut r#match.attrs);
                 self.replace_expr(&mut r#match.expr, state);
                 for arm in &mut r#match.arms {
                     self.replace_pat(&mut arm.pat);
@@ -468,6 +545,7 @@ impl<'a> SpecificContext<'a> {
                 }
             }
             Expr::MethodCall(method_call) => {
+                self.replace_attrs(&mut method_call.attrs);
                 self.replace_expr(&mut method_call.receiver, state);
                 if let Some(args) = &mut method_call.turbofish {
                     // Arc::<T>::new(t)
@@ -481,9 +559,11 @@ impl<'a> SpecificContext<'a> {
                 }
             }
             Expr::Paren(paren) => {
+                self.replace_attrs(&mut paren.attrs);
                 self.replace_expr(&mut paren.expr, state);
             }
             Expr::Path(path) => {
+                self.replace_attrs(&mut path.attrs);
                 if let Some(qself) = &mut path.qself {
                     // <T as Default>::default()
                     // <T::<0> as Default>::default()
@@ -637,6 +717,7 @@ impl<'a> SpecificContext<'a> {
                 }
             }
             Expr::Range(range) => {
+                self.replace_attrs(&mut range.attrs);
                 if let Some(start) = &mut range.start {
                     self.replace_expr(start, state);
                 }
@@ -645,18 +726,22 @@ impl<'a> SpecificContext<'a> {
                 }
             }
             Expr::Reference(reference) => {
+                self.replace_attrs(&mut reference.attrs);
                 self.replace_expr(&mut reference.expr, state);
             }
             Expr::Repeat(repeat) => {
+                self.replace_attrs(&mut repeat.attrs);
                 self.replace_expr(&mut repeat.expr, state);
                 self.replace_expr(&mut repeat.len, state);
             }
             Expr::Return(r#return) => {
+                self.replace_attrs(&mut r#return.attrs);
                 if let Some(expr) = &mut r#return.expr {
                     self.replace_expr(expr, state);
                 }
             }
             Expr::Struct(r#struct) => {
+                self.replace_attrs(&mut r#struct.attrs);
                 self.replace_path_arguments(&mut r#struct.path);
                 for field in &mut r#struct.fields {
                     self.replace_expr(&mut field.expr, state);
@@ -666,28 +751,35 @@ impl<'a> SpecificContext<'a> {
                 }
             }
             Expr::Try(r#try) => {
+                self.replace_attrs(&mut r#try.attrs);
                 self.replace_expr(&mut r#try.expr, state);
             }
             Expr::TryBlock(try_block) => {
+                self.replace_attrs(&mut try_block.attrs);
                 self.replace_block(&mut try_block.block, state);
             }
             Expr::Tuple(tuple) => {
+                self.replace_attrs(&mut tuple.attrs);
                 for expr in &mut tuple.elems {
                     self.replace_expr(expr, state);
                 }
             }
             Expr::Unary(unary) => {
+                self.replace_attrs(&mut unary.attrs);
                 self.replace_expr(&mut unary.expr, state);
             }
             Expr::Unsafe(r#unsafe) => {
+                self.replace_attrs(&mut r#unsafe.attrs);
                 self.replace_block(&mut r#unsafe.block, state);
             }
             Expr::While(r#while) => {
+                self.replace_attrs(&mut r#while.attrs);
                 self.replace_expr(&mut r#while.cond, state);
                 let mut state = BlockState::default();
                 self.replace_block(&mut r#while.body, &mut state);
             }
             Expr::Yield(r#yield) => {
+                self.replace_attrs(&mut r#yield.attrs);
                 if let Some(expr) = &mut r#yield.expr {
                     self.replace_expr(expr, state);
                 }
@@ -917,6 +1009,7 @@ impl<'a> SpecificContext<'a> {
             Item::Const(r#const) => {
                 let context = self.handle_typle_constraints(&mut r#const.generics);
                 let context = context.as_ref().unwrap_or(self);
+                context.replace_attrs(&mut r#const.attrs);
                 context.replace_type(&mut r#const.ty);
                 context.replace_expr(&mut r#const.expr, state);
             }
@@ -926,6 +1019,7 @@ impl<'a> SpecificContext<'a> {
                 }
                 let context = self.handle_typle_constraints(&mut r#enum.generics);
                 let context = context.as_ref().unwrap_or(self);
+                context.replace_attrs(&mut r#enum.attrs);
                 context.replace_generics(&mut r#enum.generics);
                 for mut variant in std::mem::take(&mut r#enum.variants) {
                     if let Fields::Unit = variant.fields {
@@ -1025,6 +1119,7 @@ impl<'a> SpecificContext<'a> {
                 }
                 let context = self.handle_typle_constraints(&mut function.sig.generics);
                 let context = context.as_ref().unwrap_or(self);
+                context.replace_attrs(&mut function.attrs);
                 context.replace_signature(&mut function.sig);
                 context.replace_block(&mut function.block, state);
             }
@@ -1032,6 +1127,7 @@ impl<'a> SpecificContext<'a> {
             Item::Impl(r#impl) => {
                 let context = self.handle_typle_constraints(&mut r#impl.generics);
                 let context = context.as_ref().unwrap_or(self);
+                context.replace_attrs(&mut r#impl.attrs);
                 context.replace_generics(&mut r#impl.generics);
                 if let Some((_, path, _)) = &mut r#impl.trait_ {
                     context.replace_path_arguments(path);
@@ -1069,6 +1165,7 @@ impl<'a> SpecificContext<'a> {
                 }
                 let context = self.handle_typle_constraints(&mut r#struct.generics);
                 let context = context.as_ref().unwrap_or(self);
+                context.replace_attrs(&mut r#struct.attrs);
                 context.replace_generics(&mut r#struct.generics);
                 context.replace_fields(&mut r#struct.fields);
             }
@@ -1080,6 +1177,7 @@ impl<'a> SpecificContext<'a> {
                 }
                 let context = self.handle_typle_constraints(&mut r#type.generics);
                 let context = context.as_ref().unwrap_or(self);
+                context.replace_attrs(&mut r#type.attrs);
                 context.replace_generics(&mut r#type.generics);
                 context.replace_type(&mut r#type.ty);
             }

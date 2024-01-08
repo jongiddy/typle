@@ -1,4 +1,4 @@
-//! The `typle!` macro generates code for multiple tuple lengths:
+//! The `typle!` macro generates code for multiple tuple lengths. This code
 //!
 //! ```rust
 //! use typle::typle;
@@ -16,7 +16,7 @@
 //! }
 //! ```
 //!
-//! This generates implementations of the `From` trait for tuples with 0 to 3 components:
+//! generates implementations of the `From` trait for tuples with 0 to 3 components:
 //! ```rust
 //! # struct MyStruct<T> {
 //! #     t: T,
@@ -80,10 +80,10 @@
 //!
 //! ```rust
 //! # use typle::typle;
-//! use std::ops::Mul;
+//! use std::{ops::Mul, time::Duration};
 //!
 //! // Return the product of the components of two tuples
-//! #[typle(Tuple for 0..=3)]
+//! #[typle(Tuple for 0..=12)]
 //! fn multiply<S: Tuple, T: Tuple>(
 //!     s: S,  // s: (S0,...)
 //!     t: T,  // t: (T0,...)
@@ -95,8 +95,8 @@
 //! }
 //!
 //! assert_eq!(
-//!     multiply((std::time::Duration::from_secs(5), 2), (4, 3)),
-//!     (std::time::Duration::from_secs(20), 6)
+//!     multiply((Duration::from_secs(5), 2), (4, 3)),
+//!     (Duration::from_secs(20), 6)
 //! )
 //! ```
 //!
@@ -138,7 +138,7 @@
 //! ```
 //!
 //! The next example is simplified from code in the
-//! [`hefty` crate](https://github.com/jongiddy/hefty/blob/main/src/tuple.rs) and
+//! [`hefty`](https://github.com/jongiddy/hefty/blob/main/src/tuple.rs) crate and
 //! demonstrates the use of `typle` with `enum`s.
 //!
 //! The [`typle_variant!`] macro creates multiple enum variants by looping
@@ -153,6 +153,10 @@
 //! Use the `typle_index!` macro to concatenate a number to an identifier. For
 //! example `S::<typle_index!(3)>` becomes the identifer `S3`.
 //!
+//! The `typle_attr_if` attribute allows conditional inclusion of attributes. It works similarly to
+//! [`cfg_attr`](https://doc.rust-lang.org/reference/conditional-compilation.html#the-cfg_attr-attribute)
+//! except that the first argument is a boolean expression using const values.
+//!
 //! The `typle_const!` macro supports const-if on an expression that evaluates
 //! to a `bool`. const-if allows branches that do not compile, as long as they are
 //! `false` at compile-time. For example, this code compiles when `i + 1 == T::LEN`
@@ -162,7 +166,7 @@
 //! ```rust
 //! use typle::typle;
 //!
-//! #[typle(Tuple for 1..=3)]
+//! #[typle(Tuple for 1..=12)]
 //! mod tuple {
 //!     pub trait Extract {
 //!         type State;
@@ -195,11 +199,11 @@
 //!         type Output = typle_for!(i in .. => T<{i}>::Output);
 //!
 //!         fn extract(&self, state: Option<Self::State>) -> Self::Output {
-//!             #[allow(unused_mut)]  // For LEN = 1 `state` is never mutated
+//!             #[typle_attr_if(T::LEN == 1, allow(unused_mut))]
 //!             let mut state = state.unwrap_or(Self::State::S::<typle_index!(0)>((), None));
 //!             for typle_const!(i) in 0..T::LEN {
-//!                 // For LEN = 1 there is only one state and the initial `output` variable is unused
-//!                 #[allow(irrefutable_let_patterns, unused_variables)]
+//!                 // For LEN = 1 there is only one variant (S0) so `let` is irrefutable
+//!                 #[typle_attr_if(T::LEN == 1, allow(irrefutable_let_patterns, unused_variables))]
 //!                 if let Self::State::S::<typle_index!(i)>(output, inner_state) = state {
 //!                     let matched = self.tuple[[i]].extract(inner_state);
 //!                     let output = typle_for!(j in ..=i =>
@@ -248,11 +252,9 @@
 //!     type State = TupleSequenceState3<T0, T1, T2>;
 //!     type Output = (<T0>::Output, <T1>::Output, <T2>::Output);
 //!     fn extract(&self, state: Option<Self::State>) -> Self::Output {
-//!         #[allow(unused_mut)]
 //!         let mut state = state.unwrap_or(Self::State::S0((), None));
 //!         {
 //!             {
-//!                 #[allow(irrefutable_let_patterns, unused_variables)]
 //!                 if let Self::State::S0(output, inner_state) = state {
 //!                     let matched = self.tuple.0.extract(inner_state);
 //!                     let output = ({ matched },);
@@ -262,7 +264,6 @@
 //!                 }
 //!             }
 //!             {
-//!                 #[allow(irrefutable_let_patterns, unused_variables)]
 //!                 if let Self::State::S1(output, inner_state) = state {
 //!                     let matched = self.tuple.1.extract(inner_state);
 //!                     let output = ({ output.0 }, { matched });
@@ -272,7 +273,6 @@
 //!                 }
 //!             }
 //!             {
-//!                 #[allow(irrefutable_let_patterns, unused_variables)]
 //!                 if let Self::State::S2(output, inner_state) = state {
 //!                     let matched = self.tuple.2.extract(inner_state);
 //!                     let output = ({ output.0 }, { output.1 }, { matched });
@@ -745,8 +745,8 @@ pub fn typle_for(_item: proc_macro::TokenStream) -> proc_macro::TokenStream {
 /// The variants will start with the variant name given before the `=` character, followed by the
 /// index.
 ///
-/// If the macro uses parentheses the variant will be use unnamed fields. If the macro uses braces
-/// the variant will use named fields. If the macro uses brackets the variant will have no fields.
+/// If the macro uses parentheses the variant will use unnamed fields. If the macro uses braces the
+/// variant will use named fields. If the macro uses brackets the variant will have no fields.
 ///
 /// Examples:
 ///

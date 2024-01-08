@@ -14,7 +14,6 @@ pub mod doc_typle {
     }
     impl MyStruct<(u32, u32)> {
         fn max(&self) -> Option<u32> {
-            #[allow(unused_mut)]
             let mut max = self.t.0;
             {
                 {
@@ -29,7 +28,6 @@ pub mod doc_typle {
     }
     impl MyStruct<(u32, u32, u32)> {
         fn max(&self) -> Option<u32> {
-            #[allow(unused_mut)]
             let mut max = self.t.0;
             {
                 {
