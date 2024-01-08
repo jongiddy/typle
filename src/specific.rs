@@ -156,7 +156,6 @@ impl<'a> SpecificContext<'a> {
                                     |tt| !matches!(tt, TokenTree::Punct(p) if p.as_char() == ','),
                                 )
                                 .collect();
-                            dbg!(&expr_tokens);
                             let Ok(mut expr) = parse2::<Expr>(expr_tokens) else {
                                 abort!(ident, "expected expression");
                             };
