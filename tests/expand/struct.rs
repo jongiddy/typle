@@ -13,7 +13,7 @@ where
     T: Tuple,
     T<_>: Into<ByteStream>,
 {
-    t: TupleSequenceOutput<T<{..}>>,
+    t: TupleSequenceOutput<T<{ .. }>>,
 }
 
 #[typle(Tuple for 0..=2)]
@@ -25,26 +25,29 @@ where
 {
     #[default]
     Invalid,
-    S = typle_variant!{i in .. => field: typle_for!(j in ..=i => Option<T<{j}>>)},
+    S = typle_variant! {i in .. => field: typle_for!(j in ..=i => Option<T<{j}>>)},
 }
 
 #[typle(Tuple for 0..=2)]
 struct AStruct<T>
 where
-    T: Tuple {
+    T: Tuple,
+{
     t: T,
-    state: State<T<{..}>>,
+    state: State<T<{ .. }>>,
 }
 
 #[typle(Tuple for 0..=2)]
-impl<T> std::io::Read for AStruct<T<{..}>>
+impl<T> std::io::Read for AStruct<T<{ .. }>>
 where
     T: Tuple,
     T<_>: std::io::Read,
 {
     fn read(&mut self, mut buf: &mut [u8]) -> std::io::Result<usize> {
         for typle_const!(i) in 0..T::LEN {
-            if let State::<typle_index!(Tuple::LEN)>::S::<typle_index!(i)>(output) = self.state.take() {
+            if let State::<typle_index!(Tuple::LEN)>::S::<typle_index!(i)>(output) =
+                self.state.take()
+            {
                 let size = self.t[[i]].read(buf);
             }
         }

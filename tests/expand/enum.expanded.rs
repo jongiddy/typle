@@ -260,3 +260,15 @@ where
         ::core::panicking::panic("internal error: entered unreachable code");
     }
 }
+impl Process for (T0, T1, T2)
+where
+    T0: Process<Output = u64>,
+    T1: Process<Output = u64>,
+    T2: Process<Output = u64>,
+{
+    type State = ProcessState0;
+    type Output = ProcessState2<T1, T2>;
+    fn process(state: Self::State) -> Result<Self::Output, Error> {
+        ::core::panicking::panic("internal error: entered unreachable code");
+    }
+}

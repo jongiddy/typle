@@ -1,6 +1,6 @@
 [package]
 name = "typle"
-version = "0.7.10"
+version = "0.7.11"
 edition = "2021"
 description = "A macro to create items for different sized tuples"
 license = "MIT"

@@ -1,4 +1,4 @@
-//! The `typle!` macro generates code for multiple tuple lengths. This code
+//! The `typle` macro generates code for multiple tuple lengths. This code
 //!
 //! ```rust
 //! use typle::typle;
@@ -55,7 +55,7 @@
 //! ```rust
 //! # use typle::typle;
 //! // Split off the first component
-//! #[typle(Tuple for 1..=3)]
+//! #[typle(Tuple for 1..=12)]
 //! fn split<T: Tuple>(
 //!     t: T  // t: (T0, T1, T2,...)
 //! ) -> (T<0>, typle_for!(i in 1.. => T<{i}>))   // (T0, (T1, T2,...))
@@ -63,9 +63,9 @@
 //!     (t[[0]], typle_for!(i in 1.. => t[[i]]))  // (t.0, (t.1, t.2,...))
 //! }
 //!
-//! assert_eq!(split((1, 2, 3)), (1, (2, 3)));
-//! assert_eq!(split((2, 3)), (2, (3,)));
-//! assert_eq!(split((3,)), (3, ()));
+//! assert_eq!(split(('1', 2, 3.0)), ('1', (2, 3.0)));
+//! assert_eq!(split((2, 3.0)), (2, (3.0,)));
+//! assert_eq!(split((3.0,)), (3.0, ()));
 //! ```
 
 //! Specify constraints on the tuple components using one of the following
@@ -82,7 +82,7 @@
 //! # use typle::typle;
 //! use std::{ops::Mul, time::Duration};
 //!
-//! // Return the product of the components of two tuples
+//! // Multiply the components of two tuples
 //! #[typle(Tuple for 0..=12)]
 //! fn multiply<S: Tuple, T: Tuple>(
 //!     s: S,  // s: (S0,...)
@@ -122,14 +122,13 @@
 //!     T: Tuple<C>,
 //!     C: for<'a> std::ops::AddAssign<&'a C> + Default,
 //! {
-//!     // Return the sums of all even positions and all odd positions, using
-//!     // 0-indexing so the first position is even and second position is odd.
+//!     // Return the sums of all odd positions and all even positions.
 //!     fn interleave(&self) -> (C, C) {
-//!         let mut even_odd = (C::default(), C::default());
+//!         let mut odd_even = (C::default(), C::default());
 //!         for typle_const!(i) in 0..T::LEN {
-//!             even_odd[[i % 2]] += &self.t[[i]];
+//!             odd_even[[i % 2]] += &self.t[[i]];
 //!         }
-//!         even_odd
+//!         odd_even
 //!     }
 //! }
 //!
@@ -148,7 +147,7 @@
 //! length. The `typle` macro adds the tuple length to their original name. For
 //! example `enum TupleSequenceState<T>` expands to `enum TupleSequenceState3<T0, T1, T2>`
 //! for 3-tuples. When referring to these types from other typled items, use
-//! `TupleSequenceState<T<{..}>>`.
+//! `TupleSequenceState<T<{ .. }>>`.
 //!
 //! Use the `typle_index!` macro to concatenate a number to an identifier. For
 //! example `S::<typle_index!(3)>` becomes the identifer `S3`.
@@ -195,7 +194,7 @@
 //!         T: Tuple,
 //!         T<_>: Extract,
 //!     {
-//!         type State = TupleSequenceState<T<{..}>>;
+//!         type State = TupleSequenceState<T<{ .. }>>;
 //!         type Output = typle_for!(i in .. => T<{i}>::Output);
 //!
 //!         fn extract(&self, state: Option<Self::State>) -> Self::Output {
@@ -690,7 +689,7 @@ fn pat_to_tuple(pat: Pat) -> Expr {
 /// Examples:
 /// ```ignore
 /// #[typle(Tuple for 0..=2)]
-/// impl<T> S<T<{..}>>
+/// impl<T> S<T<{ .. }>>
 /// where
 ///     T: Tuple<u32>
 /// {

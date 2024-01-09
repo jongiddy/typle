@@ -17,17 +17,17 @@ where
     // added to the variant name here. `S2(Option<T2::State>, [u64; 2])`
     S = typle_variant!(i in .. => Option<T<{i}>::State>, [u64; i]),
     // U2 {u: [u32; 2]}
-    U = typle_variant!{.. => u: [u32; Tuple::LEN]},
+    U = typle_variant! {.. => u: [u32; Tuple::LEN]},
     // V2
     V = typle_variant![.. =>],
-    Done([u64; Tuple::LEN])
+    Done([u64; Tuple::LEN]),
 }
 
 #[typle(Tuple for 0..=3)]
-impl<T> Default for ProcessState<T<{..}>>
+impl<T> Default for ProcessState<T<{ .. }>>
 where
     T: Tuple,
-    T<_>: Process<Output = u64>
+    T<_>: Process<Output = u64>,
 {
     fn default() -> Self {
         // Const-if allows false branches to contain invalid code. In this case state S0 does not
@@ -47,7 +47,7 @@ where
     T: Tuple,
     T<_>: Process<Output = u64>,
 {
-    type State = ProcessState<T<{..}>>;
+    type State = ProcessState<T<{ .. }>>;
     type Output = [u64; T::LEN];
 
     fn process(state: Self::State) -> Result<Self::Output, Error> {
@@ -82,6 +82,21 @@ where
         if let Self::State::Done(output) = state {
             return output;
         }
+        unreachable!();
+    }
+}
+
+#[typle(Tuple for 3..=3)]
+impl Process for T
+where
+    T: Tuple,
+    T<_>: Process<Output = u64>,
+{
+    // Test that the number of components determines the suffix
+    type State = ProcessState<T<{ 3.. }>>;
+    type Output = ProcessState<T<{ 1.. }>>;
+
+    fn process(state: Self::State) -> Result<Self::Output, Error> {
         unreachable!();
     }
 }

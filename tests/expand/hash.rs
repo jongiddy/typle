@@ -11,9 +11,9 @@ impl Hash for () {
 #[typle(Tuple for 1..=12)]
 impl<T> Hash for T
 where
-    T: Tuple,  // `T` must be a tuple with 1-12 components.
-    T<_>: Hash,  // Each component must implement `Hash`.
-    T<{T::LEN - 1}>: ?Sized,  // The last component may be unsized.
+    T: Tuple,   // `T` must be a tuple with 1-12 components.
+    T<_>: Hash, // Each component must implement `Hash`.
+    T<{ T::LEN - 1 }>: ?Sized, // The last component may be unsized.
 {
     #[inline]
     fn hash<S: Hasher>(&self, state: &mut S) {

@@ -1402,7 +1402,7 @@ impl<'a> SpecificContext<'a> {
                                     format_ident!("{}{}", path_segment.ident, index);
                                 path_segment.arguments = PathArguments::None;
                             } else {
-                                // std::option::Some(T) -> std::option::Option<(T0, T1,...)
+                                // std::option::Option<T> -> std::option::Option<(T0, T1,...)>
                                 // std::option::Option<T<3>> -> std::option::Option<T3>
                                 for arg in std::mem::take(&mut args.args) {
                                     match arg {
@@ -1446,7 +1446,7 @@ impl<'a> SpecificContext<'a> {
                                     format_ident!("{}{}", path_segment.ident, index);
                                 path_segment.arguments = PathArguments::None;
                             } else {
-                                // std::option::Some(T> -> std::option::Option<(T0, T1,...)
+                                // std::option::Option<T> -> std::option::Option<(T0, T1,...)>
                                 // std::option::Option<T<3>> -> std::option::Option<T3>
                                 for arg in std::mem::take(&mut args.args) {
                                     match arg {
@@ -1486,7 +1486,7 @@ impl<'a> SpecificContext<'a> {
                     // WrapperType<T> -> WrapperType<(T0, T1,...)>
                     // WrapperType<T<3>> -> WrapperType<T3>
                     // WrapperType<T<{..}>> -> WrapperTypeN<T0, T1,...>
-                    let mut typle_args = false;
+                    let mut typle_args = None;
                     for arg in std::mem::take(&mut args.args) {
                         match arg {
                             GenericArgument::Type(Type::Path(TypePath { qself, mut path }))
@@ -1537,7 +1537,16 @@ impl<'a> SpecificContext<'a> {
                                                         typle.get(i, path.span()),
                                                     ));
                                                 }
-                                                typle_args = true;
+                                                match typle_args {
+                                                    Some(len) => {
+                                                        if end - start != len {
+                                                            abort!(path, "inconsistent lengths");
+                                                        }
+                                                    }
+                                                    None => {
+                                                        typle_args = Some(end - start);
+                                                    }
+                                                }
                                                 continue;
                                             }
                                         }
@@ -1570,9 +1579,8 @@ impl<'a> SpecificContext<'a> {
                             }
                         }
                     }
-                    if typle_args {
-                        path_segment.ident =
-                            format_ident!("{}{}", path_segment.ident, self.typle_len);
+                    if let Some(len) = typle_args {
+                        path_segment.ident = format_ident!("{}{}", path_segment.ident, len);
                     }
                     if args.args.is_empty() {
                         path_segment.arguments = PathArguments::None;
