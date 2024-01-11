@@ -269,6 +269,7 @@ where
     type State = ProcessState0;
     type Output = ProcessState2<T1, T2>;
     fn process(state: Self::State) -> Result<Self::Output, Error> {
+        let x = Self::State::S0((), None);
         ::core::panicking::panic("internal error: entered unreachable code");
     }
 }

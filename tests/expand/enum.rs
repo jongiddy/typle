@@ -52,7 +52,7 @@ where
 
     fn process(state: Self::State) -> Result<Self::Output, Error> {
         for typle_const!(i) in 0..T::LEN {
-            if let Self::State::S::<typle_index!(i)>(inner_state, output) = state {
+            if let Self::State::S::<typle_ident!(i)>(inner_state, output) = state {
                 match self.tuple[[i]].process(inner_state) {
                     Err(e) => {
                         return Err(e);
@@ -67,13 +67,13 @@ where
                             // shadowing of `i` doesn't work correctly so use a different name:
                             .for_each(|(j, bs)| new_output[j] = bs);
                         // Often a standard `if` can be used, but we need a const-if here because
-                        // the state S::<typle_index!(i + 1)> does not exist on the last iteration.
+                        // the state S::<typle_ident!(i + 1)> does not exist on the last iteration.
                         // In that case, the second branch is never taken, and will likely get
                         // optimized out, but it still needs to compile.
                         if typle_const!(i + 1 == T::LEN) {
                             state = Self::State::Done(new_output);
                         } else {
-                            state = Self::State::S::<typle_index!(i + 1)>(None, new_output);
+                            state = Self::State::S::<typle_ident!(i + 1)>(None, new_output);
                         }
                     }
                 }
@@ -97,6 +97,8 @@ where
     type Output = ProcessState<T<{ 1.. }>>;
 
     fn process(state: Self::State) -> Result<Self::Output, Error> {
+        // For backwards compatibility, `typle_index!` is also accepted for `typle_ident!`
+        let x = Self::State::S::<typle_index!(0)>((), None);
         unreachable!();
     }
 }

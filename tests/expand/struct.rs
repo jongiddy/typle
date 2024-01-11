@@ -45,7 +45,7 @@ where
 {
     fn read(&mut self, mut buf: &mut [u8]) -> std::io::Result<usize> {
         for typle_const!(i) in 0..T::LEN {
-            if let State::<typle_index!(Tuple::LEN)>::S::<typle_index!(i)>(output) =
+            if let State::<typle_ident!(Tuple::LEN)>::S::<typle_ident!(i)>(output) =
                 self.state.take()
             {
                 let size = self.t[[i]].read(buf);

@@ -149,8 +149,8 @@
 //! for 3-tuples. When referring to these types from other typled items, use
 //! `TupleSequenceState<T<{ .. }>>`.
 //!
-//! Use the `typle_index!` macro to concatenate a number to an identifier. For
-//! example `S::<typle_index!(3)>` becomes the identifer `S3`.
+//! Use the `typle_ident!` macro to concatenate a number to an identifier. For
+//! example `S::<typle_ident!(3)>` becomes the identifer `S3`.
 //!
 //! The `typle_attr_if` attribute allows conditional inclusion of attributes. It works similarly to
 //! [`cfg_attr`](https://doc.rust-lang.org/reference/conditional-compilation.html#the-cfg_attr-attribute)
@@ -159,7 +159,7 @@
 //! The `typle_const!` macro supports const-if on an expression that evaluates
 //! to a `bool`. const-if allows branches that do not compile, as long as they are
 //! `false` at compile-time. For example, this code compiles when `i + 1 == T::LEN`
-//! even though the identifier `S::<typle_index!(T::LEN)>` (`S3` for 3-tuples) is not
+//! even though the identifier `S::<typle_ident!(T::LEN)>` (`S3` for 3-tuples) is not
 //! defined.
 //!
 //! ```rust
@@ -199,11 +199,11 @@
 //!
 //!         fn extract(&self, state: Option<Self::State>) -> Self::Output {
 //!             #[typle_attr_if(T::LEN == 1, allow(unused_mut))]
-//!             let mut state = state.unwrap_or(Self::State::S::<typle_index!(0)>((), None));
+//!             let mut state = state.unwrap_or(Self::State::S::<typle_ident!(0)>((), None));
 //!             for typle_const!(i) in 0..T::LEN {
 //!                 // For LEN = 1 there is only one variant (S0) so `let` is irrefutable
 //!                 #[typle_attr_if(T::LEN == 1, allow(irrefutable_let_patterns, unused_variables))]
-//!                 if let Self::State::S::<typle_index!(i)>(output, inner_state) = state {
+//!                 if let Self::State::S::<typle_ident!(i)>(output, inner_state) = state {
 //!                     let matched = self.tuple[[i]].extract(inner_state);
 //!                     let output = typle_for!(j in ..=i =>
 //!                         if typle_const!(j != i) { output[[j]] } else { matched }
@@ -211,7 +211,7 @@
 //!                     if typle_const!(i + 1 == T::LEN) {
 //!                         return output;
 //!                     } else {
-//!                         state = Self::State::S::<typle_index!(i + 1)>(output, None);
+//!                         state = Self::State::S::<typle_ident!(i + 1)>(output, None);
 //!                     }
 //!                 }
 //!             }

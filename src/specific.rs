@@ -680,8 +680,8 @@ impl<'a> SpecificContext<'a> {
                         match &mut path_segment.arguments {
                             PathArguments::None => {}
                             PathArguments::AngleBracketed(args) => {
-                                if let Some(index) = self.typle_index(args) {
-                                    // X::<typle_index!(3)> -> X3
+                                if let Some(index) = self.typle_ident(args) {
+                                    // X::<typle_ident!(3)> -> X3
                                     path_segment.ident =
                                         format_ident!("{}{}", path_segment.ident, index);
                                     path_segment.arguments = PathArguments::None;
@@ -1388,7 +1388,7 @@ impl<'a> SpecificContext<'a> {
             Pat::Or(_) => abort!(pat, "Or unsupported"),
             Pat::Paren(_) => abort!(pat, "Paren unsupported"),
             Pat::Path(path) => {
-                // State::S::<typle_index!(i)> -> State::S2
+                // State::S::<typle_ident!(i)> -> State::S2
                 if let Some(qself) = &mut path.qself {
                     self.replace_type(&mut qself.ty);
                 }
@@ -1396,8 +1396,8 @@ impl<'a> SpecificContext<'a> {
                     match &mut path_segment.arguments {
                         PathArguments::None => {}
                         PathArguments::AngleBracketed(args) => {
-                            if let Some(index) = self.typle_index(args) {
-                                // X::<typle_index!(3)> -> X3
+                            if let Some(index) = self.typle_ident(args) {
+                                // X::<typle_ident!(3)> -> X3
                                 path_segment.ident =
                                     format_ident!("{}{}", path_segment.ident, index);
                                 path_segment.arguments = PathArguments::None;
@@ -1432,7 +1432,7 @@ impl<'a> SpecificContext<'a> {
             Pat::Struct(_) => abort!(pat, "Struct unsupported"),
             Pat::Tuple(_) => {}
             Pat::TupleStruct(tuple_struct) => {
-                // State::S::<typle_index!(i)> -> State::S2
+                // State::S::<typle_ident!(i)> -> State::S2
                 if let Some(qself) = &mut tuple_struct.qself {
                     self.replace_type(&mut qself.ty);
                 }
@@ -1440,8 +1440,8 @@ impl<'a> SpecificContext<'a> {
                     match &mut path_segment.arguments {
                         PathArguments::None => {}
                         PathArguments::AngleBracketed(args) => {
-                            if let Some(index) = self.typle_index(args) {
-                                // X::<typle_index!(3)> -> X3
+                            if let Some(index) = self.typle_ident(args) {
+                                // X::<typle_ident!(3)> -> X3
                                 path_segment.ident =
                                     format_ident!("{}{}", path_segment.ident, index);
                                 path_segment.arguments = PathArguments::None;
@@ -1740,16 +1740,18 @@ impl<'a> SpecificContext<'a> {
         }
     }
 
-    fn typle_index(&self, args: &mut syn::AngleBracketedGenericArguments) -> Option<usize> {
+    // Return Some(usize) if the angled bracketed generic arguments is a `typle_ident!` macro.
+    // Also checks `typle_index!` for backwards compatibility.
+    fn typle_ident(&self, args: &mut syn::AngleBracketedGenericArguments) -> Option<usize> {
         if args.args.len() == 1 {
             if let Some(GenericArgument::Type(Type::Macro(TypeMacro { mac }))) =
                 args.args.first_mut()
             {
                 if let Some(macro_ident) = mac.path.get_ident() {
-                    if macro_ident == "typle_index" {
+                    if macro_ident == "typle_ident" || macro_ident == "typle_index" {
                         let Ok(mut expr) = syn::parse2::<Expr>(std::mem::take(&mut mac.tokens))
                         else {
-                            abort!(mac.tokens.span(), "expect expression in typle_index macro");
+                            abort!(mac.tokens.span(), "expect expression in typle_ident macro");
                         };
                         let mut state = BlockState::default();
                         self.replace_expr(&mut expr, &mut state);
