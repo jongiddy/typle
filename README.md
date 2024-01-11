@@ -25,34 +25,8 @@ assert_eq!(
 assert_eq!(zip((), ()), ());
 ```
 
-The `Hash` trait for tuples hashes each component of the tuple.
-
-Using `typle` this can be written as:
-
-```rust
-impl Hash for () {
-    #[inline]
-    fn hash<H: Hasher>(&self, _state: &mut H) {}
-}
-
-#[typle(Tuple for 1..=12)]
-impl<T> Hash for T
-where
-    T: Tuple,  // `T` must be a tuple with 1-12 components.
-    T<_>: Hash,  // Each component must implement `Hash`.
-    T<{T::LEN - 1}>: ?Sized,  // The last component may be unsized.
-{
-    #[inline]
-    fn hash<S: Hasher>(&self, state: &mut S) {
-        for typle_const!(i) in 0..T::LEN {
-            self[[i]].hash(state);
-        }
-    }
-}
-```
-
-Compare the `typle` implementation above to the current implementation
-(excluding docs) in the standard library:
+The `Hash` trait for tuples simply hashes each component of the tuple in order.
+The current implementation (excluding docs) in the standard library is:
 
 ```rust
 macro_rules! impl_hash_tuple {
@@ -93,6 +67,30 @@ impl_hash_tuple! { T B C D E F G H I }
 impl_hash_tuple! { T B C D E F G H I J }
 impl_hash_tuple! { T B C D E F G H I J K }
 impl_hash_tuple! { T B C D E F G H I J K L }
+```
+
+Using `typle` this can be written more clearly as:
+
+```rust
+impl Hash for () {
+    #[inline]
+    fn hash<H: Hasher>(&self, _state: &mut H) {}
+}
+
+#[typle(Tuple for 1..=12)]
+impl<T> Hash for T
+where
+    T: Tuple,  // `T` must be a tuple with 1-12 components.
+    T<_>: Hash,  // Each component must implement `Hash`.
+    T<{T::LEN - 1}>: ?Sized,  // The last component may be unsized.
+{
+    #[inline]
+    fn hash<S: Hasher>(&self, state: &mut S) {
+        for typle_index!(i) in 0..T::LEN {
+            self[[i]].hash(state);
+        }
+    }
+}
 ```
 
 See the [full documentation](https://docs.rs/typle/) for more examples.

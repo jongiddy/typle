@@ -11,7 +11,7 @@ where
     T<_>: Hash,
     T<{ T::LEN - 1 }>: ?Sized,
 {
-    for typle_const!(i) in 0..T::LEN {
+    for typle_index!(i) in 0..T::LEN {
         tuple[[i]].hash(state);
     }
 }

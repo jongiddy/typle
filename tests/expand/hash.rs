@@ -17,7 +17,7 @@ where
 {
     #[inline]
     fn hash<S: Hasher>(&self, state: &mut S) {
-        for typle_const!(i) in 0..T::LEN {
+        for typle_index!(i) in 0..T::LEN {
             self[[i]].hash(state);
         }
     }

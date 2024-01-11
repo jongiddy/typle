@@ -47,10 +47,13 @@
 //! ```
 //!
 //! Inside `typle` code, individual components of a tuple can be selected using
-//! `<{i}>` for types and `[[i]]` for values. The value `i` must be a constant.
+//! `<{i}>` for types and `[[i]]` for values. The value `i` must be a *typle
+//! index expression*, an expression that only uses literal `usize` values or
+//! *typle indexes* created by one of several macros.
 //!
-//! The [`typle_for!`] macro creates a new variable-length tuple type or value.
-//! Inside the macro the iteration variable is a constant for each component.
+//! The [`typle_for!`] macro creates a new tuple type or value. Inside the macro
+//! the typle index can provide access to each component of an existing tuple
+//! type or value.
 //!
 //! ```rust
 //! # use typle::typle;
@@ -76,7 +79,7 @@
 //! - `T<0>: Copy` - the first component of the tuple implements `Copy`
 //! - `T<{1..=2}>: Copy` - the second and third components implement `Copy`
 //! - `typle_bound!` - the most general way to bound components,
-//! allowing the iteration variable to be used in the trait bounds, as shown below:
+//! allowing the typle index to be used in the trait bounds, as shown below:
 //!
 //! ```rust
 //! # use typle::typle;
@@ -101,10 +104,10 @@
 //! ```
 //!
 //! The associated constant `LEN` provides the length of the tuple in each
-//! generated item.
+//! generated item. It can be used as a typle index.
 //!
-//! Use the `typle_const!` macro to perform const-for, iterating over a block of
-//! statements.
+//! Use the `typle_index!` macro in a `for` loop to iterate over a range bounded
+//! by typle index expressions.
 //!
 //! ```rust
 //! # use typle::typle;
@@ -123,17 +126,17 @@
 //!     C: for<'a> std::ops::AddAssign<&'a C> + Default,
 //! {
 //!     // Return the sums of all odd positions and all even positions.
-//!     fn interleave(&self) -> (C, C) {
-//!         let mut odd_even = (C::default(), C::default());
-//!         for typle_const!(i) in 0..T::LEN {
-//!             odd_even[[i % 2]] += &self.t[[i]];
+//!     fn interleave(&self) -> [C; 2] {
+//!         let mut odd_even = [C::default(), C::default()];
+//!         for typle_index!(i) in 0..T::LEN {
+//!             odd_even[i % 2] += &self.t[[i]];
 //!         }
 //!         odd_even
 //!     }
 //! }
 //!
 //! let m = MyStruct::from((3, 9, 11));
-//! assert_eq!(m.interleave(), (14, 9));
+//! assert_eq!(m.interleave(), [14, 9]);
 //! ```
 //!
 //! The next example is simplified from code in the
@@ -154,13 +157,13 @@
 //!
 //! The `typle_attr_if` attribute allows conditional inclusion of attributes. It works similarly to
 //! [`cfg_attr`](https://doc.rust-lang.org/reference/conditional-compilation.html#the-cfg_attr-attribute)
-//! except that the first argument is a boolean expression using const values.
+//! except that the first argument is a boolean typle index expression.
 //!
-//! The `typle_const!` macro supports const-if on an expression that evaluates
-//! to a `bool`. const-if allows branches that do not compile, as long as they are
-//! `false` at compile-time. For example, this code compiles when `i + 1 == T::LEN`
-//! even though the identifier `S::<typle_ident!(T::LEN)>` (`S3` for 3-tuples) is not
-//! defined.
+//! The `typle_const!` macro supports const-if on a boolean typle index
+//! expression. const-if allows branches that do not compile, as long as they
+//! are `false` at compile-time. For example, this code compiles when
+//! `i + 1 == T::LEN` even though the identifier `S::<typle_ident!(T::LEN)>`
+//! (`S3` for 3-tuples) is not defined.
 //!
 //! ```rust
 //! use typle::typle;
@@ -200,7 +203,7 @@
 //!         fn extract(&self, state: Option<Self::State>) -> Self::Output {
 //!             #[typle_attr_if(T::LEN == 1, allow(unused_mut))]
 //!             let mut state = state.unwrap_or(Self::State::S::<typle_ident!(0)>((), None));
-//!             for typle_const!(i) in 0..T::LEN {
+//!             for typle_index!(i) in 0..T::LEN {
 //!                 // For LEN = 1 there is only one variant (S0) so `let` is irrefutable
 //!                 #[typle_attr_if(T::LEN == 1, allow(irrefutable_let_patterns, unused_variables))]
 //!                 if let Self::State::S::<typle_ident!(i)>(output, inner_state) = state {
@@ -303,29 +306,23 @@
 //!     T<_>: Hash,
 //!     T<{T::LEN - 1}>: ?Sized,
 //! {
-//!     for typle_const!(i) in 0..T::LEN {
+//!     for typle_index!(i) in 0..T::LEN {
 //!         tuple[[i]].hash(state);
 //!     }
 //! }
 //! ```
-//! - The `const` values used to index tuples can only be created in const-for expressions or other
-//! typle macros. Other `const` values cannot be used.
+//! - Shadowing of typle indexes is not supported. For example, in:
 //! ```rust ignore
-//! const i: usize = 3;
-//! let a = self.tuple[[i]];  // compile error
-//! ```
-//! - Shadowing of const variables introduced using typle macros is not supported. For example, in:
-//! ```rust ignore
-//! for typle_const!(i) in 2..=3 {
+//! for typle_index!(i) in 2..=3 {
 //!     let i = 1;
 //!     func(i)
 //! }
 //! ```
-//! `func` will be called with 2 and 3, never with 1. The same is true for other places where const
-//! values are introduced. For example in a `typle_for!` macro.
-//! - const-for loops do not support labelled continue.
+//! `func` will be called with 2 and 3, never with 1. The same is true for other places where typle
+//! indexes are introduced. For example in a `typle_for!` macro.
+//! - for loops using `typle_index!` do not support labelled continue.
 //! ```rust ignore
-//! 'label: for typle_const!(i) in 2..=3 {
+//! 'label: for typle_index!(i) in 2..=3 {
 //!     loop {
 //!         if typle_const!(i == 2) {
 //!             continue 'label;  // compile error

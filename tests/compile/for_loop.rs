@@ -9,7 +9,7 @@ struct Looper<T> {
 #[typle(Tuple for 8..=8)]
 impl<T: Tuple> Looper<T> {
     fn for_loop(&self) {
-        'label: for typle_const!(i) in 0..T::LEN {
+        'label: for typle_index!(i) in 0..T::LEN {
             // This block does not have a break or continue so does not need a loop.
             if typle_const!(i == 0) {
                 let _x = i;

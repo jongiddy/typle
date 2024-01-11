@@ -44,7 +44,7 @@ where
     T<_>: std::io::Read,
 {
     fn read(&mut self, mut buf: &mut [u8]) -> std::io::Result<usize> {
-        for typle_const!(i) in 0..T::LEN {
+        for typle_index!(i) in 0..T::LEN {
             if let State::<typle_ident!(Tuple::LEN)>::S::<typle_ident!(i)>(output) =
                 self.state.take()
             {

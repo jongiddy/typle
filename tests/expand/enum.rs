@@ -51,6 +51,8 @@ where
     type Output = [u64; T::LEN];
 
     fn process(state: Self::State) -> Result<Self::Output, Error> {
+        // `typle_const!` in a for loop is the same as `typle_index!`, and is
+        // supported for backwards compatibility.
         for typle_const!(i) in 0..T::LEN {
             if let Self::State::S::<typle_ident!(i)>(inner_state, output) = state {
                 match self.tuple[[i]].process(inner_state) {

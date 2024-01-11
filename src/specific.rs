@@ -318,17 +318,18 @@ impl<'a> SpecificContext<'a> {
             Expr::ForLoop(for_loop) => {
                 self.replace_attrs(&mut for_loop.attrs);
                 self.replace_expr(&mut for_loop.expr, state);
-                // Check for typle_const!(i)
+                // Check for typle_index!(i). Also accepts `typle_const!` for backwards
+                // compatibility.
                 if let Pat::Macro(pat_macro) = &mut *for_loop.pat {
                     if let Some(macro_ident) = pat_macro.mac.path.get_ident() {
-                        if macro_ident == "typle_const" {
+                        if macro_ident == "typle_index" || macro_ident == "typle_const" {
                             let span = pat_macro.mac.tokens.span();
                             let mut tokens = std::mem::take(&mut pat_macro.mac.tokens).into_iter();
                             let Some(TokenTree::Ident(pat_ident)) = tokens.next() else {
-                                abort!(span, "expected identifier in typle_const macro");
+                                abort!(span, "expected identifier in typle_index macro");
                             };
                             if let Some(tt) = tokens.next() {
-                                abort!(tt, "unexpected token in typle_const");
+                                abort!(tt, "unexpected token in typle_index");
                             };
                             let Expr::Range(expr_range) = &*for_loop.expr else {
                                 abort!(for_loop.expr, "expected range");
