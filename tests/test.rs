@@ -24,11 +24,18 @@ fn test_hash() {
 
 #[test]
 fn test_zip() {
-    let s = ("LHR", "FCO", "ZRH");
-    let t = (51.5, 41.8, 47.5);
-    assert_eq!(zip(s, t), (("LHR", 51.5), ("FCO", 41.8), ("ZRH", 47.5)));
-
-    assert_eq!(zip((), ()), ());
+    assert_eq!(
+        zip(("LHR", "FCO", "ZRH"), (51.5, 41.8, 47.5)),
+        (("LHR", 51.5), ("FCO", 41.8), ("ZRH", 47.5))
+    );
+    assert_eq!(
+        zip((2.0, "test"), (9u8, ())),
+        ((2.0, 9u8), ("test", ()))
+    );
+    assert_eq!(
+        zip((), ()),
+        ()
+    );
 
     let s = ('a', 'b', 'c');
     let t = (1, 2, 3);

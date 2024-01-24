@@ -1,32 +1,72 @@
 # typle
 
-The `typle` crate provides a macro to create items for tuples of
-multiple lengths.
+The `typle` crate provides the ability to constrain generic arguments to tuples
+and supports manipulation of the tuple components.
 
-For example it can define a function, for tuples up to length 12, to zip a pair
-of tuples into a tuple of pairs:
+For example, to define a function to zip a pair of tuples into a tuple of pairs:
 
 ```rust
 #[typle(Tuple for 0..=12)]
 pub fn zip<A: Tuple, B: Tuple>(
-    first: A,
-    second: B
+    a: A,
+    b: B
 ) -> typle_for!(i in .. => (A<{i}>, B<{i}>))
 {
-    typle_for!(i in .. => (first[[i]], second[[i]]))
+    typle_for!(i in .. => (a[[i]], b[[i]]))
 }
-
-let s = ("LHR", "FCO", "ZRH");
-let t = (51.5, 41.8, 47.5);
-assert_eq!(
-    zip(s, t),
-    (("LHR", 51.5), ("FCO", 41.8), ("ZRH", 47.5))
-);
-assert_eq!(zip((), ()), ());
 ```
 
-The `Hash` trait for tuples simply hashes each component of the tuple in order.
-The current implementation (excluding docs) in the standard library is:
+The types `A` and `B` are generic but are constrained to be tuples. The tuples
+can have 0 to 12 components of any (sized) type, but both parameters must have the
+same length.
+
+```
+assert_eq!(
+    zip(("LHR", "FCO", "ZRH"), (51.5, 41.8, 47.5)),
+    (("LHR", 51.5), ("FCO", 41.8), ("ZRH", 47.5))
+);
+assert_eq!(
+    zip((2.0, "test"), (9u8, ())),
+    ((2.0, 9u8), ("test", ()))
+);
+assert_eq!(
+    zip((), ()),
+    ()
+);
+```
+
+A common use of `typle` is to implement a trait for tuples of multiple lengths.
+Compared to using declarative macros, the `typle` code looks more Rust-like and
+provides simple access to individual components.
+
+For example the `Hash` trait for tuples simply hashes each component of the
+tuple in order.
+
+Using `typle` this can be written as:
+
+```rust
+impl Hash for () {
+    #[inline]
+    fn hash<H: Hasher>(&self, _state: &mut H) {}
+}
+
+#[typle(Tuple for 1..=12)]
+impl<T> Hash for T
+where
+    T: Tuple,  // `T` must be a tuple with 1-12 components.
+    T<_>: Hash,  // Each component must implement `Hash`.
+    T<{T::LEN - 1}>: ?Sized,  // The last component may be unsized.
+{
+    #[inline]
+    fn hash<S: Hasher>(&self, state: &mut S) {
+        for typle_index!(i) in 0..T::LEN {
+            self[[i]].hash(state);
+        }
+    }
+}
+```
+
+Compare this to the current implementation in the standard library:
 
 ```rust
 macro_rules! impl_hash_tuple {
@@ -69,28 +109,4 @@ impl_hash_tuple! { T B C D E F G H I J K }
 impl_hash_tuple! { T B C D E F G H I J K L }
 ```
 
-Using `typle` this can be written more clearly as:
-
-```rust
-impl Hash for () {
-    #[inline]
-    fn hash<H: Hasher>(&self, _state: &mut H) {}
-}
-
-#[typle(Tuple for 1..=12)]
-impl<T> Hash for T
-where
-    T: Tuple,  // `T` must be a tuple with 1-12 components.
-    T<_>: Hash,  // Each component must implement `Hash`.
-    T<{T::LEN - 1}>: ?Sized,  // The last component may be unsized.
-{
-    #[inline]
-    fn hash<S: Hasher>(&self, state: &mut S) {
-        for typle_index!(i) in 0..T::LEN {
-            self[[i]].hash(state);
-        }
-    }
-}
-```
-
-See the [full documentation](https://docs.rs/typle/) for more examples.
+See the [crate documentation](https://docs.rs/typle/) for more examples.
