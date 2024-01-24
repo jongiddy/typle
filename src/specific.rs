@@ -318,11 +318,10 @@ impl<'a> SpecificContext<'a> {
             Expr::ForLoop(for_loop) => {
                 self.replace_attrs(&mut for_loop.attrs);
                 self.replace_expr(&mut for_loop.expr, state);
-                // Check for typle_index!(i). Also accepts `typle_const!` for backwards
-                // compatibility.
+                // Check for typle_index!(i).
                 if let Pat::Macro(pat_macro) = &mut *for_loop.pat {
                     if let Some(macro_ident) = pat_macro.mac.path.get_ident() {
-                        if macro_ident == "typle_index" || macro_ident == "typle_const" {
+                        if macro_ident == "typle_index" {
                             let span = pat_macro.mac.tokens.span();
                             let mut tokens = std::mem::take(&mut pat_macro.mac.tokens).into_iter();
                             let Some(TokenTree::Ident(pat_ident)) = tokens.next() else {
@@ -1742,14 +1741,13 @@ impl<'a> SpecificContext<'a> {
     }
 
     // Return Some(usize) if the angled bracketed generic arguments is a `typle_ident!` macro.
-    // Also checks `typle_index!` for backwards compatibility.
     fn typle_ident(&self, args: &mut syn::AngleBracketedGenericArguments) -> Option<usize> {
         if args.args.len() == 1 {
             if let Some(GenericArgument::Type(Type::Macro(TypeMacro { mac }))) =
                 args.args.first_mut()
             {
                 if let Some(macro_ident) = mac.path.get_ident() {
-                    if macro_ident == "typle_ident" || macro_ident == "typle_index" {
+                    if macro_ident == "typle_ident" {
                         let Ok(mut expr) = syn::parse2::<Expr>(std::mem::take(&mut mac.tokens))
                         else {
                             abort!(mac.tokens.span(), "expect expression in typle_ident macro");
