@@ -1,7 +1,7 @@
 # typle
 
-The `typle` crate provides the ability to constrain generic arguments to tuples
-and supports manipulation of the tuple components.
+The `typle` crate provides the ability to constrain generic arguments to be
+tuples and supports manipulation of the tuple components.
 
 For example, to define a function to zip a pair of tuples into a tuple of pairs:
 
@@ -20,7 +20,7 @@ The types `A` and `B` are generic but are constrained to be tuples. The tuples
 can have 0 to 12 components of any (sized) type, but both parameters must have the
 same length.
 
-```
+```rust
 assert_eq!(
     zip(("LHR", "FCO", "ZRH"), (51.5, 41.8, 47.5)),
     (("LHR", 51.5), ("FCO", 41.8), ("ZRH", 47.5))
@@ -39,17 +39,12 @@ A common use of `typle` is to implement a trait for tuples of multiple lengths.
 Compared to using declarative macros, the `typle` code looks more Rust-like and
 provides simple access to individual components.
 
-For example the `Hash` trait for tuples simply hashes each component of the
-tuple in order.
+For example the `Hash` implementation for tuples simply hashes each component of
+the tuple in order.
 
 Using `typle` this can be written as:
 
 ```rust
-impl Hash for () {
-    #[inline]
-    fn hash<H: Hasher>(&self, _state: &mut H) {}
-}
-
 #[typle(Tuple for 1..=12)]
 impl<T> Hash for T
 where
@@ -70,13 +65,6 @@ Compare this to the current implementation in the standard library:
 
 ```rust
 macro_rules! impl_hash_tuple {
-    () => (
-        impl Hash for () {
-            #[inline]
-            fn hash<H: Hasher>(&self, _state: &mut H) {}
-        }
-    );
-
     ( $($name:ident)+) => (
         impl<$($name: Hash),+> Hash for ($($name,)+) where last_type!($($name,)+): ?Sized {
             #[allow(non_snake_case)]
@@ -94,7 +82,6 @@ macro_rules! last_type {
     ($a:ident, $($rest_a:ident,)+) => { last_type!($($rest_a,)+) };
 }
 
-impl_hash_tuple! {}
 impl_hash_tuple! { T }
 impl_hash_tuple! { T B }
 impl_hash_tuple! { T B C }

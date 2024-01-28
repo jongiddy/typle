@@ -253,6 +253,7 @@
 //! {
 //!     type State = TupleSequenceState3<T0, T1, T2>;
 //!     type Output = (<T0>::Output, <T1>::Output, <T2>::Output);
+//!
 //!     fn extract(&self, state: Option<Self::State>) -> Self::Output {
 //!         let mut state = state.unwrap_or(Self::State::S0((), None));
 //!         {
