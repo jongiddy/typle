@@ -118,6 +118,218 @@ pub mod for_loop {
             }
         }
     }
+    #[allow(non_camel_case_types)]
+    pub trait _typle_fn_do_continue {
+        type Return;
+        fn apply(self) -> Self::Return;
+    }
+    pub fn do_continue<T>(t: T) -> <(T,) as _typle_fn_do_continue>::Return
+    where
+        (T,): _typle_fn_do_continue,
+    {
+        <(T,) as _typle_fn_do_continue>::apply((t,))
+    }
+    impl<T0, T1, T2, T3> _typle_fn_do_continue for ((T0, T1, T2, T3),) {
+        type Return = Vec<usize>;
+        fn apply(self) -> Self::Return {
+            let (t,) = self;
+            {
+                let mut output = Vec::new();
+                {
+                    {
+                        output.push(0);
+                    }
+                    {
+                        output.push(1);
+                    }
+                    let mut _typle_break = false;
+                    if !_typle_break {
+                        loop {
+                            if _typle_break {
+                                _typle_break = false;
+                                break;
+                            }
+                            _typle_break = true;
+                            {
+                                {
+                                    continue;
+                                }
+                                output.push(2);
+                            }
+                        }
+                    }
+                    if !_typle_break {
+                        output.push(3);
+                    }
+                    ()
+                }
+                output
+            }
+        }
+    }
+    #[allow(non_camel_case_types)]
+    pub trait _typle_fn_do_continue_labelled {
+        type Return;
+        fn apply(self) -> Self::Return;
+    }
+    pub fn do_continue_labelled<T>(
+        t: T,
+    ) -> <(T,) as _typle_fn_do_continue_labelled>::Return
+    where
+        (T,): _typle_fn_do_continue_labelled,
+    {
+        <(T,) as _typle_fn_do_continue_labelled>::apply((t,))
+    }
+    impl<T0, T1, T2, T3> _typle_fn_do_continue_labelled for ((T0, T1, T2, T3),) {
+        type Return = Vec<usize>;
+        fn apply(self) -> Self::Return {
+            let (t,) = self;
+            {
+                let mut output = Vec::new();
+                'label: {
+                    {
+                        loop {
+                            output.push(0);
+                            break;
+                        }
+                    }
+                    {
+                        loop {
+                            output.push(1);
+                            break;
+                        }
+                    }
+                    let mut _typle_break = false;
+                    if !_typle_break {
+                        'label: loop {
+                            if _typle_break {
+                                _typle_break = false;
+                                break;
+                            }
+                            _typle_break = true;
+                            {
+                                loop {
+                                    {
+                                        continue 'label;
+                                    }
+                                    output.push(2);
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    if !_typle_break {
+                        loop {
+                            output.push(3);
+                            break;
+                        }
+                    }
+                    ()
+                }
+                output
+            }
+        }
+    }
+    #[allow(non_camel_case_types)]
+    pub trait _typle_fn_do_break {
+        type Return;
+        fn apply(self) -> Self::Return;
+    }
+    pub fn do_break<T>(t: T) -> <(T,) as _typle_fn_do_break>::Return
+    where
+        (T,): _typle_fn_do_break,
+    {
+        <(T,) as _typle_fn_do_break>::apply((t,))
+    }
+    impl<T0, T1, T2, T3> _typle_fn_do_break for ((T0, T1, T2, T3),) {
+        type Return = Vec<usize>;
+        fn apply(self) -> Self::Return {
+            let (t,) = self;
+            {
+                let mut output = Vec::new();
+                {
+                    {
+                        output.push(0);
+                    }
+                    {
+                        output.push(1);
+                    }
+                    let mut _typle_break = false;
+                    if !_typle_break {
+                        loop {
+                            if _typle_break {
+                                _typle_break = false;
+                                break;
+                            }
+                            _typle_break = true;
+                            {
+                                {
+                                    break;
+                                }
+                                output.push(2);
+                            }
+                        }
+                    }
+                    if !_typle_break {
+                        output.push(3);
+                    }
+                    ()
+                }
+                output
+            }
+        }
+    }
+    #[allow(non_camel_case_types)]
+    pub trait _typle_fn_do_break_labelled {
+        type Return;
+        fn apply(self) -> Self::Return;
+    }
+    pub fn do_break_labelled<T>(t: T) -> <(T,) as _typle_fn_do_break_labelled>::Return
+    where
+        (T,): _typle_fn_do_break_labelled,
+    {
+        <(T,) as _typle_fn_do_break_labelled>::apply((t,))
+    }
+    impl<T0, T1, T2, T3> _typle_fn_do_break_labelled for ((T0, T1, T2, T3),) {
+        type Return = Vec<usize>;
+        fn apply(self) -> Self::Return {
+            let (t,) = self;
+            {
+                let mut output = Vec::new();
+                'label: {
+                    {
+                        loop {
+                            output.push(0);
+                            break;
+                        }
+                    }
+                    {
+                        loop {
+                            output.push(1);
+                            break;
+                        }
+                    }
+                    {
+                        loop {
+                            {
+                                break 'label;
+                            }
+                            output.push(2);
+                            break;
+                        }
+                    }
+                    {
+                        loop {
+                            output.push(3);
+                            break;
+                        }
+                    }
+                    ()
+                }
+                output
+            }
+        }
+    }
 }
 pub mod function {
     use typle::typle;

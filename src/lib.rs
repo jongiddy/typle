@@ -321,15 +321,16 @@
 //! ```
 //! `func` will be called with 2 and 3, never with 1. The same is true for other places where typle
 //! indexes are introduced. For example in a `typle_for!` macro.
-//! - for loops using `typle_index!` do not support labelled continue.
+//! - A `continue` referencing a label on a `for` loop using `typle_index!` works but displays an
+//! [unsuppressible warning](https://github.com/rust-lang/rust/issues/31745) during compilation.
 //! ```rust ignore
-//! 'label: for typle_index!(i) in 2..=3 {
+//! // warning: label name `'cont` shadows a label name that is already in scope
+//! 'cont: for typle_index!(i) in 2..=3 {
 //!     loop {
 //!         if typle_const!(i == 2) {
-//!             continue 'label;  // compile error
-//!         } else {
-//!             break 'label;  // works
+//!             continue 'cont;
 //!         }
+//!         break;
 //!     }
 //! }
 //! ```

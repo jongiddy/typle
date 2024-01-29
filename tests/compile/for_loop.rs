@@ -46,3 +46,57 @@ impl<T: Tuple> Looper<T> {
         }
     }
 }
+
+#[typle(Tuple for 4..=4)]
+pub fn do_continue<T: Tuple>(t: T) -> Vec<usize> {
+    let mut output = Vec::new();
+    for typle_index!(i) in 0..T::LEN {
+        if typle_const!(i == 2) {
+            continue;
+        }
+        output.push(i);
+    }
+    output
+}
+
+#[typle(Tuple for 4..=4)]
+pub fn do_continue_labelled<T: Tuple>(t: T) -> Vec<usize> {
+    let mut output = Vec::new();
+    'label: for typle_index!(i) in 0..T::LEN {
+        loop {
+            if typle_const!(i == 2) {
+                continue 'label;
+            }
+            output.push(i);
+            break;
+        }
+    }
+    output
+}
+
+#[typle(Tuple for 4..=4)]
+pub fn do_break<T: Tuple>(t: T) -> Vec<usize> {
+    let mut output = Vec::new();
+    for typle_index!(i) in 0..T::LEN {
+        if typle_const!(i == 2) {
+            break;
+        }
+        output.push(i);
+    }
+    output
+}
+
+#[typle(Tuple for 4..=4)]
+pub fn do_break_labelled<T: Tuple>(t: T) -> Vec<usize> {
+    let mut output = Vec::new();
+    'label: for typle_index!(i) in 0..T::LEN {
+        loop {
+            if typle_const!(i == 2) {
+                break 'label;
+            }
+            output.push(i);
+            break;
+        }
+    }
+    output
+}

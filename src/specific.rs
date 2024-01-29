@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::ops::Range;
 
 use proc_macro2::{Group, Ident, Span, TokenStream, TokenTree};
@@ -9,9 +9,10 @@ use syn::spanned::Spanned as _;
 use syn::{
     parse2, parse_quote, token, AttrStyle, Attribute, Block, Expr, ExprArray, ExprBlock, ExprField,
     ExprLit, ExprRange, ExprTuple, Fields, FieldsNamed, FieldsUnnamed, GenericArgument,
-    GenericParam, Generics, ImplItem, Index, Item, Lit, LitInt, Macro, MacroDelimiter, Member,
-    Meta, Pat, Path, PathArguments, PathSegment, PredicateType, QSelf, RangeLimits, ReturnType,
-    Stmt, Token, Type, TypeMacro, TypeParamBound, TypePath, TypeTuple, Variant, WherePredicate,
+    GenericParam, Generics, ImplItem, Index, Item, Label, Lit, LitInt, Macro, MacroDelimiter,
+    Member, Meta, Pat, Path, PathArguments, PathSegment, PredicateType, QSelf, RangeLimits,
+    ReturnType, Stmt, Token, Type, TypeMacro, TypeParamBound, TypePath, TypeTuple, Variant,
+    WherePredicate,
 };
 
 use crate::constant::{evaluate_bool, evaluate_range, evaluate_usize};
@@ -42,6 +43,33 @@ impl Typle {
 #[derive(Default)]
 pub struct BlockState {
     unlabelled_control_flow: bool,
+    labelled_continue: HashSet<Ident>,
+}
+
+impl BlockState {
+    // Propagate the labels from an inner loop into the state for this loop.
+    // We exclude any unlabelled_control_flow as it is contained by the inner
+    // loop. We also exclude any label attached to the inner loop.
+    fn propagate(&mut self, inner: Self, label: Option<&Label>) {
+        for ident in inner.labelled_continue {
+            if let Some(label) = label {
+                if label.name.ident == ident {
+                    continue;
+                }
+            }
+            self.labelled_continue.insert(ident);
+        }
+    }
+
+    // Return whether this loop has any labelled continue that refers to this loop's label.
+    fn has_labelled_continue<'a>(&self, label: Option<&'a Label>) -> Option<&'a Label> {
+        if let Some(label) = label {
+            if self.labelled_continue.contains(&label.name.ident) {
+                return Some(label);
+            }
+        }
+        None
+    }
 }
 
 #[derive(Clone)]
@@ -307,7 +335,15 @@ impl<'a> SpecificContext<'a> {
             }
             Expr::Continue(cont) => {
                 self.replace_attrs(&mut cont.attrs);
-                if cont.label.is_none() {
+                match &cont.label {
+                    Some(lt) => {
+                        state.labelled_continue.insert(lt.ident.clone());
+                    }
+                    None => {
+                        state.unlabelled_control_flow = true;
+                    }
+                }
+                {
                     state.unlabelled_control_flow = true;
                 }
             }
@@ -359,18 +395,46 @@ impl<'a> SpecificContext<'a> {
                             let mut context = self.clone();
                             let mut stmts = Vec::new();
                             context.constants.insert(pat_ident.clone(), 0);
-                            let mut unlabelled_control_flow = false;
+                            let mut check_for_break = false;
                             for index in start..end {
                                 context.constants.get_mut(&pat_ident).map(|v| *v = index);
                                 let mut block = for_loop.body.clone();
-                                let mut state = BlockState::default();
-                                context.replace_block(&mut block, &mut state);
+                                let mut inner_state = BlockState::default();
+                                context.replace_block(&mut block, &mut inner_state);
                                 if block.stmts.is_empty() {
                                     continue;
                                 }
-                                if state.unlabelled_control_flow {
-                                    if !unlabelled_control_flow {
-                                        unlabelled_control_flow = true;
+                                if let Some(label) =
+                                    inner_state.has_labelled_continue(for_loop.label.as_ref())
+                                {
+                                    if !check_for_break {
+                                        check_for_break = true;
+                                        stmts.push(parse_quote! {
+                                            let mut _typle_break = false;
+                                        });
+                                    }
+                                    // If a labelled `continue` occurs inside the block then control
+                                    // goes to the start of the loop with `_typle_break = true`
+                                    // which causes the loop to be exited with `_typle_break = false`.
+                                    // This label shadows the label on the outer block. If there is
+                                    // a labelled break as well, then it will break from this loop
+                                    // without setting _typle_break back to false.
+                                    let stmt = parse_quote! {
+                                        if ! _typle_break {
+                                            #label loop {
+                                                if _typle_break {
+                                                    _typle_break = false;
+                                                    break;
+                                                }
+                                                _typle_break = true;
+                                                #block
+                                            }
+                                        }
+                                    };
+                                    stmts.push(stmt);
+                                } else if inner_state.unlabelled_control_flow {
+                                    if !check_for_break {
+                                        check_for_break = true;
                                         stmts.push(parse_quote! {
                                             let mut _typle_break = false;
                                         });
@@ -395,7 +459,7 @@ impl<'a> SpecificContext<'a> {
                                     };
                                     stmts.push(stmt);
                                 } else {
-                                    if unlabelled_control_flow {
+                                    if check_for_break {
                                         // If this block does not contain a break or continue, but
                                         // previous blocks did we need to check for the `break`
                                         // condition before running this block.
@@ -414,6 +478,7 @@ impl<'a> SpecificContext<'a> {
                                         ));
                                     }
                                 }
+                                state.propagate(inner_state, for_loop.label.as_ref());
                             }
                             stmts.push(Stmt::Expr(
                                 Expr::Tuple(ExprTuple {
@@ -437,8 +502,9 @@ impl<'a> SpecificContext<'a> {
                 }
                 // Otherwise it is a standard for loop
                 self.replace_pat(&mut for_loop.pat);
-                let mut state = BlockState::default();
-                self.replace_block(&mut for_loop.body, &mut state);
+                let mut inner_state = BlockState::default();
+                self.replace_block(&mut for_loop.body, &mut inner_state);
+                state.propagate(inner_state, for_loop.label.as_ref());
             }
             Expr::Group(group) => {
                 self.replace_attrs(&mut group.attrs);
@@ -525,8 +591,9 @@ impl<'a> SpecificContext<'a> {
             }
             Expr::Loop(r#loop) => {
                 self.replace_attrs(&mut r#loop.attrs);
-                let mut state = BlockState::default();
-                self.replace_block(&mut r#loop.body, &mut state);
+                let mut inner_state = BlockState::default();
+                self.replace_block(&mut r#loop.body, &mut inner_state);
+                state.propagate(inner_state, r#loop.label.as_ref());
             }
             Expr::Macro(r#macro) => {
                 self.replace_attrs(&mut r#macro.attrs);
@@ -774,8 +841,9 @@ impl<'a> SpecificContext<'a> {
             Expr::While(r#while) => {
                 self.replace_attrs(&mut r#while.attrs);
                 self.replace_expr(&mut r#while.cond, state);
-                let mut state = BlockState::default();
-                self.replace_block(&mut r#while.body, &mut state);
+                let mut inner_state = BlockState::default();
+                self.replace_block(&mut r#while.body, &mut inner_state);
+                state.propagate(inner_state, r#while.label.as_ref());
             }
             Expr::Yield(r#yield) => {
                 self.replace_attrs(&mut r#yield.attrs);

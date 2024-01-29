@@ -1,5 +1,6 @@
 use std::hash::Hasher as _;
 
+use crate::compile::for_loop::{do_break, do_break_labelled, do_continue, do_continue_labelled};
 use crate::compile::function::{hash, zip};
 
 mod compile;
@@ -32,10 +33,7 @@ fn test_zip() {
         zip((2.0, "test"), (Some(9u8), ('a', 'b'))),
         ((2.0, Some(9u8)), ("test", ('a', 'b')))
     );
-    assert_eq!(
-        zip((), ()),
-        ()
-    );
+    assert_eq!(zip((), ()), ());
 
     let s = ('a', 'b', 'c');
     let t = (1, 2, 3);
@@ -44,4 +42,28 @@ fn test_zip() {
     let s = (2.0, "test".to_string());
     let t = (9u8, ());
     assert_eq!(zip(s, t), ((2.0, 9u8), ("test".to_string(), ())));
+}
+
+#[test]
+fn test_continue() {
+    let output = do_continue((1, 2, 3, 4));
+    assert_eq!(output, vec![0, 1, 3]);
+}
+
+#[test]
+fn test_continue_labelled() {
+    let output = do_continue_labelled((1, 2, 3, 4));
+    assert_eq!(output, vec![0, 1, 3]);
+}
+
+#[test]
+fn test_break() {
+    let output = do_break((1, 2, 3, 4));
+    assert_eq!(output, vec![0, 1]);
+}
+
+#[test]
+fn test_break_labelled() {
+    let output = do_break_labelled((1, 2, 3, 4));
+    assert_eq!(output, vec![0, 1]);
 }
