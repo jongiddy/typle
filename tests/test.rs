@@ -29,8 +29,8 @@ fn test_zip() {
         (("LHR", 51.5), ("FCO", 41.8), ("ZRH", 47.5))
     );
     assert_eq!(
-        zip((2.0, "test"), (9u8, ())),
-        ((2.0, 9u8), ("test", ()))
+        zip((2.0, "test"), (Some(9u8), ('a', 'b'))),
+        ((2.0, Some(9u8)), ("test", ('a', 'b')))
     );
     assert_eq!(
         zip((), ()),

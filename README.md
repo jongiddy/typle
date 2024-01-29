@@ -8,16 +8,16 @@ For example, to define a function to zip a pair of tuples into a tuple of pairs:
 ```rust
 #[typle(Tuple for 0..=12)]
 pub fn zip<A: Tuple, B: Tuple>(
-    a: A,
-    b: B
-) -> typle_for!(i in .. => (A<{i}>, B<{i}>))
+    a: A, // (A0, A1,...)
+    b: B, // (B0, B1,...)
+) -> typle_for!(i in .. => (A<{i}>, B<{i}>)) // ((A0, B0), (A1, B1),...)
 {
-    typle_for!(i in .. => (a[[i]], b[[i]]))
+    typle_for!(i in .. => (a[[i]], b[[i]])) // ((a.0, b.0), (a.1, b.1),...)
 }
 ```
 
 The types `A` and `B` are generic but are constrained to be tuples. The tuples
-can have 0 to 12 components of any (sized) type, but both parameters must have the
+can have 0 to 12 components of any (sized) type, but both tuples must have the
 same length.
 
 ```rust
@@ -26,8 +26,8 @@ assert_eq!(
     (("LHR", 51.5), ("FCO", 41.8), ("ZRH", 47.5))
 );
 assert_eq!(
-    zip((2.0, "test"), (9u8, ())),
-    ((2.0, 9u8), ("test", ()))
+    zip((2.0, "test"), (Some(9u8), ('a', 'b'))),
+    ((2.0, Some(9u8)), ("test", ('a', 'b')))
 );
 assert_eq!(
     zip((), ()),
@@ -37,7 +37,7 @@ assert_eq!(
 
 A common use of `typle` is to implement a trait for tuples of multiple lengths.
 Compared to using declarative macros, the `typle` code looks more Rust-like and
-provides simple access to individual components.
+provides access to individual components and their position.
 
 For example the `Hash` implementation for tuples simply hashes each component of
 the tuple in order.
