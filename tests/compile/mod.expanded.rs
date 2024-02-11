@@ -330,6 +330,67 @@ pub mod for_loop {
             }
         }
     }
+    #[allow(non_camel_case_types)]
+    pub trait _typle_fn_check_out_of_bounds {
+        type Return;
+        fn apply(self) -> Self::Return;
+    }
+    pub fn check_out_of_bounds<T>(
+        t: T,
+    ) -> <(T,) as _typle_fn_check_out_of_bounds>::Return
+    where
+        (T,): _typle_fn_check_out_of_bounds,
+    {
+        <(T,) as _typle_fn_check_out_of_bounds>::apply((t,))
+    }
+    impl _typle_fn_check_out_of_bounds for ((),) {
+        type Return = usize;
+        fn apply(self) -> Self::Return {
+            #[allow(unused_variables)]
+            let (t,) = self;
+            {
+                let mut count = 0;
+                {
+                    {
+                        count += 1;
+                    }
+                    {
+                        count += 1;
+                    }
+                    {
+                        count += 1;
+                    }
+                    ()
+                }
+                count
+            }
+        }
+    }
+    #[allow(non_camel_case_types)]
+    pub trait _typle_fn_check_negative_range {
+        type Return;
+        fn apply(self) -> Self::Return;
+    }
+    pub fn check_negative_range<T>(
+        t: T,
+    ) -> <(T,) as _typle_fn_check_negative_range>::Return
+    where
+        (T,): _typle_fn_check_negative_range,
+    {
+        <(T,) as _typle_fn_check_negative_range>::apply((t,))
+    }
+    impl _typle_fn_check_negative_range for ((),) {
+        type Return = usize;
+        fn apply(self) -> Self::Return {
+            #[allow(unused_variables)]
+            let (t,) = self;
+            {
+                let mut count = 0;
+                { () }
+                count
+            }
+        }
+    }
 }
 pub mod function {
     use typle::typle;

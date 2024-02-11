@@ -313,26 +313,36 @@
 //! }
 //! ```
 //! - Shadowing of typle indexes is not supported. For example, in:
-//! ```rust ignore
+//! ```rust
+//! # use typle::typle;
+//! # #[typle(Tuple for 1..=1)]
+//! # fn test<T>(t: T) where T: Tuple {
+//! let mut v = vec![];
 //! for typle_index!(i) in 2..=3 {
 //!     let i = 1;
-//!     func(i)
+//!     v.push(i);
 //! }
+//! assert_eq!(v, [2, 3]);
+//! # }
 //! ```
-//! `func` will be called with 2 and 3, never with 1. The same is true for other places where typle
+//! `push` is called with 2 and 3, never with 1. The same is true for other places where typle
 //! indexes are introduced. For example in a `typle_for!` macro.
 //! - A `continue` referencing a label on a `for` loop using `typle_index!` works but displays an
 //! [unsuppressible warning](https://github.com/rust-lang/rust/issues/31745) during compilation.
-//! ```rust ignore
+//! ```rust
+//! # use typle::typle;
+//! # #[typle(Tuple for 1..=1)]
+//! # fn test<T>(t: T) where T: Tuple {
 //! // warning: label name `'cont` shadows a label name that is already in scope
 //! 'cont: for typle_index!(i) in 2..=3 {
 //!     loop {
-//!         if typle_const!(i == 2) {
+//!         if i == 2 {
 //!             continue 'cont;
 //!         }
 //!         break;
 //!     }
 //! }
+//! # }
 //! ```
 
 mod constant;

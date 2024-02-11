@@ -1,6 +1,9 @@
 use std::hash::Hasher as _;
 
-use crate::compile::for_loop::{do_break, do_break_labelled, do_continue, do_continue_labelled};
+use crate::compile::for_loop::{
+    check_negative_range, check_out_of_bounds, do_break, do_break_labelled, do_continue,
+    do_continue_labelled,
+};
 use crate::compile::function::{hash, zip};
 
 mod compile;
@@ -66,4 +69,14 @@ fn test_break() {
 fn test_break_labelled() {
     let output = do_break_labelled((1, 2, 3, 4));
     assert_eq!(output, vec![0, 1]);
+}
+
+#[test]
+fn test_out_of_typle_range() {
+    assert_eq!(check_out_of_bounds(()), 3);
+}
+
+#[test]
+fn test_negative_range() {
+    assert_eq!(check_negative_range(()), 0);
 }

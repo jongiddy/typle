@@ -389,9 +389,6 @@ impl<'a> SpecificContext<'a> {
                             if let RangeLimits::Closed(_) = expr_range.limits {
                                 end += 1;
                             }
-                            if start > end || end > self.typle_len {
-                                abort!(for_loop.expr, "expected sub-range of tuple size");
-                            }
                             let mut context = self.clone();
                             let mut stmts = Vec::new();
                             context.constants.insert(pat_ident.clone(), 0);

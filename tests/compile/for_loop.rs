@@ -100,3 +100,23 @@ pub fn do_break_labelled<T: Tuple>(t: T) -> Vec<usize> {
     }
     output
 }
+
+// Check indexes out of tuple range
+#[typle(Tuple for 0..=0)]
+pub fn check_out_of_bounds<T: Tuple>(t: T) -> usize {
+    let mut count = 0;
+    for typle_index!(i) in 15..18 {
+        count += 1;
+    }
+    count
+}
+
+// Check negative ranges
+#[typle(Tuple for 0..=0)]
+pub fn check_negative_range<T: Tuple>(t: T) -> usize {
+    let mut count = 0;
+    for typle_index!(i) in 4..2 {
+        count += 1;
+    }
+    count
+}
