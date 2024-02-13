@@ -1200,10 +1200,12 @@ impl<'a> SpecificContext<'a> {
                 for subitem in &mut r#impl.items {
                     match subitem {
                         ImplItem::Const(constant) => {
+                            context.replace_attrs(&mut constant.attrs);
                             context.replace_type(&mut constant.ty);
                             context.replace_expr(&mut constant.expr, state);
                         }
                         ImplItem::Fn(function) => {
+                            context.replace_attrs(&mut function.attrs);
                             let inner_context =
                                 context.handle_typle_constraints(&mut function.sig.generics);
                             let inner_context = inner_context.as_ref().unwrap_or(context);
@@ -1211,9 +1213,11 @@ impl<'a> SpecificContext<'a> {
                             inner_context.replace_block(&mut function.block, state);
                         }
                         ImplItem::Type(ty) => {
+                            context.replace_attrs(&mut ty.attrs);
                             context.replace_type(&mut ty.ty);
                         }
                         ImplItem::Macro(r#macro) => {
+                            context.replace_attrs(&mut r#macro.attrs);
                             context.replace_macro(&mut r#macro.mac, EvaluationContext::Type, state);
                         }
                         _ => {}

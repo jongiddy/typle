@@ -49,11 +49,11 @@
 //! Inside `typle` code, individual components of a tuple can be selected using
 //! `<{i}>` for types and `[[i]]` for values. The value `i` must be a *typle
 //! index expression*, an expression that only uses literal `usize` values or
-//! *typle indexes* created by one of several macros.
+//! *typle index variables* created by one of several macros.
 //!
 //! The [`typle_for!`] macro creates a new tuple type or value. Inside the macro
-//! the typle index can provide access to each component of an existing tuple
-//! type or value.
+//! the typle index variable can provide access to each component of an existing
+//! tuple type or value.
 //!
 //! ```rust
 //! # use typle::typle;
@@ -79,7 +79,8 @@
 //! - `T<0>: Copy` - the first component of the tuple implements `Copy`
 //! - `T<{1..=2}>: Copy` - the second and third components implement `Copy`
 //! - `typle_bound!` - the most general way to bound components,
-//! allowing the typle index to be used in the trait bounds, as shown below:
+//! allowing the typle index variable to be used in the trait bounds, as shown
+//! below:
 //!
 //! ```rust
 //! # use typle::typle;
@@ -104,7 +105,7 @@
 //! ```
 //!
 //! The associated constant `LEN` provides the length of the tuple in each
-//! generated item. It can be used as a typle index.
+//! generated item. It can be used in typle index expressions.
 //!
 //! Use the `typle_index!` macro in a `for` loop to iterate over a range bounded
 //! by typle index expressions.
@@ -143,16 +144,16 @@
 //! [`hefty`](https://github.com/jongiddy/hefty/blob/main/src/tuple.rs) crate and
 //! demonstrates the use of `typle` with `enum`s.
 //!
-//! The [`typle_variant!`] macro creates multiple enum variants by looping
-//! similarly to `typle_for!`.
-//!
 //! Typled `enum`s and `struct`s require a separate identifier for each tuple
 //! length. The `typle` macro adds the tuple length to their original name. For
 //! example `enum TupleSequenceState<T>` expands to `enum TupleSequenceState3<T0, T1, T2>`
 //! for 3-tuples. When referring to these types from other typled items, use
 //! `TupleSequenceState<T<{ .. }>>`.
 //!
-//! Use the `typle_ident!` macro to concatenate a number to an identifier. For
+//! The [`typle_variant!`] macro creates multiple enum variants by looping
+//! similarly to `typle_for!`.
+//!
+//! The `typle_ident!` macro concatenates a number to an identifier. For
 //! example `S::<typle_ident!(3)>` becomes the identifer `S3`.
 //!
 //! The `typle_attr_if` attribute allows conditional inclusion of attributes. It works similarly to
@@ -296,7 +297,7 @@
 //! - The typle trait (`Tuple` in the examples) cannot be combined with other constraints. To
 //! support `?Sized` tuples constrain the last component using `T<{T::LEN - 1}>: ?Sized`.
 //! - Standalone `async` and `unsafe` functions are not supported.
-//! - Standalone functions require explicit lifetimes on references
+//! - Standalone functions require explicit lifetimes on references:
 //! ```rust
 //! # use std::hash::{Hash, Hasher};
 //! # use typle::typle;
@@ -312,7 +313,7 @@
 //!     }
 //! }
 //! ```
-//! - Shadowing of typle indexes is not supported. For example, in:
+//! - Typle index variables cannot be shadowed:
 //! ```rust
 //! # use typle::typle;
 //! # #[typle(Tuple for 1..=1)]
@@ -325,8 +326,6 @@
 //! assert_eq!(v, [2, 3]);
 //! # }
 //! ```
-//! `push` is called with 2 and 3, never with 1. The same is true for other places where typle
-//! indexes are introduced. For example in a `typle_for!` macro.
 //! - A `continue` referencing a label on a `for` loop using `typle_index!` works but displays an
 //! [unsuppressible warning](https://github.com/rust-lang/rust/issues/31745) during compilation.
 //! ```rust
