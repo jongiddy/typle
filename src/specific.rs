@@ -343,9 +343,6 @@ impl<'a> SpecificContext<'a> {
                         state.unlabelled_control_flow = true;
                     }
                 }
-                {
-                    state.unlabelled_control_flow = true;
-                }
             }
             Expr::Field(field) => {
                 self.replace_attrs(&mut field.attrs);
