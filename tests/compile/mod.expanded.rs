@@ -969,6 +969,31 @@ pub mod function {
         }
     }
 }
+pub mod pattern {
+    #![allow(dead_code)]
+    use typle::typle;
+    pub struct MyStruct<T> {
+        t: T,
+    }
+    impl MyStruct<(u32, u32, u32)> {
+        pub fn test_macro(&self) -> u32 {
+            let (x0, x1): (u32, u32) = (self.t.0 * 3, self.t.1 * 3);
+            x0 + x1
+        }
+        pub fn component(&self) -> u32 {
+            let x1: u32 = self.t.1;
+            x1
+        }
+        pub fn test_slice(&self) -> u32 {
+            let [x0, x1] = [self.t.0 * 3, self.t.1 * 3];
+            x0 + x1
+        }
+        pub fn test_tuple(&self) -> u32 {
+            let (x0, x1) = (self.t.0 * 3, self.t.1 * 3);
+            x0 + x1
+        }
+    }
+}
 pub mod type_alias {
     #![allow(type_alias_bounds, unused)]
     use typle::typle;

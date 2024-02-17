@@ -1447,12 +1447,18 @@ impl<'a> SpecificContext<'a> {
 
     fn replace_pat(&self, pat: &mut Pat) {
         match pat {
-            Pat::Const(_) => abort!(pat, "Const unsupported"),
-            Pat::Ident(_) => {}
-            Pat::Lit(_) => abort!(pat, "Lit unsupported"),
-            Pat::Macro(_) => abort!(pat, "Macro unsupported"),
-            Pat::Or(_) => abort!(pat, "Or unsupported"),
-            Pat::Paren(_) => abort!(pat, "Paren unsupported"),
+            Pat::Macro(m) => {
+                let mut state = BlockState::default();
+                self.replace_macro(&mut m.mac, EvaluationContext::Value, &mut state);
+            }
+            Pat::Or(or) => {
+                for pat in &mut or.cases {
+                    self.replace_pat(pat);
+                }
+            }
+            Pat::Paren(paren) => {
+                self.replace_pat(&mut paren.pat);
+            }
             Pat::Path(path) => {
                 // State::S::<typle_ident!(i)> -> State::S2
                 if let Some(qself) = &mut path.qself {
@@ -1491,12 +1497,19 @@ impl<'a> SpecificContext<'a> {
                     path.path.segments.push(path_segment)
                 }
             }
-            Pat::Range(_) => abort!(pat, "Range unsupported"),
-            Pat::Reference(_) => abort!(pat, "Reference unsupported"),
-            Pat::Rest(_) => abort!(pat, "Rest unsupported"),
-            Pat::Slice(_) => abort!(pat, "Slice unsupported"),
-            Pat::Struct(_) => abort!(pat, "Struct unsupported"),
-            Pat::Tuple(_) => {}
+            Pat::Reference(reference) => {
+                self.replace_pat(&mut reference.pat);
+            }
+            Pat::Slice(slice) => {
+                for pat in &mut slice.elems {
+                    self.replace_pat(pat);
+                }
+            }
+            Pat::Tuple(tuple) => {
+                for pat in &mut tuple.elems {
+                    self.replace_pat(pat);
+                }
+            }
             Pat::TupleStruct(tuple_struct) => {
                 // State::S::<typle_ident!(i)> -> State::S2
                 if let Some(qself) = &mut tuple_struct.qself {
@@ -1536,10 +1549,9 @@ impl<'a> SpecificContext<'a> {
                 }
             }
             Pat::Type(pat_type) => {
+                self.replace_pat(&mut pat_type.pat);
                 self.replace_type(&mut pat_type.ty);
             }
-            Pat::Verbatim(_) => abort!(pat, "Verbatim unsupported"),
-            Pat::Wild(_) => abort!(pat, "Wild unsupported"),
             _ => {}
         }
     }
