@@ -21,6 +21,34 @@ pub fn evaluate_bool(expr: &Expr) -> Option<bool> {
                     }
                 }
             }
+            syn::BinOp::Lt(_) => {
+                if let Some(left) = evaluate_usize(&binary.left) {
+                    if let Some(right) = evaluate_usize(&binary.right) {
+                        return Some(left < right);
+                    }
+                }
+            }
+            syn::BinOp::Le(_) => {
+                if let Some(left) = evaluate_usize(&binary.left) {
+                    if let Some(right) = evaluate_usize(&binary.right) {
+                        return Some(left <= right);
+                    }
+                }
+            }
+            syn::BinOp::Gt(_) => {
+                if let Some(left) = evaluate_usize(&binary.left) {
+                    if let Some(right) = evaluate_usize(&binary.right) {
+                        return Some(left > right);
+                    }
+                }
+            }
+            syn::BinOp::Ge(_) => {
+                if let Some(left) = evaluate_usize(&binary.left) {
+                    if let Some(right) = evaluate_usize(&binary.right) {
+                        return Some(left >= right);
+                    }
+                }
+            }
             _ => {}
         },
         Expr::Block(_) => todo!(),
