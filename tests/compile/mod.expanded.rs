@@ -969,6 +969,21 @@ pub mod function {
         }
     }
 }
+pub mod macros {
+    #![allow(dead_code)]
+    use typle::typle;
+    struct MyStruct<T> {
+        t: T,
+    }
+    impl<T0, T1, T2> MyStruct<(T0, T1, T2)> {
+        fn call_macro(_t: (T0, T1, T2)) {
+            "T";
+            "T :: LEN";
+            "(T0, T1, T2)";
+            "3";
+        }
+    }
+}
 pub mod pattern {
     #![allow(dead_code)]
     use typle::typle;

@@ -1347,8 +1347,125 @@ impl<'a> SpecificContext<'a> {
                         };
                     }
                 }
+                return;
             }
         }
+        r#macro.tokens = self.replace_macro_token_stream(std::mem::take(&mut r#macro.tokens));
+    }
+
+    // Look for `typle_ty!(...)` or `typle_expr!(...)` and evaluate body.
+    fn replace_macro_token_stream(&self, input: TokenStream) -> TokenStream {
+        enum TTState {
+            Start,
+            FoundIdent(Ident),
+            TypleTy,
+            TypleExpr,
+        }
+
+        let mut output = Vec::new();
+        let mut state = TTState::Start;
+        for tt in input {
+            match tt {
+                TokenTree::Group(group) => {
+                    match state {
+                        TTState::Start => {
+                            output.push(TokenTree::Group(Group::new(
+                                group.delimiter(),
+                                self.replace_macro_token_stream(group.stream()),
+                            )));
+                        }
+                        TTState::FoundIdent(ident) => {
+                            output.push(TokenTree::Ident(ident));
+                            output.push(TokenTree::Group(Group::new(
+                                group.delimiter(),
+                                self.replace_macro_token_stream(group.stream()),
+                            )));
+                        }
+                        TTState::TypleTy => {
+                            let span = group.span();
+                            let Ok(mut ty) = syn::parse2(group.stream()) else {
+                                abort!(span, "typle: expected type");
+                            };
+                            self.replace_type(&mut ty);
+                            let token_stream = ty.into_token_stream();
+                            for tt in token_stream {
+                                output.push(tt);
+                            }
+                        }
+                        TTState::TypleExpr => {
+                            let span = group.span();
+                            let Ok(mut expr) = syn::parse2(group.stream()) else {
+                                abort!(span, "typle: expected expression");
+                            };
+                            let mut state = BlockState::default();
+                            self.replace_expr(&mut expr, &mut state);
+                            let token_stream = expr.into_token_stream();
+                            for tt in token_stream {
+                                output.push(tt);
+                            }
+                        }
+                    }
+                    state = TTState::Start;
+                }
+                TokenTree::Ident(ident) => {
+                    match state {
+                        TTState::Start => {}
+                        TTState::FoundIdent(prev) => {
+                            output.push(TokenTree::Ident(prev));
+                        }
+                        TTState::TypleTy | TTState::TypleExpr => {
+                            abort!(ident.span(), "typle: expected macro body");
+                        }
+                    }
+                    state = TTState::FoundIdent(ident);
+                }
+                TokenTree::Punct(punct) => {
+                    match state {
+                        TTState::Start => {}
+                        TTState::FoundIdent(ident) => {
+                            if punct.as_char() == '!' {
+                                if ident == "typle_ty" {
+                                    state = TTState::TypleTy;
+                                    continue;
+                                } else if ident == "typle_expr" {
+                                    state = TTState::TypleExpr;
+                                    continue;
+                                }
+                            }
+                            output.push(TokenTree::Ident(ident));
+                        }
+                        TTState::TypleTy | TTState::TypleExpr => {
+                            abort!(punct.span(), "typle: expected macro body");
+                        }
+                    }
+                    output.push(TokenTree::Punct(punct));
+                    state = TTState::Start;
+                }
+                TokenTree::Literal(literal) => {
+                    match state {
+                        TTState::Start => {}
+                        TTState::FoundIdent(ident) => {
+                            output.push(TokenTree::Ident(ident));
+                        }
+                        TTState::TypleTy | TTState::TypleExpr => {
+                            abort!(literal.span(), "typle: expected macro body");
+                        }
+                    }
+                    output.push(TokenTree::Literal(literal));
+                    state = TTState::Start;
+                }
+            }
+        }
+        match state {
+            TTState::Start => {}
+            TTState::FoundIdent(ident) => {
+                output.push(TokenTree::Ident(ident));
+            }
+            TTState::TypleTy | TTState::TypleExpr => {
+                abort!(Span::call_site(), "typle: expected macro body");
+            }
+        }
+        output.into_iter().collect()
     }
 
     fn parse_pattern_range(&self, token_stream: &mut TokenStream) -> (Option<Ident>, Range<usize>) {

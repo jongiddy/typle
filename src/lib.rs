@@ -140,6 +140,24 @@
 //! assert_eq!(m.interleave(), [14, 9]);
 //! ```
 //!
+//! Due to interaction of `typle` with other macros, passing some types and
+//! expressions to a macro may produce unexpected results. To help work around
+//! this, inside a macro invocation the `typle_ty!` macro expands types and the
+//! `typle_expr!` macro expands expressions.
+//!
+//!
+//! ```rust
+//! # use typle::typle;
+//! # #[typle(Tuple for 3..=3)]
+//! # fn test1<T: Tuple>(t: T) {
+//! assert_eq!(
+//!     stringify!([T, typle_ty!(T), T::LEN, typle_expr!(T::LEN)]),
+//!     "[T, (T0, T1, T2), T :: LEN, 3]"
+//! );
+//! # }
+//! # test1((1, 2, 3));
+//! ```
+//!
 //! The next example is simplified from code in the
 //! [`hefty`](https://github.com/jongiddy/hefty/blob/main/src/tuple.rs) crate and
 //! demonstrates the use of `typle` with `enum`s.
