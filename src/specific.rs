@@ -16,6 +16,7 @@ use syn::{
 };
 
 use crate::constant::{evaluate_bool, evaluate_range, evaluate_usize};
+use crate::IterationTrait;
 
 enum EvaluationContext {
     Type,
@@ -74,7 +75,7 @@ impl BlockState {
 
 #[derive(Clone)]
 pub struct SpecificContext<'a> {
-    pub typle_trait: &'a Ident,
+    pub typle_trait: &'a IterationTrait,
     pub typle_len: usize,
     pub constants: HashMap<Ident, usize>,
     pub typles: HashMap<Ident, Typle>,
@@ -133,7 +134,7 @@ impl<'a> SpecificContext<'a> {
                 let path = &trait_bound.path;
                 if path.leading_colon.is_none() && path.segments.len() == 1 {
                     if let Some(segment) = path.segments.first() {
-                        if &segment.ident == self.typle_trait {
+                        if segment.ident == self.typle_trait.ident {
                             match &segment.arguments {
                                 PathArguments::None => {
                                     return Some(Typle::Generic(
@@ -633,7 +634,7 @@ impl<'a> SpecificContext<'a> {
                     .into_iter()
                     .peekable();
                 if let Some(first) = segments.peek() {
-                    if &first.ident == self.typle_trait {
+                    if first.ident == self.typle_trait.ident {
                         let _ = segments.next().unwrap();
                         match segments.peek() {
                             Some(second) => {
@@ -644,6 +645,26 @@ impl<'a> SpecificContext<'a> {
                                         attrs: std::mem::take(&mut path.attrs),
                                         lit: Lit::Int(LitInt::new(
                                             &self.typle_len.to_string(),
+                                            path.span(),
+                                        )),
+                                    });
+                                    return;
+                                } else if second.ident == "MAX" {
+                                    // Tuple::MAX or <T as Tuple>::MAX
+                                    *expr = Expr::Lit(ExprLit {
+                                        attrs: std::mem::take(&mut path.attrs),
+                                        lit: Lit::Int(LitInt::new(
+                                            &self.typle_trait.max_len.to_string(),
+                                            path.span(),
+                                        )),
+                                    });
+                                    return;
+                                } else if second.ident == "MIN" {
+                                    // Tuple::MIN or <T as Tuple>::MIN
+                                    *expr = Expr::Lit(ExprLit {
+                                        attrs: std::mem::take(&mut path.attrs),
+                                        lit: Lit::Int(LitInt::new(
+                                            &self.typle_trait.min_len.to_string(),
                                             path.span(),
                                         )),
                                     });
@@ -664,6 +685,26 @@ impl<'a> SpecificContext<'a> {
                                                 attrs: std::mem::take(&mut path.attrs),
                                                 lit: Lit::Int(LitInt::new(
                                                     &self.typle_len.to_string(),
+                                                    path.span(),
+                                                )),
+                                            });
+                                            return;
+                                        } else if second.ident == "MAX" {
+                                            // T::MAX
+                                            *expr = Expr::Lit(ExprLit {
+                                                attrs: std::mem::take(&mut path.attrs),
+                                                lit: Lit::Int(LitInt::new(
+                                                    &self.typle_trait.max_len.to_string(),
+                                                    path.span(),
+                                                )),
+                                            });
+                                            return;
+                                        } else if second.ident == "MIN" {
+                                            // T::MIN
+                                            *expr = Expr::Lit(ExprLit {
+                                                attrs: std::mem::take(&mut path.attrs),
+                                                lit: Lit::Int(LitInt::new(
+                                                    &self.typle_trait.min_len.to_string(),
                                                     path.span(),
                                                 )),
                                             });

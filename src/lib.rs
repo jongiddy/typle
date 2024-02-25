@@ -105,7 +105,8 @@
 //! ```
 //!
 //! The associated constant `LEN` provides the length of the tuple in each
-//! generated item. It can be used in typle index expressions.
+//! generated item. Associated constants `MIN` and `MAX` provide the bounds of
+//! the typle lengths. These values can be used in typle index expressions.
 //!
 //! Use the `typle_index!` macro in a `for` loop to iterate over a range bounded
 //! by typle index expressions.
@@ -138,24 +139,6 @@
 //!
 //! let m = MyStruct::from((3, 9, 11));
 //! assert_eq!(m.interleave(), [14, 9]);
-//! ```
-//!
-//! Due to interaction of `typle` with other macros, passing some types and
-//! expressions to a macro may produce unexpected results. To help work around
-//! this, inside a macro invocation the `typle_ty!` macro expands types and the
-//! `typle_expr!` macro expands expressions.
-//!
-//!
-//! ```rust
-//! # use typle::typle;
-//! # #[typle(Tuple for 3..=3)]
-//! # fn test1<T: Tuple>(t: T) {
-//! assert_eq!(
-//!     stringify!([T, typle_ty!(T), T::LEN, typle_expr!(T::LEN)]),
-//!     "[T, (T0, T1, T2), T :: LEN, 3]"
-//! );
-//! # }
-//! # test1((1, 2, 3));
 //! ```
 //!
 //! The next example is simplified from code in the
@@ -361,6 +344,24 @@
 //! }
 //! # }
 //! ```
+//! - Due to interaction of `typle` with other macros, passing some types and
+//! expressions to a macro may produce unexpected results. To help work around
+//! this, inside a macro invocation the `typle_ty!` macro expands types and the
+//! `typle_expr!` macro expands expressions.
+//!
+//! ```rust
+//! # use typle::typle;
+//! # #[typle(Tuple for 3..=3)]
+//! # fn test1<T: Tuple>(t: T) {
+//! assert_eq!(
+//!     stringify!([T, typle_ty!(T), T::LEN, typle_expr!(T::LEN)]),
+//!     "[T, (T0, T1, T2), T :: LEN, 3]"
+//! );
+//! # }
+//! # test1((1, 2, 3));
+//! ```
+//!
+
 
 mod constant;
 mod specific;
@@ -471,7 +472,7 @@ impl IterationTrait {
                 if self.has_typles(generics) {
                     for typle_len in self.min_len..=self.max_len {
                         let context = SpecificContext {
-                            typle_trait: &self.ident,
+                            typle_trait: &self,
                             typle_len,
                             constants: HashMap::new(),
                             typles: HashMap::new(),
@@ -587,7 +588,7 @@ impl IterationTrait {
 
                     for typle_len in self.min_len..=self.max_len {
                         let context = SpecificContext {
-                            typle_trait: &self.ident,
+                            typle_trait: &self,
                             typle_len,
                             constants: HashMap::new(),
                             typles: HashMap::new(),

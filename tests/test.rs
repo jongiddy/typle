@@ -1,4 +1,7 @@
+#![cfg(test)]
 use std::hash::Hasher as _;
+
+use typle::typle;
 
 use crate::compile::for_loop::{
     check_negative_range, check_out_of_bounds, do_break, do_break_labelled, do_continue,
@@ -79,4 +82,49 @@ fn test_out_of_typle_range() {
 #[test]
 fn test_negative_range() {
     assert_eq!(check_negative_range(()), 0);
+}
+
+#[allow(unused)]
+struct MyStruct<T> {
+    t: T,
+}
+
+#[allow(unused)]
+#[typle(Tuple for 2..=5)]
+impl<T: Tuple> MyStruct<T> {
+    fn tuple_min(&self) -> usize {
+        Tuple::MIN
+    }
+
+    fn tuple_max(&self) -> usize {
+        Tuple::MAX
+    }
+
+    fn tuple_len(&self) -> usize {
+        Tuple::LEN
+    }
+
+    fn type_min(&self) -> usize {
+        T::MIN
+    }
+
+    fn type_max(&self) -> usize {
+        T::MAX
+    }
+
+    fn type_len(&self) -> usize {
+        T::LEN
+    }
+}
+
+#[test]
+fn test_min_max() {
+    let m = MyStruct { t: (1, 2, 3) };
+    assert_eq!(m.tuple_min(), 2);
+    assert_eq!(m.tuple_max(), 5);
+    assert_eq!(m.tuple_len(), 3);
+
+    assert_eq!(m.type_min(), 2);
+    assert_eq!(m.type_max(), 5);
+    assert_eq!(m.type_len(), 3);
 }
