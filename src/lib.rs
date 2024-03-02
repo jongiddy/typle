@@ -145,11 +145,12 @@
 //! [`hefty`](https://github.com/jongiddy/hefty/blob/main/src/tuple.rs) crate and
 //! demonstrates the use of `typle` with `enum`s.
 //!
-//! Typled `enum`s and `struct`s require a separate identifier for each tuple
-//! length. The `typle` macro adds the tuple length to their original name. For
-//! example `enum TupleSequenceState<T>` expands to `enum TupleSequenceState3<T0, T1, T2>`
-//! for 3-tuples. When referring to these types from other typled items, use
-//! `TupleSequenceState<T<{ .. }>>`.
+//! Typled `enum`s are implemented for the maximum length. When referring to
+//! these types from other typled items, use `TupleSequenceState<T<{ ..T::MAX }>>`.
+//! This will fill in unused type parameters with the `never` type provided for
+//! the `typle` macro. The default type is [`!`] but this is not available in stable
+//! Rust. [`std::convert::Infallible`] is an uninhabited type that is available in
+//! stable Rust but any type is permissible.
 //!
 //! The [`typle_variant!`] macro creates multiple enum variants by looping
 //! similarly to `typle_for!`.
@@ -164,13 +165,12 @@
 //! The `typle_const!` macro supports const-if on a boolean typle index
 //! expression. const-if allows branches that do not compile, as long as they
 //! are `false` at compile-time. For example, this code compiles when
-//! `i + 1 == T::LEN` even though the identifier `S::<typle_ident!(T::LEN)>`
-//! (`S3` for 3-tuples) is not defined.
+//! `j` is the length of the `output` tuple even though the identifier `output[[j]]`
+//! is not valid because it only exists in the false branch of the `if`.
 //!
 //! ```rust
-//! use typle::typle;
-//!
-//! #[typle(Tuple for 1..=12)]
+//! # use typle::typle;
+//! #[typle(Tuple for 1..=4, never=std::convert::Infallible)]
 //! mod tuple {
 //!     pub trait Extract {
 //!         type State;
@@ -179,14 +179,25 @@
 //!         fn extract(&self, state: Option<Self::State>) -> Self::Output;
 //!     }
 //!
+//!     impl Extract for std::convert::Infallible {
+//!         type State = std::convert::Infallible;
+//!         type Output = ();
+//!
+//!         fn extract(
+//!             &self,
+//!             _state: Option<Self::State>,
+//!         ) -> Self::Output {
+//!             ()
+//!         }
+//!     }
+//!
 //!     pub enum TupleSequenceState<T>
 //!     where
 //!         T: Tuple,
 //!         T<_>: Extract,
 //!     {
-//!         S = typle_variant!(i in .. =>
-//!             typle_for!(j in ..i => T::<{j}>::Output),
-//!             Option<T<{i}>::State>
+//!         S = typle_variant!(i in ..T::MAX =>
+//!             typle_for!(j in ..i => T::<{j}>::Output), Option<T<{i}>::State>
 //!         ),
 //!     }
 //!
@@ -199,15 +210,19 @@
 //!         T: Tuple,
 //!         T<_>: Extract,
 //!     {
-//!         type State = TupleSequenceState<T<{ .. }>>;
-//!         type Output = typle_for!(i in .. => T<{i}>::Output);
+//!         // The state contains the output from all previous components and the state
+//!         // of the current component.
+//!         type State = TupleSequenceState<T<{ ..T::MAX }>>;
+//!         type Output = typle_for!(i in .. => <T<{i}> as Extract>::Output);
 //!
 //!         fn extract(&self, state: Option<Self::State>) -> Self::Output {
 //!             #[typle_attr_if(T::LEN == 1, allow(unused_mut))]
 //!             let mut state = state.unwrap_or(Self::State::S::<typle_ident!(0)>((), None));
 //!             for typle_index!(i) in 0..T::LEN {
 //!                 // For LEN = 1 there is only one variant (S0) so `let` is irrefutable
-//!                 #[typle_attr_if(T::LEN == 1, allow(irrefutable_let_patterns, unused_variables))]
+//!                 #[typle_attr_if(T::LEN == 1, allow(irrefutable_let_patterns))]
+//!                 // For i == 0, the `output` state variable does not get used
+//!                 #[typle_attr_if(i == 0, allow(unused_variables))]
 //!                 if let Self::State::S::<typle_ident!(i)>(output, inner_state) = state {
 //!                     let matched = self.tuple[[i]].extract(inner_state);
 //!                     let output = typle_for!(j in ..=i =>
@@ -233,18 +248,28 @@
 //! #     type Output;
 //! #     fn extract(&self, state: Option<Self::State>) -> Self::Output;
 //! # }
+//! # impl Extract for std::convert::Infallible {
+//! #     type State = std::convert::Infallible;
+//! #     type Output = ();
+//! #     fn extract(&self, _state: Option<Self::State>) -> Self::Output {
+//! #         ()
+//! #     }
+//! # }
 //! # pub struct TupleSequence<T> {
 //! #     tuple: T,
 //! # }
-//! pub enum TupleSequenceState3<T0, T1, T2>
+//! // enum implemented only for maximum size
+//! pub enum TupleSequenceState<T0, T1, T2, T3>
 //! where
 //!     T0: Extract,
 //!     T1: Extract,
 //!     T2: Extract,
+//!     T3: Extract,
 //! {
 //!     S0((), Option<<T0>::State>),
 //!     S1((<T0>::Output,), Option<<T1>::State>),
 //!     S2((<T0>::Output, <T1>::Output), Option<<T2>::State>),
+//!     S3((<T0>::Output, <T1>::Output, <T2>::Output), Option<<T3>::State>),
 //! }
 //!
 //! impl<T0, T1, T2> Extract for TupleSequence<(T0, T1, T2)>
@@ -253,13 +278,18 @@
 //!     T1: Extract,
 //!     T2: Extract,
 //! {
-//!     type State = TupleSequenceState3<T0, T1, T2>;
-//!     type Output = (<T0>::Output, <T1>::Output, <T2>::Output);
-//!
+//!     // reference to enum uses `never` type for unused type parameters.
+//!     type State = TupleSequenceState<T0, T1, T2, std::convert::Infallible>;
+//!     type Output = (
+//!         <T0 as Extract>::Output,
+//!         <T1 as Extract>::Output,
+//!         <T2 as Extract>::Output,
+//!     );
 //!     fn extract(&self, state: Option<Self::State>) -> Self::Output {
 //!         let mut state = state.unwrap_or(Self::State::S0((), None));
 //!         {
 //!             {
+//!                 #[allow(unused_variables)]
 //!                 if let Self::State::S0(output, inner_state) = state {
 //!                     let matched = self.tuple.0.extract(inner_state);
 //!                     let output = ({ matched },);
@@ -362,7 +392,6 @@
 //! ```
 //!
 
-
 mod constant;
 mod specific;
 
@@ -374,7 +403,10 @@ use proc_macro_error::{abort, abort_call_site, proc_macro_error};
 use quote::{format_ident, ToTokens};
 use specific::{ident_to_path, BlockState, SpecificContext};
 use syn::punctuated::Punctuated;
-use syn::{parse_quote, token, Expr, GenericParam, Generics, Item, ItemImpl, Pat, TypeParam};
+use syn::{
+    parse_quote, token, Expr, GenericParam, Generics, Item, ItemImpl, Pat, Type, TypeNever,
+    TypeParam,
+};
 
 #[doc(hidden)]
 #[proc_macro]
@@ -411,10 +443,14 @@ struct IterationTrait {
     ident: Ident,
     min_len: usize,
     max_len: usize,
+    never_type: Type,
 }
 
 fn parse_args(args: TokenStream) -> IterationTrait {
-    // #[typle(Tuple for 2..=12)]
+    // #[typle(Tuple for 2..=12, never=std::convert::Infallible)]
+    let mut never_type = Type::Never(TypeNever {
+        bang_token: syn::token::Not::default(),
+    });
     let mut args_iter = args.into_iter();
     // Tuple
     let Some(TokenTree::Ident(trait_ident)) = args_iter.next() else {
@@ -427,9 +463,27 @@ fn parse_args(args: TokenStream) -> IterationTrait {
             abort_call_site!("expected for keyword");
         }
     }
+
+    let mut range_tokens = Vec::new();
+    let mut never_tokens = Vec::new();
+    let mut comma_seen = false;
+    for token in args_iter {
+        if comma_seen {
+            never_tokens.push(token);
+        } else {
+            if let TokenTree::Punct(punct) = &token {
+                if punct.as_char() == ',' {
+                    comma_seen = true;
+                    continue;
+                }
+            }
+            range_tokens.push(token);
+        }
+    }
     // 2..=12
-    let rest = args_iter.collect();
-    let range = syn::parse2::<syn::ExprRange>(rest).unwrap_or_else(|e| abort_call_site!("{}", e));
+    let range_stream = range_tokens.into_iter().collect();
+    let range =
+        syn::parse2::<syn::ExprRange>(range_stream).unwrap_or_else(|e| abort_call_site!("{}", e));
     let min = range
         .start
         .as_ref()
@@ -450,10 +504,29 @@ fn parse_args(args: TokenStream) -> IterationTrait {
     if max < min {
         abort!(range, "range contains no values");
     }
+    if !never_tokens.is_empty() {
+        // never=some::Type
+        let mut iter = never_tokens.into_iter();
+        let Some(TokenTree::Ident(ident)) = iter.next() else {
+            abort_call_site!("expected identifier after comma");
+        };
+        if ident != "never" {
+            abort_call_site!("expected identifier 'never' after comma");
+        }
+        let Some(TokenTree::Punct(punct)) = iter.next() else {
+            abort_call_site!("expected equals after never");
+        };
+        if punct.as_char() != '=' {
+            abort_call_site!("expected equals after never");
+        }
+        let type_stream = iter.collect();
+        never_type = syn::parse2::<Type>(type_stream).unwrap_or_else(|e| abort_call_site!("{}", e));
+    }
     IterationTrait {
         ident: trait_ident,
         min_len: min,
         max_len: max,
+        never_type,
     }
 }
 
@@ -461,145 +534,129 @@ impl IterationTrait {
     fn process_item(&self, item: Item) -> Vec<Item> {
         let mut output = Vec::new();
         match item {
-            Item::Const(syn::ItemConst { ref generics, .. })
-            | Item::Enum(syn::ItemEnum { ref generics, .. })
-            | Item::Impl(syn::ItemImpl { ref generics, .. })
-            | Item::Struct(syn::ItemStruct { ref generics, .. })
-            | Item::Trait(syn::ItemTrait { ref generics, .. })
-            | Item::TraitAlias(syn::ItemTraitAlias { ref generics, .. })
-            | Item::Type(syn::ItemType { ref generics, .. })
-            | Item::Union(syn::ItemUnion { ref generics, .. }) => {
-                if self.has_typles(generics) {
-                    for typle_len in self.min_len..=self.max_len {
-                        let context = SpecificContext {
-                            typle_trait: &self,
-                            typle_len,
-                            constants: HashMap::new(),
-                            typles: HashMap::new(),
-                        };
-                        let mut item = item.clone();
-                        let mut state = BlockState::default();
-                        context.replace_item(&mut item, true, &mut state);
-                        output.push(item);
-                    }
-                } else {
+            Item::Impl(syn::ItemImpl { ref generics, .. }) if self.has_typles(generics) => {
+                for typle_len in self.min_len..=self.max_len {
+                    let context = SpecificContext {
+                        typle_trait: &self,
+                        typle_len: Some(typle_len),
+                        constants: HashMap::new(),
+                        typles: HashMap::new(),
+                    };
+                    let mut item = item.clone();
+                    let mut state = BlockState::default();
+                    context.replace_item(&mut item, &mut state);
                     output.push(item);
                 }
             }
-            Item::Fn(function) => {
-                let generics = &function.sig.generics;
-                if self.has_typles(generics) {
-                    let fn_name = &function.sig.ident;
-                    let fn_meta = &function.attrs;
-                    let fn_vis = &function.vis;
-                    let trait_name = format_ident!("_typle_fn_{}", fn_name);
-                    let fn_type_params = &function.sig.generics.params;
-                    let fn_type_params_no_constraints = remove_constraints(fn_type_params);
-                    let fn_input_params = &function.sig.inputs;
-                    let mut type_tuple = syn::TypeTuple {
-                        paren_token: token::Paren::default(),
-                        elems: Punctuated::new(),
-                    };
-                    let mut pat_tuple = syn::PatTuple {
-                        attrs: Vec::new(),
-                        paren_token: token::Paren::default(),
-                        elems: Punctuated::new(),
-                    };
-                    let mut value_tuple = syn::ExprTuple {
-                        attrs: Vec::new(),
-                        paren_token: token::Paren::default(),
-                        elems: Punctuated::new(),
-                    };
-                    for arg in fn_input_params {
-                        match arg {
-                            syn::FnArg::Receiver(_) => abort!(arg, "unexpected self"),
-                            syn::FnArg::Typed(pat_type) => {
-                                type_tuple.elems.push(pat_type.ty.as_ref().clone());
-                                pat_tuple.elems.push(pat_type.pat.as_ref().clone());
-                                value_tuple
-                                    .elems
-                                    .push(pat_to_tuple(pat_type.pat.as_ref().clone()));
-                            }
+            Item::Fn(function) if self.has_typles(&function.sig.generics) => {
+                let fn_name = &function.sig.ident;
+                let fn_meta = &function.attrs;
+                let fn_vis = &function.vis;
+                let trait_name = format_ident!("_typle_fn_{}", fn_name);
+                let fn_type_params = &function.sig.generics.params;
+                let fn_type_params_no_constraints = remove_constraints(fn_type_params);
+                let fn_input_params = &function.sig.inputs;
+                let mut type_tuple = syn::TypeTuple {
+                    paren_token: token::Paren::default(),
+                    elems: Punctuated::new(),
+                };
+                let mut pat_tuple = syn::PatTuple {
+                    attrs: Vec::new(),
+                    paren_token: token::Paren::default(),
+                    elems: Punctuated::new(),
+                };
+                let mut value_tuple = syn::ExprTuple {
+                    attrs: Vec::new(),
+                    paren_token: token::Paren::default(),
+                    elems: Punctuated::new(),
+                };
+                for arg in fn_input_params {
+                    match arg {
+                        syn::FnArg::Receiver(_) => abort!(arg, "unexpected self"),
+                        syn::FnArg::Typed(pat_type) => {
+                            type_tuple.elems.push(pat_type.ty.as_ref().clone());
+                            pat_tuple.elems.push(pat_type.pat.as_ref().clone());
+                            value_tuple
+                                .elems
+                                .push(pat_to_tuple(pat_type.pat.as_ref().clone()));
                         }
                     }
-                    let trait_item = parse_quote!(
-                        #[allow(non_camel_case_types)]
-                        #fn_vis trait #trait_name {
-                            type Return;
+                }
+                let trait_item = parse_quote!(
+                    #[allow(non_camel_case_types)]
+                    #fn_vis trait #trait_name {
+                        type Return;
 
-                            fn apply(self) -> Self::Return;
-                        }
-                    );
-                    output.push(trait_item);
-                    let fn_item = parse_quote!(
-                        #(#fn_meta)*
-                        #fn_vis fn #fn_name <#fn_type_params_no_constraints>(#fn_input_params) -> <#type_tuple as #trait_name>::Return
-                        where
-                            #type_tuple: #trait_name,
-                        {
-                            <#type_tuple as #trait_name>::apply(#value_tuple)
-                        }
-                    );
-                    output.push(fn_item);
-                    let return_type = match function.sig.output {
-                        syn::ReturnType::Default => parse_quote!(()),
-                        syn::ReturnType::Type(_, t) => *t,
-                    };
-                    let fn_body = function.block;
-                    let let_stmt: syn::Stmt = if self.min_len == 0 {
-                        parse_quote!(
-                            #[allow(unused_variables)]
-                            let #pat_tuple = self;
-                        )
-                    } else {
-                        parse_quote!(let #pat_tuple = self;)
-                    };
-                    let items = vec![
-                        syn::ImplItem::Type(syn::ImplItemType {
-                            attrs: Vec::new(),
-                            vis: syn::Visibility::Inherited,
-                            defaultness: None,
-                            type_token: token::Type::default(),
-                            ident: Ident::new("Return", Span::call_site()),
-                            generics: Generics::default(),
-                            eq_token: token::Eq::default(),
-                            ty: return_type,
-                            semi_token: token::Semi::default(),
-                        }),
-                        parse_quote!(
-                            fn apply(self) -> Self::Return {
-                                #let_stmt
-                                #fn_body
-                            }
-                        ),
-                    ];
-
-                    let item = Item::Impl(ItemImpl {
-                        attrs: Vec::new(),
-                        defaultness: None,
-                        unsafety: None,
-                        impl_token: token::Impl::default(),
-                        generics: function.sig.generics,
-                        trait_: Some((None, ident_to_path(trait_name), token::For::default())),
-                        self_ty: Box::new(syn::Type::Tuple(type_tuple)),
-                        brace_token: token::Brace::default(),
-                        items,
-                    });
-
-                    for typle_len in self.min_len..=self.max_len {
-                        let context = SpecificContext {
-                            typle_trait: &self,
-                            typle_len,
-                            constants: HashMap::new(),
-                            typles: HashMap::new(),
-                        };
-                        let mut item = item.clone();
-                        let mut state = BlockState::default();
-                        context.replace_item(&mut item, true, &mut state);
-                        output.push(item);
+                        fn apply(self) -> Self::Return;
                     }
+                );
+                output.push(trait_item);
+                let fn_item = parse_quote!(
+                    #(#fn_meta)*
+                    #fn_vis fn #fn_name <#fn_type_params_no_constraints>(#fn_input_params) -> <#type_tuple as #trait_name>::Return
+                    where
+                        #type_tuple: #trait_name,
+                    {
+                        <#type_tuple as #trait_name>::apply(#value_tuple)
+                    }
+                );
+                output.push(fn_item);
+                let return_type = match function.sig.output {
+                    syn::ReturnType::Default => parse_quote!(()),
+                    syn::ReturnType::Type(_, t) => *t,
+                };
+                let fn_body = function.block;
+                let let_stmt: syn::Stmt = if self.min_len == 0 {
+                    parse_quote!(
+                        #[allow(unused_variables)]
+                        let #pat_tuple = self;
+                    )
                 } else {
-                    output.push(Item::Fn(function));
+                    parse_quote!(let #pat_tuple = self;)
+                };
+                let items = vec![
+                    syn::ImplItem::Type(syn::ImplItemType {
+                        attrs: Vec::new(),
+                        vis: syn::Visibility::Inherited,
+                        defaultness: None,
+                        type_token: token::Type::default(),
+                        ident: Ident::new("Return", Span::call_site()),
+                        generics: Generics::default(),
+                        eq_token: token::Eq::default(),
+                        ty: return_type,
+                        semi_token: token::Semi::default(),
+                    }),
+                    parse_quote!(
+                        fn apply(self) -> Self::Return {
+                            #let_stmt
+                            #fn_body
+                        }
+                    ),
+                ];
+
+                let item = Item::Impl(ItemImpl {
+                    attrs: Vec::new(),
+                    defaultness: None,
+                    unsafety: None,
+                    impl_token: token::Impl::default(),
+                    generics: function.sig.generics,
+                    trait_: Some((None, ident_to_path(trait_name), token::For::default())),
+                    self_ty: Box::new(syn::Type::Tuple(type_tuple)),
+                    brace_token: token::Brace::default(),
+                    items,
+                });
+
+                for typle_len in self.min_len..=self.max_len {
+                    let context = SpecificContext {
+                        typle_trait: &self,
+                        typle_len: Some(typle_len),
+                        constants: HashMap::new(),
+                        typles: HashMap::new(),
+                    };
+                    let mut item = item.clone();
+                    let mut state = BlockState::default();
+                    context.replace_item(&mut item, &mut state);
+                    output.push(item);
                 }
             }
             Item::Mod(mut module) => {
@@ -611,6 +668,15 @@ impl IterationTrait {
                 output.push(Item::Mod(module));
             }
             item => {
+                let context = SpecificContext {
+                    typle_trait: &self,
+                    typle_len: None,
+                    constants: HashMap::new(),
+                    typles: HashMap::new(),
+                };
+                let mut item = item;
+                let mut state = BlockState::default();
+                context.replace_item(&mut item, &mut state);
                 output.push(item);
             }
         }
@@ -714,11 +780,16 @@ fn pat_to_tuple(pat: Pat) -> Expr {
 /// With parentheses, this macro can be used in type or value position.
 ///
 /// Examples:
-/// ```ignore
+/// ```
+/// struct S<T>
+/// {
+///     t: T
+/// }
+///
 /// #[typle(Tuple for 0..=2)]
-/// impl<T> S<T<{ .. }>>
+/// impl<T> S<T>
 /// where
-///     T: Tuple<u32>
+///     T: Tuple<u32>,
 /// {
 ///     fn new(t: typle_for!(i in .. => &T<{i}>)) {
 ///         // Square brackets create an array
@@ -733,22 +804,26 @@ fn pat_to_tuple(pat: Pat) -> Expr {
 /// }
 /// ```
 /// generates
-/// ```ignore
-/// impl S0 {
+/// ```
+/// # struct S<T>
+/// # {
+/// #     t: T
+/// # }
+/// impl S<()> {
 ///     fn new(t: ()) {
 ///         let a = [];
 ///         let b = ();
 ///         let init: [Option<u32>; 0] = [];
 ///     }
 /// }
-/// impl S1<u32> {
+/// impl S<(u32,)> {
 ///     fn new(t: (&u32,)) {
 ///         let a = [*t.0 * 2];
 ///         let b = (*t.0 * 2,);
 ///         let init: [Option<u32>; 1] = [None];
 ///     }
 /// }
-/// impl S2<u32, u32> {
+/// impl S<(u32, u32)> {
 ///     fn new(t: (&u32, &u32)) {
 ///         let a = [*t.0 * 2, *t.1 * 2];
 ///         let b = (*t.0 * 2, *t.1 * 2);
@@ -787,10 +862,10 @@ pub fn typle_for(_item: proc_macro::TokenStream) -> proc_macro::TokenStream {
 ///     T: Tuple,
 ///     T<_>: Process,
 /// {
-///     Q = typle_variant![..],
-///     R = typle_variant!{i in 0..T::LEN => r: T<{i}>},
-///     S = typle_variant!(i in .. => Option<T<{i}>::State>, [u64; i]),
-///     Done([u64; Tuple::LEN])
+///     Q = typle_variant![..Tuple::MAX],
+///     R = typle_variant!{i in 0..T::MAX => r: T<{i}>},
+///     S = typle_variant!(i in ..T::MAX => Option<T<{i}>::State>, [u64; i]),
+///     Done([u64; Tuple::MAX])
 /// }
 /// ```
 /// creates

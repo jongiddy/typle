@@ -15,16 +15,16 @@ where
 {
     // `typle_variant!` creates a variant for each component. The variant will have a number
     // added to the variant name here. `S2(Option<T2::State>, [u64; 2])`
-    S = typle_variant!(i in .. => Option<T<{i}>::State>, [u64; i]),
+    S = typle_variant!(i in ..T::MAX => Option<T<{i}>::State>, [u64; i]),
     // U2 {u: [u32; 2]}
-    U = typle_variant! {.. => u: [u32; Tuple::LEN]},
+    U = typle_variant! {i in ..Tuple::MAX => u: [u32; i]},
     // V2
-    V = typle_variant![.. =>],
-    Done([u64; Tuple::LEN]),
+    V = typle_variant![..Tuple::MAX],
+    Done([u64; Tuple::MAX]),
 }
 
 #[typle(Tuple for 0..=3)]
-impl<T> Default for ProcessState<T<{ .. }>>
+impl<T> Default for ProcessState<T<{ ..T::MAX }>>
 where
     T: Tuple,
     T<_>: Process<Output = u64>,
@@ -34,7 +34,7 @@ where
         // exist for the empty tuple implementation. An alternative to using the `typle_const!` here
         // is to set the typle! macro range to 1..=3 and implement `Default` separately for `()`.
         if typle_const!(T::LEN == 0) {
-            Self::Done([])
+            Self::Done([0; 3])
         } else {
             Self::S0(None, [])
         }
@@ -47,7 +47,7 @@ where
     T: Tuple,
     T<_>: Process<Output = u64>,
 {
-    type State = ProcessState<T<{ .. }>>;
+    type State = ProcessState<T<{ ..T::MAX }>>;
     type Output = [u64; T::LEN];
 
     fn process(state: Self::State) -> Result<Self::Output, Error> {
@@ -92,7 +92,7 @@ where
     T: Tuple,
     T<_>: Process<Output = u64>,
 {
-    // Test that the number of components determines the suffix
+    // Test that the number of components can be a different range
     type State = ProcessState<T<{ 3.. }>>;
     type Output = ProcessState<T<{ 1.. }>>;
 

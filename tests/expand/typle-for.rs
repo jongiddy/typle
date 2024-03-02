@@ -1,15 +1,12 @@
 use typle::typle;
 
-#[typle(Tuple for 0..=2)]
 struct S<T>
-where
-    T: Tuple<u32>,
 {
-    t: typle_for!(i in 0..T::LEN => Option<T<{i}>>),
+    t: T
 }
 
 #[typle(Tuple for 0..=2)]
-impl<'a, T> S<T<{ .. }>>
+impl<T> S<T>
 where
     T: Tuple<u32>,
 {

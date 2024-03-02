@@ -45,6 +45,206 @@ pub mod doc_typle {
             Some(max)
         }
     }
+    mod tuple {
+        pub trait Extract {
+            type State;
+            type Output;
+            fn extract(&self, state: Option<Self::State>) -> Self::Output;
+        }
+        impl Extract for () {
+            type State = ();
+            type Output = ();
+            fn extract(&self, _state: Option<Self::State>) -> Self::Output {
+                ()
+            }
+        }
+        pub enum TupleSequenceState<T0, T1, T2, T3>
+        where
+            T0: Extract,
+            T1: Extract,
+            T2: Extract,
+            T3: Extract,
+        {
+            S0((), Option<<T0>::State>),
+            S1((<T0>::Output,), Option<<T1>::State>),
+            S2((<T0>::Output, <T1>::Output), Option<<T2>::State>),
+            S3((<T0>::Output, <T1>::Output, <T2>::Output), Option<<T3>::State>),
+        }
+        pub struct TupleSequence<T> {
+            tuple: T,
+        }
+        impl<T0> Extract for TupleSequence<(T0,)>
+        where
+            T0: Extract,
+        {
+            type State = TupleSequenceState<T0, (), (), ()>;
+            type Output = (<T0 as Extract>::Output,);
+            fn extract(&self, state: Option<Self::State>) -> Self::Output {
+                #[allow(unused_mut)]
+                let mut state = state.unwrap_or(Self::State::S0((), None));
+                {
+                    {
+                        #[allow(irrefutable_let_patterns)] #[allow(unused_variables)]
+                        if let Self::State::S0(output, inner_state) = state {
+                            let matched = self.tuple.0.extract(inner_state);
+                            let output = ({ matched },);
+                            {
+                                return output;
+                            }
+                        }
+                    }
+                    ()
+                }
+                ::core::panicking::panic("internal error: entered unreachable code");
+            }
+        }
+        impl<T0, T1> Extract for TupleSequence<(T0, T1)>
+        where
+            T0: Extract,
+            T1: Extract,
+        {
+            type State = TupleSequenceState<T0, T1, (), ()>;
+            type Output = (<T0 as Extract>::Output, <T1 as Extract>::Output);
+            fn extract(&self, state: Option<Self::State>) -> Self::Output {
+                let mut state = state.unwrap_or(Self::State::S0((), None));
+                {
+                    {
+                        #[allow(unused_variables)]
+                        if let Self::State::S0(output, inner_state) = state {
+                            let matched = self.tuple.0.extract(inner_state);
+                            let output = ({ matched },);
+                            {
+                                state = Self::State::S1(output, None);
+                            }
+                        }
+                    }
+                    {
+                        if let Self::State::S1(output, inner_state) = state {
+                            let matched = self.tuple.1.extract(inner_state);
+                            let output = ({ output.0 }, { matched });
+                            {
+                                return output;
+                            }
+                        }
+                    }
+                    ()
+                }
+                ::core::panicking::panic("internal error: entered unreachable code");
+            }
+        }
+        impl<T0, T1, T2> Extract for TupleSequence<(T0, T1, T2)>
+        where
+            T0: Extract,
+            T1: Extract,
+            T2: Extract,
+        {
+            type State = TupleSequenceState<T0, T1, T2, ()>;
+            type Output = (
+                <T0 as Extract>::Output,
+                <T1 as Extract>::Output,
+                <T2 as Extract>::Output,
+            );
+            fn extract(&self, state: Option<Self::State>) -> Self::Output {
+                let mut state = state.unwrap_or(Self::State::S0((), None));
+                {
+                    {
+                        #[allow(unused_variables)]
+                        if let Self::State::S0(output, inner_state) = state {
+                            let matched = self.tuple.0.extract(inner_state);
+                            let output = ({ matched },);
+                            {
+                                state = Self::State::S1(output, None);
+                            }
+                        }
+                    }
+                    {
+                        if let Self::State::S1(output, inner_state) = state {
+                            let matched = self.tuple.1.extract(inner_state);
+                            let output = ({ output.0 }, { matched });
+                            {
+                                state = Self::State::S2(output, None);
+                            }
+                        }
+                    }
+                    {
+                        if let Self::State::S2(output, inner_state) = state {
+                            let matched = self.tuple.2.extract(inner_state);
+                            let output = ({ output.0 }, { output.1 }, { matched });
+                            {
+                                return output;
+                            }
+                        }
+                    }
+                    ()
+                }
+                ::core::panicking::panic("internal error: entered unreachable code");
+            }
+        }
+        impl<T0, T1, T2, T3> Extract for TupleSequence<(T0, T1, T2, T3)>
+        where
+            T0: Extract,
+            T1: Extract,
+            T2: Extract,
+            T3: Extract,
+        {
+            type State = TupleSequenceState<T0, T1, T2, T3>;
+            type Output = (
+                <T0 as Extract>::Output,
+                <T1 as Extract>::Output,
+                <T2 as Extract>::Output,
+                <T3 as Extract>::Output,
+            );
+            fn extract(&self, state: Option<Self::State>) -> Self::Output {
+                let mut state = state.unwrap_or(Self::State::S0((), None));
+                {
+                    {
+                        #[allow(unused_variables)]
+                        if let Self::State::S0(output, inner_state) = state {
+                            let matched = self.tuple.0.extract(inner_state);
+                            let output = ({ matched },);
+                            {
+                                state = Self::State::S1(output, None);
+                            }
+                        }
+                    }
+                    {
+                        if let Self::State::S1(output, inner_state) = state {
+                            let matched = self.tuple.1.extract(inner_state);
+                            let output = ({ output.0 }, { matched });
+                            {
+                                state = Self::State::S2(output, None);
+                            }
+                        }
+                    }
+                    {
+                        if let Self::State::S2(output, inner_state) = state {
+                            let matched = self.tuple.2.extract(inner_state);
+                            let output = ({ output.0 }, { output.1 }, { matched });
+                            {
+                                state = Self::State::S3(output, None);
+                            }
+                        }
+                    }
+                    {
+                        if let Self::State::S3(output, inner_state) = state {
+                            let matched = self.tuple.3.extract(inner_state);
+                            let output = (
+                                { output.0 },
+                                { output.1 },
+                                { output.2 },
+                                { matched },
+                            );
+                            {
+                                return output;
+                            }
+                        }
+                    }
+                    ()
+                }
+                ::core::panicking::panic("internal error: entered unreachable code");
+            }
+        }
+    }
 }
 pub mod for_loop {
     #![allow(unreachable_code, unused)]
@@ -1019,14 +1219,7 @@ pub mod type_alias {
             state: Self::State,
         ) -> Result<Self::Output, Box<dyn std::error::Error>>;
     }
-    type Alias0 = ();
-    type Alias1<T0> where T0: Process = (Option<<T0>::Output>,);
-    type Alias2<T0, T1>
-    where
-        T0: Process,
-        T1: Process,
-    = (Option<<T0>::Output>, Option<<T1>::Output>);
-    type Alias3<T0, T1, T2>
+    type Alias<T0, T1, T2>
     where
         T0: Process,
         T1: Process,

@@ -4,32 +4,7 @@ trait Process {
     type Output;
     fn process(state: Self::State) -> Result<Self::Output, Error>;
 }
-pub enum ProcessState0 {
-    Done([u64; 0]),
-}
-pub enum ProcessState1<T0>
-where
-    T0: Process<Output = u64>,
-{
-    S0(Option<<T0>::State>, [u64; 0]),
-    U0 { u: [u32; 1] },
-    V0,
-    Done([u64; 1]),
-}
-pub enum ProcessState2<T0, T1>
-where
-    T0: Process<Output = u64>,
-    T1: Process<Output = u64>,
-{
-    S0(Option<<T0>::State>, [u64; 0]),
-    S1(Option<<T1>::State>, [u64; 1]),
-    U0 { u: [u32; 2] },
-    U1 { u: [u32; 2] },
-    V0,
-    V1,
-    Done([u64; 2]),
-}
-pub enum ProcessState3<T0, T1, T2>
+pub enum ProcessState<T0, T1, T2>
 where
     T0: Process<Output = u64>,
     T1: Process<Output = u64>,
@@ -38,20 +13,20 @@ where
     S0(Option<<T0>::State>, [u64; 0]),
     S1(Option<<T1>::State>, [u64; 1]),
     S2(Option<<T2>::State>, [u64; 2]),
-    U0 { u: [u32; 3] },
-    U1 { u: [u32; 3] },
-    U2 { u: [u32; 3] },
+    U0 { u: [u32; 0] },
+    U1 { u: [u32; 1] },
+    U2 { u: [u32; 2] },
     V0,
     V1,
     V2,
     Done([u64; 3]),
 }
-impl Default for ProcessState0 {
+impl Default for ProcessState<!, !, !> {
     fn default() -> Self {
-        { Self::Done([]) }
+        { Self::Done([0; 3]) }
     }
 }
-impl<T0> Default for ProcessState1<T0>
+impl<T0> Default for ProcessState<T0, !, !>
 where
     T0: Process<Output = u64>,
 {
@@ -59,7 +34,7 @@ where
         { Self::S0(None, []) }
     }
 }
-impl<T0, T1> Default for ProcessState2<T0, T1>
+impl<T0, T1> Default for ProcessState<T0, T1, !>
 where
     T0: Process<Output = u64>,
     T1: Process<Output = u64>,
@@ -68,7 +43,7 @@ where
         { Self::S0(None, []) }
     }
 }
-impl<T0, T1, T2> Default for ProcessState3<T0, T1, T2>
+impl<T0, T1, T2> Default for ProcessState<T0, T1, T2>
 where
     T0: Process<Output = u64>,
     T1: Process<Output = u64>,
@@ -79,7 +54,7 @@ where
     }
 }
 impl Process for () {
-    type State = ProcessState0;
+    type State = ProcessState<!, !, !>;
     type Output = [u64; 0];
     fn process(state: Self::State) -> Result<Self::Output, Error> {
         { () }
@@ -93,7 +68,7 @@ impl Process for (T0,)
 where
     T0: Process<Output = u64>,
 {
-    type State = ProcessState1<T0>;
+    type State = ProcessState<T0, !, !>;
     type Output = [u64; 1];
     fn process(state: Self::State) -> Result<Self::Output, Error> {
         {
@@ -130,7 +105,7 @@ where
     T0: Process<Output = u64>,
     T1: Process<Output = u64>,
 {
-    type State = ProcessState2<T0, T1>;
+    type State = ProcessState<T0, T1, !>;
     type Output = [u64; 2];
     fn process(state: Self::State) -> Result<Self::Output, Error> {
         {
@@ -188,7 +163,7 @@ where
     T1: Process<Output = u64>,
     T2: Process<Output = u64>,
 {
-    type State = ProcessState3<T0, T1, T2>;
+    type State = ProcessState<T0, T1, T2>;
     type Output = [u64; 3];
     fn process(state: Self::State) -> Result<Self::Output, Error> {
         {
@@ -266,8 +241,8 @@ where
     T1: Process<Output = u64>,
     T2: Process<Output = u64>,
 {
-    type State = ProcessState0;
-    type Output = ProcessState2<T1, T2>;
+    type State = ProcessState;
+    type Output = ProcessState<T1, T2>;
     fn process(state: Self::State) -> Result<Self::Output, Error> {
         let x = Self::State::S0((), None);
         ::core::panicking::panic("internal error: entered unreachable code");

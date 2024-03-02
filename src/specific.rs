@@ -76,12 +76,33 @@ impl BlockState {
 #[derive(Clone)]
 pub struct SpecificContext<'a> {
     pub typle_trait: &'a IterationTrait,
-    pub typle_len: usize,
+    pub typle_len: Option<usize>,
     pub constants: HashMap<Ident, usize>,
     pub typles: HashMap<Ident, Typle>,
 }
 
 impl<'a> SpecificContext<'a> {
+    pub fn get_type(&self, typle: &Typle, i: usize, span: Span) -> Type {
+        match self.typle_len {
+            Some(typle_len) => {
+                if i < typle_len {
+                    typle.get(i, span)
+                } else if i < self.typle_trait.max_len {
+                    self.typle_trait.never_type.clone()
+                } else {
+                    abort!(span, "typle index out of range");
+                }
+            }
+            None => {
+                if i < self.typle_trait.max_len {
+                    typle.get(i, span)
+                } else {
+                    abort!(span, "typle index out of range");
+                }
+            }
+        }
+    }
+
     pub fn handle_typle_constraints(&self, generics: &mut Generics) -> Option<Self> {
         fn get_type_ident(predicate_type: &PredicateType) -> Option<&Ident> {
             if let Type::Path(type_path) = &predicate_type.bounded_ty {
@@ -138,7 +159,7 @@ impl<'a> SpecificContext<'a> {
                             match &segment.arguments {
                                 PathArguments::None => {
                                     return Some(Typle::Generic(
-                                        (0..self.typle_len)
+                                        (0..self.typle_len.unwrap_or(self.typle_trait.max_len))
                                             .map(|i| format!("{}{}", &type_ident, i))
                                             .collect(),
                                     ));
@@ -234,7 +255,7 @@ impl<'a> SpecificContext<'a> {
                     block.stmts.push(Stmt::Local(local));
                 }
                 Stmt::Item(mut item) => {
-                    self.replace_item(&mut item, false, state);
+                    self.replace_item(&mut item, state);
                     block.stmts.push(Stmt::Item(item));
                 }
                 Stmt::Expr(mut expr, semi) => {
@@ -641,10 +662,13 @@ impl<'a> SpecificContext<'a> {
                                 if second.ident == "LEN" {
                                     // Tuple::LEN or <T as Tuple>::LEN
                                     // todo: check that any qself is a type tuple of the correct length
+                                    let Some(typle_len) = self.typle_len else {
+                                        abort!(second.ident, "LEN not available outside fn or impl")
+                                    };
                                     *expr = Expr::Lit(ExprLit {
                                         attrs: std::mem::take(&mut path.attrs),
                                         lit: Lit::Int(LitInt::new(
-                                            &self.typle_len.to_string(),
+                                            &typle_len.to_string(),
                                             path.span(),
                                         )),
                                     });
@@ -681,10 +705,16 @@ impl<'a> SpecificContext<'a> {
                                     Some(second) => {
                                         if second.ident == "LEN" {
                                             // T::LEN
+                                            let Some(typle_len) = self.typle_len else {
+                                                abort!(
+                                                    second.ident,
+                                                    "LEN not available outside fn or impl"
+                                                )
+                                            };
                                             *expr = Expr::Lit(ExprLit {
                                                 attrs: std::mem::take(&mut path.attrs),
                                                 lit: Lit::Int(LitInt::new(
-                                                    &self.typle_len.to_string(),
+                                                    &typle_len.to_string(),
                                                     path.span(),
                                                 )),
                                             });
@@ -713,9 +743,11 @@ impl<'a> SpecificContext<'a> {
                                         // T::clone(&t) -> <(T0, T1)>::clone(&t)
                                         let tuple_type = Box::new(Type::Tuple(TypeTuple {
                                             paren_token: token::Paren::default(),
-                                            elems: (0..self.typle_len)
+                                            elems: (0..self
+                                                .typle_len
+                                                .unwrap_or(self.typle_trait.max_len))
                                                 .into_iter()
-                                                .map(|i| typle.get(i, first.span()))
+                                                .map(|i| self.get_type(typle, i, first.span()))
                                                 .collect(),
                                         }));
                                         path.qself = Some(QSelf {
@@ -746,7 +778,7 @@ impl<'a> SpecificContext<'a> {
                                             abort!(expr, "unsupported tuple type index");
                                         };
                                         // T<{4}>
-                                        let qself = typle.get(value, first.span());
+                                        let qself = self.get_type(typle, value, first.span());
                                         if path.qself.is_some() {
                                             abort!(first, "not a trait");
                                         }
@@ -960,7 +992,10 @@ impl<'a> SpecificContext<'a> {
                                                         abort!(end, "expected integer")
                                                     })
                                                 })
-                                                .unwrap_or(self.typle_len);
+                                                .unwrap_or(
+                                                    self.typle_len
+                                                        .unwrap_or(self.typle_trait.max_len),
+                                                );
                                             let end = match range.limits {
                                                 RangeLimits::HalfOpen(_) => end,
                                                 RangeLimits::Closed(_) => end.saturating_add(1),
@@ -1106,7 +1141,7 @@ impl<'a> SpecificContext<'a> {
         }
     }
 
-    pub fn replace_item(&self, item: &mut Item, top_level: bool, state: &mut BlockState) {
+    pub fn replace_item(&self, item: &mut Item, state: &mut BlockState) {
         match item {
             Item::Const(r#const) => {
                 let context = self.handle_typle_constraints(&mut r#const.generics);
@@ -1116,9 +1151,6 @@ impl<'a> SpecificContext<'a> {
                 context.replace_expr(&mut r#const.expr, state);
             }
             Item::Enum(r#enum) => {
-                if top_level {
-                    r#enum.ident = format_ident!("{}{}", r#enum.ident, self.typle_len);
-                }
                 let context = self.handle_typle_constraints(&mut r#enum.generics);
                 let context = context.as_ref().unwrap_or(self);
                 context.replace_attrs(&mut r#enum.attrs);
@@ -1214,18 +1246,15 @@ impl<'a> SpecificContext<'a> {
                     r#enum.variants.push(variant);
                 }
             }
-            Item::ExternCrate(_) => abort!(item, "ExternCrate unsupported"),
+            Item::ExternCrate(_) => {}
             Item::Fn(function) => {
-                if top_level {
-                    function.sig.ident = format_ident!("{}{}", function.sig.ident, self.typle_len);
-                }
                 let context = self.handle_typle_constraints(&mut function.sig.generics);
                 let context = context.as_ref().unwrap_or(self);
                 context.replace_attrs(&mut function.attrs);
                 context.replace_signature(&mut function.sig);
                 context.replace_block(&mut function.block, state);
             }
-            Item::ForeignMod(_) => abort!(item, "ForeignMod unsupported"),
+            Item::ForeignMod(_) => {}
             Item::Impl(r#impl) => {
                 let context = self.handle_typle_constraints(&mut r#impl.generics);
                 let context = context.as_ref().unwrap_or(self);
@@ -1262,35 +1291,33 @@ impl<'a> SpecificContext<'a> {
                     }
                 }
             }
-            Item::Macro(_) => abort!(item, "Macro unsupported"),
-            Item::Mod(_) => abort!(item, "Mod unsupported"),
-            Item::Static(_) => abort!(item, "Static unsupported"),
+            Item::Macro(m) => {
+                let mut state = BlockState::default();
+                self.replace_macro(&mut m.mac, EvaluationContext::Type, &mut state)
+            }
+            Item::Mod(_) => {}
+            Item::Static(_) => {}
             Item::Struct(r#struct) => {
-                if top_level {
-                    r#struct.ident = format_ident!("{}{}", r#struct.ident, self.typle_len);
-                }
                 let context = self.handle_typle_constraints(&mut r#struct.generics);
                 let context = context.as_ref().unwrap_or(self);
+                dbg!(context.typles.keys().collect::<Vec<_>>());
                 context.replace_attrs(&mut r#struct.attrs);
                 context.replace_generics(&mut r#struct.generics);
                 context.replace_fields(&mut r#struct.fields);
             }
-            Item::Trait(_) => abort!(item, "Trait unsupported"),
-            Item::TraitAlias(_) => abort!(item, "TraitAlias unsupported"),
+            Item::Trait(_) => {}
+            Item::TraitAlias(_) => {}
             Item::Type(r#type) => {
-                if top_level {
-                    r#type.ident = format_ident!("{}{}", r#type.ident, self.typle_len);
-                }
                 let context = self.handle_typle_constraints(&mut r#type.generics);
                 let context = context.as_ref().unwrap_or(self);
                 context.replace_attrs(&mut r#type.attrs);
                 context.replace_generics(&mut r#type.generics);
                 context.replace_type(&mut r#type.ty);
             }
-            Item::Union(_) => abort!(item, "Union unsupported"),
-            Item::Use(_) => abort!(item, "Use unsupported"),
-            Item::Verbatim(_) => abort!(item, "Verbatim unsupported"),
-            _ => todo!(),
+            Item::Union(_) => {}
+            Item::Use(_) => {}
+            Item::Verbatim(_) => {}
+            _ => {}
         }
     }
 
@@ -1575,7 +1602,13 @@ impl<'a> SpecificContext<'a> {
                             evaluate_usize(expr)
                                 .unwrap_or_else(|| abort!(range.end, "range end invalid"))
                         })
-                        .unwrap_or(self.typle_len)
+                        .unwrap_or_else(|| {
+                            if let Some(typle_len) = self.typle_len {
+                                typle_len
+                            } else {
+                                abort!(range.end, "no default range end")
+                            }
+                        })
                         .checked_add(match range.limits {
                             RangeLimits::HalfOpen(_) => 0,
                             RangeLimits::Closed(_) => 1,
@@ -1584,14 +1617,14 @@ impl<'a> SpecificContext<'a> {
                             abort!(
                                 range,
                                 "for length {} range contains no values",
-                                self.typle_len
+                                self.typle_len.unwrap_or(self.typle_trait.max_len)
                             )
                         });
                     if end < start {
                         abort!(
                             range,
                             "for length {} range contains no values",
-                            self.typle_len
+                            self.typle_len.unwrap_or(self.typle_trait.max_len)
                         );
                     }
                     (pattern, start..end)
@@ -1721,8 +1754,7 @@ impl<'a> SpecificContext<'a> {
                 PathArguments::AngleBracketed(args) => {
                     // WrapperType<T> -> WrapperType<(T0, T1,...)>
                     // WrapperType<T<3>> -> WrapperType<T3>
-                    // WrapperType<T<{..}>> -> WrapperTypeN<T0, T1,...>
-                    let mut typle_args = None;
+                    // WrapperType<T<{..}>> -> WrapperType<T0, T1,...>
                     for arg in std::mem::take(&mut args.args) {
                         match arg {
                             GenericArgument::Type(Type::Path(TypePath { qself, mut path }))
@@ -1763,25 +1795,21 @@ impl<'a> SpecificContext<'a> {
                                                             abort!(end, "expected integer")
                                                         })
                                                     })
-                                                    .unwrap_or(self.typle_len);
+                                                    .unwrap_or_else(|| {
+                                                        if let Some(typle_len) = self.typle_len {
+                                                            typle_len
+                                                        } else {
+                                                            abort!(range.end, "no default max")
+                                                        }
+                                                    });
                                                 let end = match range.limits {
                                                     RangeLimits::HalfOpen(_) => end,
                                                     RangeLimits::Closed(_) => end.saturating_add(1),
                                                 };
                                                 for i in start..end {
                                                     args.args.push(GenericArgument::Type(
-                                                        typle.get(i, path.span()),
+                                                        self.get_type(typle, i, path.span()),
                                                     ));
-                                                }
-                                                match typle_args {
-                                                    Some(len) => {
-                                                        if end - start != len {
-                                                            abort!(path, "inconsistent lengths");
-                                                        }
-                                                    }
-                                                    None => {
-                                                        typle_args = Some(end - start);
-                                                    }
                                                 }
                                                 continue;
                                             }
@@ -1814,9 +1842,6 @@ impl<'a> SpecificContext<'a> {
                                 args.args.push(p);
                             }
                         }
-                    }
-                    if let Some(len) = typle_args {
-                        path_segment.ident = format_ident!("{}{}", path_segment.ident, len);
                     }
                     if args.args.is_empty() {
                         path_segment.arguments = PathArguments::None;
@@ -1887,9 +1912,11 @@ impl<'a> SpecificContext<'a> {
                                         let span = first.ident.span();
                                         *ty = Type::Tuple(TypeTuple {
                                             paren_token: token::Paren::default(),
-                                            elems: (0..self.typle_len)
+                                            elems: (0..self
+                                                .typle_len
+                                                .unwrap_or(self.typle_trait.max_len))
                                                 .into_iter()
-                                                .map(|i| typle.get(i, span))
+                                                .map(|i| self.get_type(typle, i, span))
                                                 .collect(),
                                         });
                                         return;
@@ -1912,7 +1939,8 @@ impl<'a> SpecificContext<'a> {
                                                         expr
                                                     );
                                                 };
-                                                let component_type = typle.get(value, first.span());
+                                                let component_type =
+                                                    self.get_type(typle, value, first.span());
                                                 if segments.peek().is_some() {
                                                     // T<3>::Output -> <T3>::Output
                                                     path.qself = Some(QSelf {

@@ -5,7 +5,7 @@ type TupleSequenceOutput<T>
 where
     T: Tuple,
     T<_>: Extract,
-= typle_for!(i in .. => Option<T<{i}>::Output>);
+= typle_for!(i in ..T::MAX => Option<T<{i}>::Output>);
 
 #[typle(Tuple for 1..=2)]
 struct SeqIntoIter<T>
@@ -13,7 +13,7 @@ where
     T: Tuple,
     T<_>: Into<ByteStream>,
 {
-    t: TupleSequenceOutput<T<{ .. }>>,
+    t: TupleSequenceOutput<T<{ ..T::MAX }>>,
 }
 
 #[typle(Tuple for 0..=2)]
@@ -25,31 +25,5 @@ where
 {
     #[default]
     Invalid,
-    S = typle_variant! {i in .. => field: typle_for!(j in ..=i => Option<T<{j}>>)},
-}
-
-#[typle(Tuple for 0..=2)]
-struct AStruct<T>
-where
-    T: Tuple,
-{
-    t: T,
-    state: State<T<{ .. }>>,
-}
-
-#[typle(Tuple for 0..=2)]
-impl<T> std::io::Read for AStruct<T<{ .. }>>
-where
-    T: Tuple,
-    T<_>: std::io::Read,
-{
-    fn read(&mut self, mut buf: &mut [u8]) -> std::io::Result<usize> {
-        for typle_index!(i) in 0..T::LEN {
-            if let State::<typle_ident!(Tuple::LEN)>::S::<typle_ident!(i)>(output) =
-                self.state.take()
-            {
-                let size = self.t[[i]].read(buf);
-            }
-        }
-    }
+    S = typle_variant! {i in ..T::MAX => field: typle_for!(j in ..=i => Option<T<{j}>>)},
 }
