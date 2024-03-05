@@ -8,16 +8,16 @@ use syn::punctuated::Punctuated;
 use syn::spanned::Spanned as _;
 use syn::{
     parse2, parse_quote, token, AttrStyle, Attribute, Block, Expr, ExprArray, ExprBlock, ExprField,
-    ExprLit, ExprRange, ExprTuple, Fields, FieldsNamed, FieldsUnnamed, GenericArgument,
-    GenericParam, Generics, ImplItem, Index, Item, Label, Lit, LitInt, Macro, MacroDelimiter,
-    Member, Meta, Pat, Path, PathArguments, PathSegment, PredicateType, QSelf, RangeLimits,
-    ReturnType, Stmt, Token, Type, TypeMacro, TypeParamBound, TypePath, TypeTuple, Variant,
-    WherePredicate,
+    ExprLit, ExprTuple, Fields, FieldsNamed, FieldsUnnamed, GenericArgument, GenericParam,
+    Generics, ImplItem, Index, Item, Label, Lit, LitInt, Macro, MacroDelimiter, Member, Meta, Pat,
+    Path, PathArguments, PathSegment, PredicateType, QSelf, RangeLimits, ReturnType, Stmt, Token,
+    Type, TypeMacro, TypeParamBound, TypePath, TypeTuple, Variant, WherePredicate,
 };
 
 use crate::constant::{evaluate_bool, evaluate_range, evaluate_usize};
 use crate::IterationTrait;
 
+#[derive(PartialEq)]
 enum EvaluationContext {
     Type,
     Value,
@@ -960,14 +960,12 @@ impl<'a> SpecificContext<'a> {
                                         };
                                         let mut expr = match arg {
                                             GenericArgument::Type(Type::Infer(_)) => {
-                                                Expr::Range(ExprRange {
-                                                    attrs: Vec::new(),
-                                                    start: None,
-                                                    limits: RangeLimits::HalfOpen(
-                                                        token::DotDot::default(),
-                                                    ),
-                                                    end: None,
-                                                })
+                                                if let Some(typle_len) = self.typle_len {
+                                                    parse_quote!(.. #typle_len)
+                                                } else {
+                                                    let typle_len = self.typle_trait.max_len;
+                                                    parse_quote!(.. #typle_len)
+                                                }
                                             }
                                             GenericArgument::Const(expr) => expr.clone(),
                                             _ => abort!(arg, "expected const expression or `_`"),
@@ -992,10 +990,7 @@ impl<'a> SpecificContext<'a> {
                                                         abort!(end, "expected integer")
                                                     })
                                                 })
-                                                .unwrap_or(
-                                                    self.typle_len
-                                                        .unwrap_or(self.typle_trait.max_len),
-                                                );
+                                                .unwrap_or(self.typle_trait.max_len);
                                             let end = match range.limits {
                                                 RangeLimits::HalfOpen(_) => end,
                                                 RangeLimits::Closed(_) => end.saturating_add(1),
@@ -1353,6 +1348,19 @@ impl<'a> SpecificContext<'a> {
                 };
                 let mut token_stream = std::mem::take(&mut r#macro.tokens);
                 let (pattern, range) = self.parse_pattern_range(&mut token_stream);
+                if let Some(typle_len) = self.typle_len {
+                    if context == EvaluationContext::Value
+                        && pattern.is_some()
+                        && range.end > typle_len
+                    {
+                        // Do not allow an iteration variable to be set higher then Tuple::LEN
+                        abort!(
+                            default_span,
+                            "restrict upper bound to {}::LEN",
+                            self.typle_trait.ident
+                        );
+                    }
+                }
                 let body_span = token_stream.span();
                 match context {
                     EvaluationContext::Type => {
@@ -1602,13 +1610,7 @@ impl<'a> SpecificContext<'a> {
                             evaluate_usize(expr)
                                 .unwrap_or_else(|| abort!(range.end, "range end invalid"))
                         })
-                        .unwrap_or_else(|| {
-                            if let Some(typle_len) = self.typle_len {
-                                typle_len
-                            } else {
-                                abort!(range.end, "no default range end")
-                            }
-                        })
+                        .unwrap_or(self.typle_trait.max_len)
                         .checked_add(match range.limits {
                             RangeLimits::HalfOpen(_) => 0,
                             RangeLimits::Closed(_) => 1,
@@ -1795,13 +1797,7 @@ impl<'a> SpecificContext<'a> {
                                                             abort!(end, "expected integer")
                                                         })
                                                     })
-                                                    .unwrap_or_else(|| {
-                                                        if let Some(typle_len) = self.typle_len {
-                                                            typle_len
-                                                        } else {
-                                                            abort!(range.end, "no default max")
-                                                        }
-                                                    });
+                                                    .unwrap_or(self.typle_trait.max_len);
                                                 let end = match range.limits {
                                                     RangeLimits::HalfOpen(_) => end,
                                                     RangeLimits::Closed(_) => end.saturating_add(1),

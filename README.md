@@ -10,9 +10,9 @@ For example, to define a function to zip a pair of tuples into a tuple of pairs:
 pub fn zip<A: Tuple, B: Tuple>(
     a: A,
     b: B,
-) -> typle_for!(i in .. => (A<{i}>, B<{i}>))
+) -> typle_for!(i in ..Tuple::LEN => (A<{i}>, B<{i}>))
 {
-    typle_for!(i in .. => (a[[i]], b[[i]]))
+    typle_for!(i in ..Tuple::LEN => (a[[i]], b[[i]]))
 }
 ```
 

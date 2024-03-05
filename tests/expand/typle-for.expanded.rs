@@ -4,21 +4,21 @@ struct S<T> {
 }
 impl S<()> {
     fn new(t: ()) {
-        let a = [];
+        let a: [u32; 0] = [];
         let b = ();
         let init: [Option<u32>; 0] = [];
     }
 }
 impl S<(u32,)> {
     fn new(t: (&u32,)) {
-        let a = [*t.0 * 2];
+        let a: [u32; 1] = [*t.0 * 2];
         let b = (*t.0 * 2,);
         let init: [Option<u32>; 1] = [None];
     }
 }
 impl S<(u32, u32)> {
     fn new(t: (&u32, &u32)) {
-        let a = [*t.0 * 2, *t.1 * 2];
+        let a: [u32; 2] = [*t.0 * 2, *t.1 * 2];
         let b = (*t.0 * 2, *t.1 * 2);
         let init: [Option<u32>; 2] = [None, None];
     }

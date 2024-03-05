@@ -55,22 +55,25 @@
 //! the typle index variable can provide access to each component of an existing
 //! tuple type or value.
 //!
+//! The associated constant `LEN` provides the length of the tuple in each
+//! generated item. This value can be used in typle index expressions.
+//!
 //! ```rust
 //! # use typle::typle;
 //! // Split off the first component
 //! #[typle(Tuple for 1..=12)]
 //! fn split<T: Tuple>(
 //!     t: T  // t: (T0, T1, T2,...)
-//! ) -> (T<0>, typle_for!(i in 1.. => T<{i}>))   // (T0, (T1, T2,...))
+//! ) -> (T<0>, typle_for!(i in 1..T::LEN => T<{i}>))   // (T0, (T1, T2,...))
 //! {
-//!     (t[[0]], typle_for!(i in 1.. => t[[i]]))  // (t.0, (t.1, t.2,...))
+//!     (t[[0]], typle_for!(i in 1..T::LEN => t[[i]]))  // (t.0, (t.1, t.2,...))
 //! }
 //!
 //! assert_eq!(split(('1', 2, 3.0)), ('1', (2, 3.0)));
 //! assert_eq!(split((2, 3.0)), (2, (3.0,)));
 //! assert_eq!(split((3.0,)), (3.0, ()));
 //! ```
-
+//!
 //! Specify constraints on the tuple components using one of the following
 //! forms. Except for the first form, these constraints can only appear in the
 //! `where` clause.
@@ -91,11 +94,11 @@
 //! fn multiply<S: Tuple, T: Tuple>(
 //!     s: S,  // s: (S0,...)
 //!     t: T,  // t: (T0,...)
-//! ) -> typle_for!(i in .. => <S<{i}> as Mul<T<{i}>>>::Output)  // (<S0 as Mul<T0>>::Output,...)
+//! ) -> typle_for!(i in ..T::LEN => <S<{i}> as Mul<T<{i}>>>::Output)  // (<S0 as Mul<T0>>::Output,...)
 //! where
-//!     typle_bound!(i in .. => S<{i}>): Mul<T<{i}>>,  // S0: Mul<T0>,...
+//!     typle_bound!(i in ..T::LEN => S<{i}>): Mul<T<{i}>>,  // S0: Mul<T0>,...
 //! {
-//!     typle_for!(i in .. => s[[i]] * t[[i]])  // (s.0 * t.0,...)
+//!     typle_for!(i in ..T::LEN => s[[i]] * t[[i]])  // (s.0 * t.0,...)
 //! }
 //!
 //! assert_eq!(
@@ -103,10 +106,6 @@
 //!     (Duration::from_secs(20), 6)
 //! )
 //! ```
-//!
-//! The associated constant `LEN` provides the length of the tuple in each
-//! generated item. Associated constants `MIN` and `MAX` provide the bounds of
-//! the typle lengths. These values can be used in typle index expressions.
 //!
 //! Use the `typle_index!` macro in a `for` loop to iterate over a range bounded
 //! by typle index expressions.
@@ -146,10 +145,12 @@
 //! demonstrates the use of `typle` with `enum`s.
 //!
 //! Typled `enum`s are implemented for the maximum length. When referring to
-//! these types from other typled items, use `TupleSequenceState<T<{ ..T::MAX }>>`.
-//! This will fill in unused type parameters with the `never` type provided for
-//! the `typle` macro. The default type is [`!`] but this is not available in stable
-//! Rust. [`std::convert::Infallible`] is an uninhabited type that is available in
+//! these types from other typled items, use `TupleSequenceState<T<{ .. }>>`.
+//! For typle range expressions the default lower bound is 0 and the default
+//! upper bound is `T::MAX`, the maximum length for the tuple. This will fill in
+//! unused type parameters with the `never` type provided for the `typle` macro.
+//! The default type is [`!`] but this is not available in stable Rust.
+//! [`std::convert::Infallible`] is an uninhabited type that is available in
 //! stable Rust but any type is permissible.
 //!
 //! The [`typle_variant!`] macro creates multiple enum variants by looping
@@ -196,7 +197,7 @@
 //!         T: Tuple,
 //!         T<_>: Extract,
 //!     {
-//!         S = typle_variant!(i in ..T::MAX =>
+//!         S = typle_variant!(i in .. =>
 //!             typle_for!(j in ..i => T::<{j}>::Output), Option<T<{i}>::State>
 //!         ),
 //!     }
@@ -212,8 +213,8 @@
 //!     {
 //!         // The state contains the output from all previous components and the state
 //!         // of the current component.
-//!         type State = TupleSequenceState<T<{ ..T::MAX }>>;
-//!         type Output = typle_for!(i in .. => <T<{i}> as Extract>::Output);
+//!         type State = TupleSequenceState<T<{ .. }>>;
+//!         type Output = typle_for!(i in ..T::LEN => <T<{i}> as Extract>::Output);
 //!
 //!         fn extract(&self, state: Option<Self::State>) -> Self::Output {
 //!             #[typle_attr_if(T::LEN == 1, allow(unused_mut))]
@@ -781,22 +782,21 @@ fn pat_to_tuple(pat: Pat) -> Expr {
 ///
 /// Examples:
 /// ```
+/// # use typle::typle;
 /// struct S<T>
 /// {
 ///     t: T
 /// }
 ///
 /// #[typle(Tuple for 0..=2)]
-/// impl<T> S<T>
-/// where
-///     T: Tuple<u32>,
+/// impl<T: Tuple<u32>> S<T>
 /// {
-///     fn new(t: typle_for!(i in .. => &T<{i}>)) {
+///     fn new(t: typle_for!(i in ..T::LEN => &T<{i}>)) {
 ///         // Square brackets create an array
-///         let a = typle_for![i in 0..T::LEN => *t[[i]] * 2];
+///         let a: [u32; T::LEN] = typle_for![i in 0..T::LEN => *t[[i]] * 2];
 ///         // Parentheses create a tuple
 ///         // The default bounds of the range are 0..Tuple::LEN
-///         let b = typle_for!(i in .. => *t[[i]] * 2);
+///         let b = typle_for!(i in ..T::LEN => *t[[i]] * 2);
 ///         // Arbitrary expressions can be used for the indices and
 ///         // the iterator variable can be left out if not needed
 ///         let init: [Option<u32>; T::LEN] = typle_for![T::LEN * 2..T::LEN * 3 => None];
@@ -811,21 +811,21 @@ fn pat_to_tuple(pat: Pat) -> Expr {
 /// # }
 /// impl S<()> {
 ///     fn new(t: ()) {
-///         let a = [];
+///         let a: [u32; 0] = [];
 ///         let b = ();
 ///         let init: [Option<u32>; 0] = [];
 ///     }
 /// }
 /// impl S<(u32,)> {
 ///     fn new(t: (&u32,)) {
-///         let a = [*t.0 * 2];
+///         let a: [u32; 1] = [*t.0 * 2];
 ///         let b = (*t.0 * 2,);
 ///         let init: [Option<u32>; 1] = [None];
 ///     }
 /// }
 /// impl S<(u32, u32)> {
 ///     fn new(t: (&u32, &u32)) {
-///         let a = [*t.0 * 2, *t.1 * 2];
+///         let a: [u32; 2] = [*t.0 * 2, *t.1 * 2];
 ///         let b = (*t.0 * 2, *t.1 * 2);
 ///         let init: [Option<u32>; 2] = [None, None];
 ///     }
