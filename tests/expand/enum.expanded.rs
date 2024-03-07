@@ -4,22 +4,18 @@ trait Process {
     type Output;
     fn process(state: Self::State) -> Result<Self::Output, Error>;
 }
-pub enum ProcessState<T0, T1, T2>
+pub enum ProcessState<T0, T1>
 where
     T0: Process<Output = u64>,
     T1: Process<Output = u64>,
-    T2: Process<Output = u64>,
 {
     S0(Option<<T0>::State>, [u64; 0]),
     S1(Option<<T1>::State>, [u64; 1]),
-    S2(Option<<T2>::State>, [u64; 2]),
     U0 { u: [u32; 0] },
     U1 { u: [u32; 1] },
-    U2 { u: [u32; 2] },
     V0,
     V1,
-    V2,
-    Done([u64; 3]),
+    Done([u64; 2]),
 }
 impl Default for ProcessState<!, !, !> {
     fn default() -> Self {

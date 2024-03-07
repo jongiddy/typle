@@ -602,7 +602,7 @@ pub fn typle_for(_item: proc_macro::TokenStream) -> proc_macro::TokenStream {
 ///
 /// In an enum, the `typle_variant` macro allows the creation of variants for each component.
 ///
-/// A variant is created for each index in the range provided. The default range is `0..Tuple::LEN`.
+/// A variant is created for each index in the range provided. The default range is `0..Tuple::MAX`.
 ///
 /// The variants will start with the variant name given before the `=` character, followed by the
 /// index.
@@ -615,36 +615,38 @@ pub fn typle_for(_item: proc_macro::TokenStream) -> proc_macro::TokenStream {
 /// ```
 /// # use typle::typle;
 /// # trait Process {
+/// #     type Output;
 /// #     type State;
 /// # }
-/// #[typle(Tuple for 2..=2)]
+/// #[typle(Tuple for 0..=2)]
 /// pub enum ProcessState<T>
 /// where
 ///     T: Tuple,
-///     T<_>: Process,
+///     T<_>: Process<Output = u64>,
 /// {
-///     Q = typle_variant![..Tuple::MAX],
-///     R = typle_variant!{i in 0..T::MAX => r: T<{i}>},
-///     S = typle_variant!(i in ..T::MAX => Option<T<{i}>::State>, [u64; i]),
-///     Done([u64; Tuple::MAX])
+///     S = typle_variant!(i in .. => Option<T<{i}>::State>, [u64; i]),
+///     U = typle_variant! {i in .. => u: [u32; i]},
+///     V = typle_variant![..],
+///     Done([u64; Tuple::MAX]),
 /// }
 /// ```
 /// creates
 /// ```
 /// # trait Process {
+/// #     type Output;
 /// #     type State;
 /// # }
-/// pub enum ProcessState2<T0, T1>
+/// pub enum ProcessState<T0, T1>
 /// where
-///     T0: Process,
-///     T1: Process,
+///     T0: Process<Output = u64>,
+///     T1: Process<Output = u64>,
 /// {
-///     Q0,
-///     Q1,
-///     R0 { r: T0 },
-///     R1 { r: T1 },
 ///     S0(Option<<T0>::State>, [u64; 0]),
 ///     S1(Option<<T1>::State>, [u64; 1]),
+///     U0 { u: [u32; 0] },
+///     U1 { u: [u32; 1] },
+///     V0,
+///     V1,
 ///     Done([u64; 2]),
 /// }
 /// ```
