@@ -394,20 +394,14 @@
 //!
 
 mod constant;
-mod specific;
-
-use std::collections::HashMap;
+mod context;
 
 use constant::evaluate_usize;
-use proc_macro2::{Ident, Span, TokenStream, TokenTree};
+use context::TypleContext;
+use proc_macro2::{Ident, TokenStream, TokenTree};
 use proc_macro_error::{abort, abort_call_site, proc_macro_error};
-use quote::{format_ident, ToTokens};
-use specific::{ident_to_path, BlockState, SpecificContext};
-use syn::punctuated::Punctuated;
-use syn::{
-    parse_quote, token, Expr, GenericParam, Generics, Item, ItemImpl, Pat, Type, TypeNever,
-    TypeParam,
-};
+use quote::ToTokens;
+use syn::{Item, Type, TypeNever};
 
 #[doc(hidden)]
 #[proc_macro]
@@ -422,17 +416,19 @@ pub fn typle(
     args: proc_macro::TokenStream,
     item: proc_macro::TokenStream,
 ) -> proc_macro::TokenStream {
-    let iteration_trait = parse_args(TokenStream::from(args));
+    let typle_macro = TypleMacro::from(TokenStream::from(args));
 
     let Ok(item) = syn::parse::<Item>(item) else {
         abort_call_site!("unsupported tokens");
     };
 
-    let mut output = Vec::new();
+    let context = TypleContext::from(&typle_macro);
 
-    output.extend(iteration_trait.process_item(item));
+    let mut items = Vec::new();
 
-    output
+    context.replace_item(item, &mut items);
+
+    items
         .into_iter()
         .map(Item::into_token_stream)
         .collect::<TokenStream>()
@@ -440,334 +436,99 @@ pub fn typle(
 }
 
 #[derive(Clone)]
-struct IterationTrait {
+struct TypleMacro {
     ident: Ident,
     min_len: usize,
     max_len: usize,
     never_type: Type,
 }
 
-fn parse_args(args: TokenStream) -> IterationTrait {
-    // #[typle(Tuple for 2..=12, never=std::convert::Infallible)]
-    let mut never_type = Type::Never(TypeNever {
-        bang_token: syn::token::Not::default(),
-    });
-    let mut args_iter = args.into_iter();
-    // Tuple
-    let Some(TokenTree::Ident(trait_ident)) = args_iter.next() else {
-        abort_call_site!("expected identifier");
-    };
-    // for
-    match args_iter.next() {
-        Some(TokenTree::Ident(for_ident)) if for_ident == "for" => {}
-        _ => {
-            abort_call_site!("expected for keyword");
-        }
-    }
-
-    let mut range_tokens = Vec::new();
-    let mut never_tokens = Vec::new();
-    let mut comma_seen = false;
-    for token in args_iter {
-        if comma_seen {
-            never_tokens.push(token);
-        } else {
-            if let TokenTree::Punct(punct) = &token {
-                if punct.as_char() == ',' {
-                    comma_seen = true;
-                    continue;
-                }
-            }
-            range_tokens.push(token);
-        }
-    }
-    // 2..=12
-    let range_stream = range_tokens.into_iter().collect();
-    let range =
-        syn::parse2::<syn::ExprRange>(range_stream).unwrap_or_else(|e| abort_call_site!("{}", e));
-    let min = range
-        .start
-        .as_ref()
-        .map(|expr| evaluate_usize(&expr).unwrap_or_else(|| abort!(expr, "range start invalid")))
-        .unwrap_or_else(|| abort!(range, "range start must be bounded"));
-    let end = range
-        .end
-        .as_ref()
-        .unwrap_or_else(|| abort!(range, "range end must be bounded"));
-    let max = match range.limits {
-        syn::RangeLimits::HalfOpen(_) => evaluate_usize(&end)
-            .and_then(|max| max.checked_sub(1))
-            .unwrap_or_else(|| abort!(end, "range end invalid")),
-        syn::RangeLimits::Closed(_) => {
-            evaluate_usize(&end).unwrap_or_else(|| abort!(end, "range end invalid"))
-        }
-    };
-    if max < min {
-        abort!(range, "range contains no values");
-    }
-    if !never_tokens.is_empty() {
-        // never=some::Type
-        let mut iter = never_tokens.into_iter();
-        let Some(TokenTree::Ident(ident)) = iter.next() else {
-            abort_call_site!("expected identifier after comma");
+impl From<TokenStream> for TypleMacro {
+    fn from(args: TokenStream) -> Self {
+        // #[typle(Tuple for 2..=12, never=std::convert::Infallible)]
+        let mut never_type = Type::Never(TypeNever {
+            bang_token: syn::token::Not::default(),
+        });
+        let mut args_iter = args.into_iter();
+        // Tuple
+        let Some(TokenTree::Ident(trait_ident)) = args_iter.next() else {
+            abort_call_site!("expected identifier");
         };
-        if ident != "never" {
-            abort_call_site!("expected identifier 'never' after comma");
+        // for
+        match args_iter.next() {
+            Some(TokenTree::Ident(for_ident)) if for_ident == "for" => {}
+            _ => {
+                abort_call_site!("expected for keyword");
+            }
         }
-        let Some(TokenTree::Punct(punct)) = iter.next() else {
-            abort_call_site!("expected equals after never");
+
+        let mut range_tokens = Vec::new();
+        let mut never_tokens = Vec::new();
+        let mut comma_seen = false;
+        for token in args_iter {
+            if comma_seen {
+                never_tokens.push(token);
+            } else {
+                if let TokenTree::Punct(punct) = &token {
+                    if punct.as_char() == ',' {
+                        comma_seen = true;
+                        continue;
+                    }
+                }
+                range_tokens.push(token);
+            }
+        }
+        // 2..=12
+        let range_stream = range_tokens.into_iter().collect();
+        let range = syn::parse2::<syn::ExprRange>(range_stream)
+            .unwrap_or_else(|e| abort_call_site!("{}", e));
+        let min = range
+            .start
+            .as_ref()
+            .map(|expr| {
+                evaluate_usize(&expr).unwrap_or_else(|| abort!(expr, "range start invalid"))
+            })
+            .unwrap_or_else(|| abort!(range, "range start must be bounded"));
+        let end = range
+            .end
+            .as_ref()
+            .unwrap_or_else(|| abort!(range, "range end must be bounded"));
+        let max = match range.limits {
+            syn::RangeLimits::HalfOpen(_) => evaluate_usize(&end)
+                .and_then(|max| max.checked_sub(1))
+                .unwrap_or_else(|| abort!(end, "range end invalid1")),
+            syn::RangeLimits::Closed(_) => {
+                evaluate_usize(&end).unwrap_or_else(|| abort!(end, "range end invalid2"))
+            }
         };
-        if punct.as_char() != '=' {
-            abort_call_site!("expected equals after never");
+        if max < min {
+            abort!(range, "range contains no values");
         }
-        let type_stream = iter.collect();
-        never_type = syn::parse2::<Type>(type_stream).unwrap_or_else(|e| abort_call_site!("{}", e));
-    }
-    IterationTrait {
-        ident: trait_ident,
-        min_len: min,
-        max_len: max,
-        never_type,
-    }
-}
-
-impl IterationTrait {
-    fn process_item(&self, item: Item) -> Vec<Item> {
-        let mut output = Vec::new();
-        match item {
-            Item::Impl(syn::ItemImpl { ref generics, .. }) if self.has_typles(generics) => {
-                for typle_len in self.min_len..=self.max_len {
-                    let context = SpecificContext {
-                        typle_trait: &self,
-                        typle_len: Some(typle_len),
-                        constants: HashMap::new(),
-                        typles: HashMap::new(),
-                    };
-                    let mut item = item.clone();
-                    let mut state = BlockState::default();
-                    context.replace_item(&mut item, &mut state);
-                    output.push(item);
-                }
+        if !never_tokens.is_empty() {
+            // never=some::Type
+            let mut iter = never_tokens.into_iter();
+            let Some(TokenTree::Ident(ident)) = iter.next() else {
+                abort_call_site!("expected identifier after comma");
+            };
+            if ident != "never" {
+                abort_call_site!("expected identifier 'never' after comma");
             }
-            Item::Fn(function) if self.has_typles(&function.sig.generics) => {
-                let fn_name = &function.sig.ident;
-                let fn_meta = &function.attrs;
-                let fn_vis = &function.vis;
-                let trait_name = format_ident!("_typle_fn_{}", fn_name);
-                let fn_type_params = &function.sig.generics.params;
-                let fn_type_params_no_constraints = remove_constraints(fn_type_params);
-                let fn_input_params = &function.sig.inputs;
-                let mut type_tuple = syn::TypeTuple {
-                    paren_token: token::Paren::default(),
-                    elems: Punctuated::new(),
-                };
-                let mut pat_tuple = syn::PatTuple {
-                    attrs: Vec::new(),
-                    paren_token: token::Paren::default(),
-                    elems: Punctuated::new(),
-                };
-                let mut value_tuple = syn::ExprTuple {
-                    attrs: Vec::new(),
-                    paren_token: token::Paren::default(),
-                    elems: Punctuated::new(),
-                };
-                for arg in fn_input_params {
-                    match arg {
-                        syn::FnArg::Receiver(_) => abort!(arg, "unexpected self"),
-                        syn::FnArg::Typed(pat_type) => {
-                            type_tuple.elems.push(pat_type.ty.as_ref().clone());
-                            pat_tuple.elems.push(pat_type.pat.as_ref().clone());
-                            value_tuple
-                                .elems
-                                .push(pat_to_tuple(pat_type.pat.as_ref().clone()));
-                        }
-                    }
-                }
-                let trait_item = parse_quote!(
-                    #[allow(non_camel_case_types)]
-                    #fn_vis trait #trait_name {
-                        type Return;
-
-                        fn apply(self) -> Self::Return;
-                    }
-                );
-                output.push(trait_item);
-                let fn_item = parse_quote!(
-                    #(#fn_meta)*
-                    #fn_vis fn #fn_name <#fn_type_params_no_constraints>(#fn_input_params) -> <#type_tuple as #trait_name>::Return
-                    where
-                        #type_tuple: #trait_name,
-                    {
-                        <#type_tuple as #trait_name>::apply(#value_tuple)
-                    }
-                );
-                output.push(fn_item);
-                let return_type = match function.sig.output {
-                    syn::ReturnType::Default => parse_quote!(()),
-                    syn::ReturnType::Type(_, t) => *t,
-                };
-                let fn_body = function.block;
-                let let_stmt: syn::Stmt = if self.min_len == 0 {
-                    parse_quote!(
-                        #[allow(unused_variables)]
-                        let #pat_tuple = self;
-                    )
-                } else {
-                    parse_quote!(let #pat_tuple = self;)
-                };
-                let items = vec![
-                    syn::ImplItem::Type(syn::ImplItemType {
-                        attrs: Vec::new(),
-                        vis: syn::Visibility::Inherited,
-                        defaultness: None,
-                        type_token: token::Type::default(),
-                        ident: Ident::new("Return", Span::call_site()),
-                        generics: Generics::default(),
-                        eq_token: token::Eq::default(),
-                        ty: return_type,
-                        semi_token: token::Semi::default(),
-                    }),
-                    parse_quote!(
-                        fn apply(self) -> Self::Return {
-                            #let_stmt
-                            #fn_body
-                        }
-                    ),
-                ];
-
-                let item = Item::Impl(ItemImpl {
-                    attrs: Vec::new(),
-                    defaultness: None,
-                    unsafety: None,
-                    impl_token: token::Impl::default(),
-                    generics: function.sig.generics,
-                    trait_: Some((None, ident_to_path(trait_name), token::For::default())),
-                    self_ty: Box::new(syn::Type::Tuple(type_tuple)),
-                    brace_token: token::Brace::default(),
-                    items,
-                });
-
-                for typle_len in self.min_len..=self.max_len {
-                    let context = SpecificContext {
-                        typle_trait: &self,
-                        typle_len: Some(typle_len),
-                        constants: HashMap::new(),
-                        typles: HashMap::new(),
-                    };
-                    let mut item = item.clone();
-                    let mut state = BlockState::default();
-                    context.replace_item(&mut item, &mut state);
-                    output.push(item);
-                }
+            let Some(TokenTree::Punct(punct)) = iter.next() else {
+                abort_call_site!("expected equals after never");
+            };
+            if punct.as_char() != '=' {
+                abort_call_site!("expected equals after never");
             }
-            Item::Mod(mut module) => {
-                if let Some((_, items)) = &mut module.content {
-                    for item in std::mem::take(items) {
-                        items.extend(self.process_item(item));
-                    }
-                }
-                output.push(Item::Mod(module));
-            }
-            item => {
-                let context = SpecificContext {
-                    typle_trait: &self,
-                    typle_len: None,
-                    constants: HashMap::new(),
-                    typles: HashMap::new(),
-                };
-                let mut item = item;
-                let mut state = BlockState::default();
-                context.replace_item(&mut item, &mut state);
-                output.push(item);
-            }
+            let type_stream = iter.collect();
+            never_type =
+                syn::parse2::<Type>(type_stream).unwrap_or_else(|e| abort_call_site!("{}", e));
         }
-        output
-    }
-
-    fn has_typles(&self, generics: &Generics) -> bool {
-        for param in &generics.params {
-            if let GenericParam::Type(type_param) = param {
-                for bound in &type_param.bounds {
-                    if let syn::TypeParamBound::Trait(trait_bound) = bound {
-                        let trait_path = &trait_bound.path;
-                        if trait_path.leading_colon.is_none()
-                            && trait_path.segments.len() == 1
-                            && trait_path.segments[0].ident == self.ident
-                        {
-                            return true;
-                        }
-                    }
-                }
-            }
+        TypleMacro {
+            ident: trait_ident,
+            min_len: min,
+            max_len: max,
+            never_type,
         }
-
-        if let Some(where_clause) = &generics.where_clause {
-            for predicate in &where_clause.predicates {
-                if let syn::WherePredicate::Type(predicate_type) = predicate {
-                    for bound in &predicate_type.bounds {
-                        if let syn::TypeParamBound::Trait(trait_bound) = bound {
-                            let trait_path = &trait_bound.path;
-                            if trait_path.leading_colon.is_none()
-                                && trait_path.segments.len() == 1
-                                && trait_path.segments[0].ident == self.ident
-                            {
-                                return true;
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        false
-    }
-}
-
-fn remove_constraints(
-    fn_type_params: &Punctuated<GenericParam, token::Comma>,
-) -> Punctuated<GenericParam, token::Comma> {
-    let mut output = Punctuated::new();
-    for param in fn_type_params.into_iter() {
-        if let GenericParam::Type(ref type_param) = param {
-            output.push(GenericParam::Type(TypeParam {
-                bounds: Punctuated::new(),
-                ..type_param.clone()
-            }));
-        } else {
-            output.push(param.clone());
-        }
-    }
-    output
-}
-
-fn pat_to_tuple(pat: Pat) -> Expr {
-    match pat {
-        Pat::Const(p) => Expr::Const(p),
-        Pat::Ident(p) => Expr::Path(syn::ExprPath {
-            attrs: p.attrs,
-            qself: None,
-            path: ident_to_path(p.ident),
-        }),
-        Pat::Lit(p) => Expr::Lit(p),
-        Pat::Macro(p) => Expr::Macro(p),
-        Pat::Or(_) => todo!(),
-        Pat::Paren(_) => todo!(),
-        Pat::Path(_) => todo!(),
-        Pat::Range(_) => todo!(),
-        Pat::Reference(_) => todo!(),
-        Pat::Rest(_) => todo!(),
-        Pat::Slice(_) => todo!(),
-        Pat::Struct(_) => todo!(),
-        Pat::Tuple(p) => Expr::Tuple(syn::ExprTuple {
-            attrs: p.attrs,
-            paren_token: p.paren_token,
-            elems: p.elems.into_iter().map(pat_to_tuple).collect(),
-        }),
-        Pat::TupleStruct(_) => todo!(),
-        Pat::Type(_) => todo!(),
-        Pat::Verbatim(_) => todo!(),
-        Pat::Wild(_) => todo!(),
-        _ => todo!(),
     }
 }
 

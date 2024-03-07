@@ -35,4 +35,7 @@ where
     typle_bound!(i in .. => T<{i}>): Mul<T<{ T::LEN - i - 1 }>>,
     T<{ T::LEN - 1 }>: AsRef<str>,
 {
+    fn g() {
+        let f: TupleD<T<{ .. }>> = TupleD::<T<{ .. }>>::new();
+    }
 }
