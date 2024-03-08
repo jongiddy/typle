@@ -75,11 +75,11 @@ impl BlockState {
 }
 
 #[derive(Clone)]
-pub struct TypleContext<'a> {
-    pub typle_macro: &'a TypleMacro,
-    pub typle_len: Option<usize>,
-    pub constants: HashMap<Ident, usize>,
-    pub typles: HashMap<Ident, Typle>,
+pub(crate) struct TypleContext<'a> {
+    pub(crate) typle_macro: &'a TypleMacro,
+    pub(crate) typle_len: Option<usize>,
+    pub(crate) constants: HashMap<Ident, usize>,
+    pub(crate) typles: HashMap<Ident, Typle>,
 }
 
 impl<'a> From<&'a TypleMacro> for TypleContext<'a> {
