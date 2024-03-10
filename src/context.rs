@@ -860,44 +860,10 @@ impl<'a> TypleContext<'a> {
                             lit: Lit::Int(LitInt::new(&value.to_string(), first.ident.span())),
                         });
                         return;
+                    } else {
+                        path.path.segments = segments.collect();
                     }
-                    for mut path_segment in segments {
-                        match &mut path_segment.arguments {
-                            PathArguments::None => {}
-                            PathArguments::AngleBracketed(args) => {
-                                if let Some(index) = self.typle_ident(args) {
-                                    // X::<typle_ident!(3)> -> X3
-                                    path_segment.ident =
-                                        format_ident!("{}{}", path_segment.ident, index);
-                                    path_segment.arguments = PathArguments::None;
-                                } else {
-                                    // std::option::Some(T> -> std::option::Option<(T0, T1,...)
-                                    // std::option::Option<T<3>> -> std::option::Option<T3>
-                                    for arg in std::mem::take(&mut args.args) {
-                                        match arg {
-                                            GenericArgument::Type(mut generic_type) => {
-                                                self.replace_type(&mut generic_type);
-                                                args.args.push(GenericArgument::Type(generic_type));
-                                            }
-                                            GenericArgument::AssocType(mut assoc_type) => {
-                                                self.replace_type(&mut assoc_type.ty);
-                                                args.args
-                                                    .push(GenericArgument::AssocType(assoc_type));
-                                            }
-                                            p => {
-                                                args.args.push(p);
-                                            }
-                                        }
-                                    }
-                                    if args.args.is_empty() {
-                                        path_segment.arguments = PathArguments::None;
-                                    }
-                                }
-                            }
-                            PathArguments::Parenthesized(_) => todo!(),
-                        }
-                        path.path.segments.push(path_segment)
-                    }
+                    self.replace_path_arguments(&mut path.path);
                 }
             }
             Expr::Range(range) => {
@@ -1936,93 +1902,114 @@ impl<'a> TypleContext<'a> {
             match &mut path_segment.arguments {
                 PathArguments::None => {}
                 PathArguments::AngleBracketed(args) => {
-                    // WrapperType<T> -> WrapperType<(T0, T1,...)>
-                    // WrapperType<T<3>> -> WrapperType<T3>
-                    // WrapperType<T<{..}>> -> WrapperType<T0, T1,...>
-                    for arg in std::mem::take(&mut args.args) {
-                        match arg {
-                            GenericArgument::Type(Type::Path(TypePath { qself, mut path }))
-                                if qself.is_none() && path.leading_colon.is_none() =>
-                            {
-                                let mut segments = path.segments.iter_mut();
-                                if let Some(first) = segments.next() {
-                                    if let (
-                                        Some(typle),
-                                        PathArguments::AngleBracketed(arguments),
-                                        None,
-                                    ) = (
-                                        self.typles.get(&first.ident),
-                                        &mut first.arguments,
-                                        segments.next(),
-                                    ) {
-                                        let mut iter = arguments.args.iter_mut();
-                                        if let (Some(GenericArgument::Const(ref mut expr)), None) =
-                                            (iter.next(), iter.next())
-                                        {
-                                            let mut state = BlockState::default();
-                                            self.replace_expr(expr, &mut state);
-                                            if let Some(range) = evaluate_range(&expr) {
-                                                let start = range
-                                                    .start
-                                                    .as_deref()
-                                                    .map(|start| {
-                                                        evaluate_usize(start).unwrap_or_else(|| {
-                                                            abort!(start, "expected integer")
+                    if let Some(index) = self.typle_ident(args) {
+                        // X::<typle_ident!(3)> -> X3
+                        path_segment.ident = format_ident!("{}{}", path_segment.ident, index);
+                        path_segment.arguments = PathArguments::None;
+                    } else {
+                        // WrapperType<T> -> WrapperType<(T0, T1,...)>
+                        // WrapperType<T<3>> -> WrapperType<T3>
+                        // WrapperType<T<{..}>> -> WrapperType<T0, T1,...>
+                        for arg in std::mem::take(&mut args.args) {
+                            match arg {
+                                GenericArgument::Type(Type::Path(TypePath { qself, mut path }))
+                                    if qself.is_none() && path.leading_colon.is_none() =>
+                                {
+                                    let mut segments = path.segments.iter_mut();
+                                    if let Some(first) = segments.next() {
+                                        if first.ident == "PQ" {
+                                            dbg!(1);
+                                        }
+                                        if let (
+                                            Some(typle),
+                                            PathArguments::AngleBracketed(arguments),
+                                            None,
+                                        ) = (
+                                            self.typles.get(&first.ident),
+                                            &mut first.arguments,
+                                            segments.next(),
+                                        ) {
+                                            if first.ident == "PQ" {
+                                                dbg!(2);
+                                            }
+                                            let mut iter = arguments.args.iter_mut();
+                                            if let (
+                                                Some(GenericArgument::Const(ref mut expr)),
+                                                None,
+                                            ) = (iter.next(), iter.next())
+                                            {
+                                                let mut state = BlockState::default();
+                                                self.replace_expr(expr, &mut state);
+                                                if let Some(range) = evaluate_range(&expr) {
+                                                    let start = range
+                                                        .start
+                                                        .as_deref()
+                                                        .map(|start| {
+                                                            evaluate_usize(start).unwrap_or_else(
+                                                                || {
+                                                                    abort!(
+                                                                        start,
+                                                                        "expected integer"
+                                                                    )
+                                                                },
+                                                            )
                                                         })
-                                                    })
-                                                    .unwrap_or(0);
-                                                let end = range
-                                                    .end
-                                                    .as_deref()
-                                                    .map(|end| {
-                                                        evaluate_usize(end).unwrap_or_else(|| {
-                                                            abort!(end, "expected integer")
+                                                        .unwrap_or(0);
+                                                    let end = range
+                                                        .end
+                                                        .as_deref()
+                                                        .map(|end| {
+                                                            evaluate_usize(end).unwrap_or_else(
+                                                                || abort!(end, "expected integer"),
+                                                            )
                                                         })
-                                                    })
-                                                    .unwrap_or(self.typle_macro.max_len);
-                                                let end = match range.limits {
-                                                    RangeLimits::HalfOpen(_) => end,
-                                                    RangeLimits::Closed(_) => end.saturating_add(1),
-                                                };
-                                                for i in start..end {
-                                                    args.args.push(GenericArgument::Type(
-                                                        self.get_type(typle, i, path.span()),
-                                                    ));
+                                                        .unwrap_or(self.typle_macro.max_len);
+                                                    let end = match range.limits {
+                                                        RangeLimits::HalfOpen(_) => end,
+                                                        RangeLimits::Closed(_) => {
+                                                            end.saturating_add(1)
+                                                        }
+                                                    };
+                                                    for i in start..end {
+                                                        args.args.push(GenericArgument::Type(
+                                                            self.get_type(typle, i, path.span()),
+                                                        ));
+                                                    }
+                                                    continue;
                                                 }
-                                                continue;
                                             }
                                         }
                                     }
+                                    let mut generic_type = Type::Path(TypePath { qself, path });
+                                    self.replace_type(&mut generic_type);
+                                    args.args.push(GenericArgument::Type(generic_type));
                                 }
-                                let mut generic_type = Type::Path(TypePath { qself, path });
-                                self.replace_type(&mut generic_type);
-                                args.args.push(GenericArgument::Type(generic_type));
-                            }
-                            GenericArgument::Type(mut generic_type) => {
-                                self.replace_type(&mut generic_type);
-                                args.args.push(GenericArgument::Type(generic_type));
-                            }
-                            GenericArgument::AssocType(mut assoc_type) => {
-                                self.replace_type(&mut assoc_type.ty);
-                                args.args.push(GenericArgument::AssocType(assoc_type));
-                            }
-                            GenericArgument::Const(mut expr) => {
-                                let mut state = &mut BlockState::default();
-                                self.replace_expr(&mut expr, &mut state);
-                                args.args.push(GenericArgument::Const(expr));
-                            }
-                            GenericArgument::AssocConst(mut assoc_const) => {
-                                let mut state = &mut BlockState::default();
-                                self.replace_expr(&mut assoc_const.value, &mut state);
-                                args.args.push(GenericArgument::AssocConst(assoc_const));
-                            }
-                            p => {
-                                args.args.push(p);
+                                GenericArgument::Type(mut generic_type) => {
+                                    self.replace_type(&mut generic_type);
+                                    args.args.push(GenericArgument::Type(generic_type));
+                                }
+                                GenericArgument::AssocType(mut assoc_type) => {
+                                    self.replace_type(&mut assoc_type.ty);
+                                    args.args.push(GenericArgument::AssocType(assoc_type));
+                                }
+                                GenericArgument::Const(mut expr) => {
+                                    let mut state = &mut BlockState::default();
+                                    self.replace_expr(&mut expr, &mut state);
+                                    args.args.push(GenericArgument::Const(expr));
+                                }
+                                GenericArgument::AssocConst(mut assoc_const) => {
+                                    let mut state = &mut BlockState::default();
+                                    self.replace_expr(&mut assoc_const.value, &mut state);
+                                    args.args.push(GenericArgument::AssocConst(assoc_const));
+                                }
+                                p => {
+                                    args.args.push(p);
+                                }
                             }
                         }
-                    }
-                    if args.args.is_empty() {
-                        path_segment.arguments = PathArguments::None;
+                        if args.args.is_empty() {
+                            path_segment.arguments = PathArguments::None;
+                        }
                     }
                 }
                 PathArguments::Parenthesized(_) => todo!(),

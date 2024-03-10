@@ -15,3 +15,31 @@ where
     T0::Output: AsRef<str>,
     T1::Output: AsRef<str>,
 {}
+impl<S0, T0> Extract for TupleC<(T0,)>
+where
+    T0: Extract<Output = Option<(S0,)>>,
+{}
+impl<S0, S1, T0, T1> Extract for TupleC<(T0, T1)>
+where
+    S1: Extract,
+    T0: Extract<Output = Option<(S0, S1)>>,
+{}
+impl<T0> TraitD for TupleD<T0, !>
+where
+    T0: Mul<T0>,
+    T0: AsRef<str>,
+{
+    fn g() {
+        let f: TupleD<T0, !> = TupleD::<T0, !>::new();
+    }
+}
+impl<T0, T1> TraitD for TupleD<T0, T1>
+where
+    T0: Mul<T1>,
+    T1: Mul<T0>,
+    T1: AsRef<str>,
+{
+    fn g() {
+        let f: TupleD<T0, T1> = TupleD::<T0, T1>::new();
+    }
+}

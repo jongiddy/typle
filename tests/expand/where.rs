@@ -21,7 +21,7 @@ where
 impl<S, T> Extract for TupleC<T>
 where
     S: Tuple,
-    S<{ 1.. }>: Extract,
+    S<{ 1..S::LEN }>: Extract,
     T: Tuple,
     T<0>: Extract<Output = Option<S>>,
 {
@@ -32,10 +32,11 @@ where
 impl<T> TraitD for TupleD<T<{ .. }>>
 where
     T: Tuple,
-    typle_bound!(i in .. => T<{i}>): Mul<T<{ T::LEN - i - 1 }>>,
+    typle_bound!(i in ..T::LEN => T<{i}>): Mul<T<{ T::LEN - i - 1 }>>,
     T<{ T::LEN - 1 }>: AsRef<str>,
 {
     fn g() {
+        // T{ .. } expands to all types in a referenced enum
         let f: TupleD<T<{ .. }>> = TupleD::<T<{ .. }>>::new();
     }
 }
