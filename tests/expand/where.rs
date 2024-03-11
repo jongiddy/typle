@@ -38,5 +38,6 @@ where
     fn g() {
         // T{ .. } expands to all types in a referenced enum
         let f: TupleD<T<{ .. }>> = TupleD::<T<{ .. }>>::new();
+        T::<0>::output_to_bytestream();
     }
 }

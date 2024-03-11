@@ -1,6 +1,6 @@
 [package]
 name = "typle"
-version = "0.9.1"
+version = "0.9.2"
 edition = "2021"
 description = "Generic tuple bounds and transformations"
 license = "MIT"

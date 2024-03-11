@@ -860,9 +860,8 @@ impl<'a> TypleContext<'a> {
                             lit: Lit::Int(LitInt::new(&value.to_string(), first.ident.span())),
                         });
                         return;
-                    } else {
-                        path.path.segments = segments.collect();
                     }
+                    path.path.segments = segments.collect();
                     self.replace_path_arguments(&mut path.path);
                 }
             }
@@ -1142,9 +1141,92 @@ impl<'a> TypleContext<'a> {
     fn replace_generic_arguments(&self, args: &mut Punctuated<GenericArgument, token::Comma>) {
         for arg in std::mem::take(args) {
             match arg {
+                GenericArgument::Type(Type::Path(TypePath { qself, mut path }))
+                    if qself.is_none() && path.leading_colon.is_none() =>
+                {
+                    let mut segments = path.segments.iter_mut();
+                    if let Some(first) = segments.next() {
+                        if let (Some(typle), PathArguments::AngleBracketed(arguments), None) = (
+                            self.typles.get(&first.ident),
+                            &mut first.arguments,
+                            segments.next(),
+                        ) {
+                            // T<{..}> or T<3> or T<{i}>
+                            let mut iter = arguments.args.iter_mut();
+                            if let (Some(GenericArgument::Const(ref mut expr)), None) =
+                                (iter.next(), iter.next())
+                            {
+                                let mut state = BlockState::default();
+                                self.replace_expr(expr, &mut state);
+                                if let Some(range) = evaluate_range(&expr) {
+                                    let start = range
+                                        .start
+                                        .as_deref()
+                                        .map(|start| {
+                                            evaluate_usize(start).unwrap_or_else(|| {
+                                                abort!(start, "expected integer")
+                                            })
+                                        })
+                                        .unwrap_or(0);
+                                    let end = range
+                                        .end
+                                        .as_deref()
+                                        .map(|end| {
+                                            evaluate_usize(end)
+                                                .unwrap_or_else(|| abort!(end, "expected integer"))
+                                        })
+                                        .unwrap_or(self.typle_macro.max_len);
+                                    let end = match range.limits {
+                                        RangeLimits::HalfOpen(_) => end,
+                                        RangeLimits::Closed(_) => end.saturating_add(1),
+                                    };
+                                    for i in start..end {
+                                        args.push(GenericArgument::Type(self.get_type(
+                                            typle,
+                                            i,
+                                            path.span(),
+                                        )));
+                                    }
+                                    continue;
+                                }
+                                if let Some(i) = evaluate_usize(&expr) {
+                                    args.push(GenericArgument::Type(self.get_type(
+                                        typle,
+                                        i,
+                                        path.span(),
+                                    )));
+                                    continue;
+                                }
+                            }
+                        }
+                    }
+                    let mut generic_type = Type::Path(TypePath { qself, path });
+                    self.replace_type(&mut generic_type);
+                    args.push(GenericArgument::Type(generic_type));
+                }
                 GenericArgument::Type(mut generic_type) => {
                     self.replace_type(&mut generic_type);
                     args.push(GenericArgument::Type(generic_type));
+                }
+                GenericArgument::Const(mut generic_expr) => {
+                    let mut state = BlockState::default();
+                    self.replace_expr(&mut generic_expr, &mut state);
+                    args.push(GenericArgument::Const(generic_expr));
+                }
+                GenericArgument::AssocType(mut assoc_type) => {
+                    if let Some(generic_args) = &mut assoc_type.generics {
+                        self.replace_generic_arguments(&mut generic_args.args);
+                    }
+                    self.replace_type(&mut assoc_type.ty);
+                    args.push(GenericArgument::AssocType(assoc_type));
+                }
+                GenericArgument::AssocConst(mut assoc_expr) => {
+                    if let Some(generic_args) = &mut assoc_expr.generics {
+                        self.replace_generic_arguments(&mut generic_args.args);
+                    }
+                    let mut state = BlockState::default();
+                    self.replace_expr(&mut assoc_expr.value, &mut state);
+                    args.push(GenericArgument::AssocConst(assoc_expr));
                 }
                 p => {
                     args.push(p);
@@ -1817,17 +1899,7 @@ impl<'a> TypleContext<'a> {
                             } else {
                                 // std::option::Option<T> -> std::option::Option<(T0, T1,...)>
                                 // std::option::Option<T<3>> -> std::option::Option<T3>
-                                for arg in std::mem::take(&mut args.args) {
-                                    match arg {
-                                        GenericArgument::Type(mut generic_type) => {
-                                            self.replace_type(&mut generic_type);
-                                            args.args.push(GenericArgument::Type(generic_type));
-                                        }
-                                        p => {
-                                            args.args.push(p);
-                                        }
-                                    }
-                                }
+                                self.replace_generic_arguments(&mut args.args);
                                 if args.args.is_empty() {
                                     path_segment.arguments = PathArguments::None;
                                 }
@@ -1868,17 +1940,7 @@ impl<'a> TypleContext<'a> {
                             } else {
                                 // std::option::Option<T> -> std::option::Option<(T0, T1,...)>
                                 // std::option::Option<T<3>> -> std::option::Option<T3>
-                                for arg in std::mem::take(&mut args.args) {
-                                    match arg {
-                                        GenericArgument::Type(mut generic_type) => {
-                                            self.replace_type(&mut generic_type);
-                                            args.args.push(GenericArgument::Type(generic_type));
-                                        }
-                                        p => {
-                                            args.args.push(p);
-                                        }
-                                    }
-                                }
+                                self.replace_generic_arguments(&mut args.args);
                                 if args.args.is_empty() {
                                     path_segment.arguments = PathArguments::None;
                                 }
@@ -1910,103 +1972,7 @@ impl<'a> TypleContext<'a> {
                         // WrapperType<T> -> WrapperType<(T0, T1,...)>
                         // WrapperType<T<3>> -> WrapperType<T3>
                         // WrapperType<T<{..}>> -> WrapperType<T0, T1,...>
-                        for arg in std::mem::take(&mut args.args) {
-                            match arg {
-                                GenericArgument::Type(Type::Path(TypePath { qself, mut path }))
-                                    if qself.is_none() && path.leading_colon.is_none() =>
-                                {
-                                    let mut segments = path.segments.iter_mut();
-                                    if let Some(first) = segments.next() {
-                                        if first.ident == "PQ" {
-                                            dbg!(1);
-                                        }
-                                        if let (
-                                            Some(typle),
-                                            PathArguments::AngleBracketed(arguments),
-                                            None,
-                                        ) = (
-                                            self.typles.get(&first.ident),
-                                            &mut first.arguments,
-                                            segments.next(),
-                                        ) {
-                                            if first.ident == "PQ" {
-                                                dbg!(2);
-                                            }
-                                            let mut iter = arguments.args.iter_mut();
-                                            if let (
-                                                Some(GenericArgument::Const(ref mut expr)),
-                                                None,
-                                            ) = (iter.next(), iter.next())
-                                            {
-                                                let mut state = BlockState::default();
-                                                self.replace_expr(expr, &mut state);
-                                                if let Some(range) = evaluate_range(&expr) {
-                                                    let start = range
-                                                        .start
-                                                        .as_deref()
-                                                        .map(|start| {
-                                                            evaluate_usize(start).unwrap_or_else(
-                                                                || {
-                                                                    abort!(
-                                                                        start,
-                                                                        "expected integer"
-                                                                    )
-                                                                },
-                                                            )
-                                                        })
-                                                        .unwrap_or(0);
-                                                    let end = range
-                                                        .end
-                                                        .as_deref()
-                                                        .map(|end| {
-                                                            evaluate_usize(end).unwrap_or_else(
-                                                                || abort!(end, "expected integer"),
-                                                            )
-                                                        })
-                                                        .unwrap_or(self.typle_macro.max_len);
-                                                    let end = match range.limits {
-                                                        RangeLimits::HalfOpen(_) => end,
-                                                        RangeLimits::Closed(_) => {
-                                                            end.saturating_add(1)
-                                                        }
-                                                    };
-                                                    for i in start..end {
-                                                        args.args.push(GenericArgument::Type(
-                                                            self.get_type(typle, i, path.span()),
-                                                        ));
-                                                    }
-                                                    continue;
-                                                }
-                                            }
-                                        }
-                                    }
-                                    let mut generic_type = Type::Path(TypePath { qself, path });
-                                    self.replace_type(&mut generic_type);
-                                    args.args.push(GenericArgument::Type(generic_type));
-                                }
-                                GenericArgument::Type(mut generic_type) => {
-                                    self.replace_type(&mut generic_type);
-                                    args.args.push(GenericArgument::Type(generic_type));
-                                }
-                                GenericArgument::AssocType(mut assoc_type) => {
-                                    self.replace_type(&mut assoc_type.ty);
-                                    args.args.push(GenericArgument::AssocType(assoc_type));
-                                }
-                                GenericArgument::Const(mut expr) => {
-                                    let mut state = &mut BlockState::default();
-                                    self.replace_expr(&mut expr, &mut state);
-                                    args.args.push(GenericArgument::Const(expr));
-                                }
-                                GenericArgument::AssocConst(mut assoc_const) => {
-                                    let mut state = &mut BlockState::default();
-                                    self.replace_expr(&mut assoc_const.value, &mut state);
-                                    args.args.push(GenericArgument::AssocConst(assoc_const));
-                                }
-                                p => {
-                                    args.args.push(p);
-                                }
-                            }
-                        }
+                        self.replace_generic_arguments(&mut args.args);
                         if args.args.is_empty() {
                             path_segment.arguments = PathArguments::None;
                         }
