@@ -1151,7 +1151,6 @@ impl<'a> TypleContext<'a> {
                             &mut first.arguments,
                             segments.next(),
                         ) {
-                            // T<{..}> or T<3> or T<{i}>
                             let mut iter = arguments.args.iter_mut();
                             if let (Some(GenericArgument::Const(ref mut expr)), None) =
                                 (iter.next(), iter.next())
@@ -1159,6 +1158,7 @@ impl<'a> TypleContext<'a> {
                                 let mut state = BlockState::default();
                                 self.replace_expr(expr, &mut state);
                                 if let Some(range) = evaluate_range(&expr) {
+                                    // T<{..}>
                                     let start = range
                                         .start
                                         .as_deref()
@@ -1187,14 +1187,6 @@ impl<'a> TypleContext<'a> {
                                             path.span(),
                                         )));
                                     }
-                                    continue;
-                                }
-                                if let Some(i) = evaluate_usize(&expr) {
-                                    args.push(GenericArgument::Type(self.get_type(
-                                        typle,
-                                        i,
-                                        path.span(),
-                                    )));
                                     continue;
                                 }
                             }
