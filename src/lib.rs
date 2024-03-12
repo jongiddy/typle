@@ -217,12 +217,11 @@
 //!         type Output = typle_for!(i in ..T::LEN => <T<{i}> as Extract>::Output);
 //!
 //!         fn extract(&self, state: Option<Self::State>) -> Self::Output {
+//!             // When LEN == 1 the code never changes `state`
 //!             #[typle_attr_if(T::LEN == 1, allow(unused_mut))]
 //!             let mut state = state.unwrap_or(Self::State::S::<typle_ident!(0)>((), None));
 //!             for typle_index!(i) in 0..T::LEN {
-//!                 // For LEN = 1 there is only one variant (S0) so `let` is irrefutable
-//!                 #[typle_attr_if(T::LEN == 1, allow(irrefutable_let_patterns))]
-//!                 // For i == 0, the `output` state variable does not get used
+//!                 // When i == 0, the `output` state variable does not get used
 //!                 #[typle_attr_if(i == 0, allow(unused_variables))]
 //!                 if let Self::State::S::<typle_ident!(i)>(output, inner_state) = state {
 //!                     let matched = self.tuple[[i]].extract(inner_state);
@@ -556,7 +555,6 @@ impl From<TokenStream> for TypleMacro {
 ///         // Square brackets create an array
 ///         let a: [u32; T::LEN] = typle_for![i in 0..T::LEN => *t[[i]] * 2];
 ///         // Parentheses create a tuple
-///         // The default bounds of the range are 0..Tuple::LEN
 ///         let b = typle_for!(i in ..T::LEN => *t[[i]] * 2);
 ///         // Arbitrary expressions can be used for the indices and
 ///         // the iterator variable can be left out if not needed
