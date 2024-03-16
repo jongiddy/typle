@@ -28,3 +28,11 @@ impl<T: Tuple<u32>> MyStruct<T> {
         x0 + x1
     }
 }
+
+#[typle(Tuple for 1..=12)]
+fn multiply_by<T: Tuple<u32>>(t: T, m: u32) -> T {
+    // let (x0, x1, x2) = (t.0 * m, t.1 * m, t.2 * m);
+    let typle_for!(i in ..T::LEN => x::<typle_ident!(i)>) = typle_for!(i in ..T::LEN => t[[i]] * m);
+    assert_eq!(x0, t.0 * m);
+    typle_for!(i in ..T::LEN => x::<typle_ident!(i)>)
+}

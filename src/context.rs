@@ -8,21 +8,16 @@ use syn::punctuated::Punctuated;
 use syn::spanned::Spanned as _;
 use syn::{
     parse2, parse_quote, token, AttrStyle, Attribute, Block, Expr, ExprArray, ExprBlock, ExprField,
-    ExprLit, ExprTuple, Fields, FieldsNamed, FieldsUnnamed, GenericArgument, GenericParam,
-    Generics, ImplItem, Index, Item, ItemImpl, Label, Lit, LitInt, Macro, MacroDelimiter, Member,
-    Meta, Pat, Path, PathArguments, PathSegment, PredicateType, QSelf, RangeLimits, ReturnType,
-    Stmt, Token, Type, TypeMacro, TypeParam, TypeParamBound, TypePath, TypeTuple, Variant,
+    ExprLit, ExprMacro, ExprTuple, Fields, FieldsNamed, FieldsUnnamed, GenericArgument,
+    GenericParam, Generics, ImplItem, Index, Item, ItemImpl, Label, Lit, LitInt, Macro,
+    MacroDelimiter, Member, Meta, Pat, PatMacro, PatParen, PatReference, PatTuple, PatWild, Path,
+    PathArguments, PathSegment, PredicateType, QSelf, RangeLimits, ReturnType, Stmt, StmtMacro,
+    Token, Type, TypeMacro, TypeParam, TypeParamBound, TypePath, TypeTuple, Variant,
     WherePredicate,
 };
 
 use crate::constant::{evaluate_bool, evaluate_range, evaluate_usize};
 use crate::TypleMacro;
-
-#[derive(PartialEq)]
-enum EvaluationContext {
-    Type,
-    Value,
-}
 
 #[derive(Clone)]
 pub enum Typle {
@@ -334,8 +329,11 @@ impl<'a> TypleContext<'a> {
                 }
                 Stmt::Macro(mut stmt_macro) => {
                     self.replace_attrs(&mut stmt_macro.attrs);
-                    self.replace_macro(&mut stmt_macro.mac, EvaluationContext::Value, state);
-                    block.stmts.push(Stmt::Macro(stmt_macro));
+                    if let Some(stmt) = self.replace_macro_stmt(&mut stmt_macro, state) {
+                        block.stmts.push(stmt);
+                    } else {
+                        block.stmts.push(Stmt::Macro(stmt_macro));
+                    }
                 }
             }
         }
@@ -663,8 +661,9 @@ impl<'a> TypleContext<'a> {
                 state.propagate(inner_state, r#loop.label.as_ref());
             }
             Expr::Macro(r#macro) => {
-                self.replace_attrs(&mut r#macro.attrs);
-                self.replace_macro(&mut r#macro.mac, EvaluationContext::Value, state);
+                if let Some(e) = self.replace_macro_expr(r#macro, state) {
+                    *expr = e;
+                }
             }
             Expr::Match(r#match) => {
                 self.replace_attrs(&mut r#match.attrs);
@@ -1486,13 +1485,10 @@ impl<'a> TypleContext<'a> {
                                 context.replace_attrs(&mut ty.attrs);
                                 context.replace_type(&mut ty.ty);
                             }
-                            ImplItem::Macro(r#macro) => {
-                                context.replace_attrs(&mut r#macro.attrs);
-                                let mut state = BlockState::default();
-                                context.replace_macro(
-                                    &mut r#macro.mac,
-                                    EvaluationContext::Type,
-                                    &mut state,
+                            ImplItem::Macro(subitem) => {
+                                context.replace_attrs(&mut subitem.attrs);
+                                subitem.mac.tokens = context.replace_macro_token_stream(
+                                    std::mem::take(&mut subitem.mac.tokens),
                                 );
                             }
                             _ => {}
@@ -1501,10 +1497,11 @@ impl<'a> TypleContext<'a> {
                     items.push(Item::Impl(impl_item));
                 }
             }
-            Item::Macro(mut macro_item) => {
-                let mut state = BlockState::default();
-                self.replace_macro(&mut macro_item.mac, EvaluationContext::Type, &mut state);
-                items.push(Item::Macro(macro_item));
+            Item::Macro(mut item) => {
+                self.replace_attrs(&mut item.attrs);
+                item.mac.tokens =
+                    self.replace_macro_token_stream(std::mem::take(&mut item.mac.tokens));
+                items.push(Item::Macro(item));
             }
             Item::Mod(mut module) => {
                 if let Some((_, inner_items)) = &mut module.content {
@@ -1538,117 +1535,199 @@ impl<'a> TypleContext<'a> {
         }
     }
 
-    fn replace_macro(
-        &self,
-        r#macro: &mut Macro,
-        context: EvaluationContext,
-        state: &mut BlockState,
-    ) {
+    fn replace_typle_for_expr(
+        &'a self,
+        mac: &mut Macro,
+        state: &'a mut BlockState,
+    ) -> impl Iterator<Item = Expr> + 'a {
+        let mut token_stream = std::mem::take(&mut mac.tokens);
+        let (pattern, range) = self.parse_pattern_range(&mut token_stream);
+        let body_span = token_stream.span();
+        let Ok(expr) = parse2::<Expr>(token_stream.clone()) else {
+            abort!(body_span, "expected expression");
+        };
+        range.map(move |index| {
+            let mut context = self.clone();
+            if let Some(ident) = pattern.clone() {
+                if ident != "_" {
+                    context.constants.insert(ident, index);
+                }
+            }
+            let mut expr = expr.clone();
+            context.replace_expr(&mut expr, state);
+            expr
+        })
+    }
+
+    fn replace_macro_expr(&self, m: &mut ExprMacro, state: &mut BlockState) -> Option<Expr> {
+        // typle_for!(i in .. => Some<t[[i]]) -> (Some<t.0>, Some<t.1>)
+        // typle_for!(i in .. => t.to_string()) -> (t.0.to_string(), t.1.to_string())
+        // as opposed to
+        // Some(t) -> Some((t.0, t.1))
+        // t.to_string() -> (t.0, t.1).to_string()
+        self.replace_attrs(&mut m.attrs);
+        if let Some(macro_name) = m.mac.path.get_ident() {
+            if macro_name == "typle_for" {
+                let elems = self.replace_typle_for_expr(&mut m.mac, state);
+                let expr = match &m.mac.delimiter {
+                    MacroDelimiter::Paren(_) => {
+                        let tuple = ExprTuple {
+                            attrs: std::mem::take(&mut m.attrs),
+                            paren_token: token::Paren::default(),
+                            elems: elems.collect(),
+                        };
+                        Expr::Tuple(tuple)
+                    }
+                    MacroDelimiter::Brace(_) => {
+                        abort!(m, "expected parentheses or brackets");
+                    }
+                    MacroDelimiter::Bracket(_) => {
+                        let array = ExprArray {
+                            attrs: std::mem::take(&mut m.attrs),
+                            bracket_token: token::Bracket::default(),
+                            elems: elems.collect(),
+                        };
+                        Expr::Array(array)
+                    }
+                };
+                return Some(expr);
+            }
+        }
+        m.mac.tokens = self.replace_macro_token_stream(std::mem::take(&mut m.mac.tokens));
+        None
+    }
+
+    // Expanding a macro in pattern position using expression parsing allows use of const-if and
+    // other macros that are not valid in a pattern. This means that `typle_for!` only accepts
+    // patterns that have an equivalent type. This covers the most common patterns but, notably,
+    // `ref` and `mut` are not available.
+    fn expr_to_pat(expr: Expr) -> Pat {
+        match expr {
+            Expr::Const(expr) => Pat::Const(expr),
+            Expr::Infer(expr) => Pat::Wild(PatWild {
+                attrs: expr.attrs,
+                underscore_token: expr.underscore_token,
+            }),
+            Expr::Lit(expr) => Pat::Lit(expr),
+            Expr::Macro(expr) => Pat::Macro(expr),
+            Expr::Paren(expr) => Pat::Paren(PatParen {
+                attrs: expr.attrs,
+                paren_token: expr.paren_token,
+                pat: Box::new(Self::expr_to_pat(*expr.expr)),
+            }),
+            Expr::Path(expr) => Pat::Path(expr),
+            Expr::Reference(expr) => Pat::Reference(PatReference {
+                attrs: expr.attrs,
+                and_token: expr.and_token,
+                mutability: expr.mutability,
+                pat: Box::new(Self::expr_to_pat(*expr.expr)),
+            }),
+            Expr::Tuple(expr) => Pat::Tuple(PatTuple {
+                attrs: expr.attrs,
+                paren_token: expr.paren_token,
+                elems: expr
+                    .elems
+                    .into_iter()
+                    .map(|expr| Self::expr_to_pat(expr))
+                    .collect(),
+            }),
+            _ => abort!(expr, "typle does not support this pattern"),
+        }
+    }
+
+    fn replace_macro_pat(&self, m: &mut PatMacro) -> Option<Pat> {
+        self.replace_attrs(&mut m.attrs);
+        if let Some(macro_name) = m.mac.path.get_ident() {
+            if macro_name == "typle_for" {
+                let mut state = BlockState::default();
+                let elems = self.replace_typle_for_expr(&mut m.mac, &mut state);
+                let pat = match m.mac.delimiter {
+                    MacroDelimiter::Paren(_) => {
+                        let tuple = PatTuple {
+                            attrs: std::mem::take(&mut m.attrs),
+                            paren_token: token::Paren::default(),
+                            elems: elems.map(Self::expr_to_pat).collect(),
+                        };
+                        Pat::Tuple(tuple)
+                    }
+                    _ => {
+                        abort!(m, "expected parentheses");
+                    }
+                };
+                return Some(pat);
+            }
+        }
+        m.mac.tokens = self.replace_macro_token_stream(std::mem::take(&mut m.mac.tokens));
+        None
+    }
+
+    fn replace_macro_stmt(&self, m: &mut StmtMacro, state: &mut BlockState) -> Option<Stmt> {
+        self.replace_attrs(&mut m.attrs);
+        if let Some(macro_name) = m.mac.path.get_ident() {
+            if macro_name == "typle_for" {
+                let elems = self.replace_typle_for_expr(&mut m.mac, state);
+                let expr = match m.mac.delimiter {
+                    MacroDelimiter::Paren(_) => {
+                        let tuple = ExprTuple {
+                            attrs: std::mem::take(&mut m.attrs),
+                            paren_token: token::Paren::default(),
+                            elems: elems.collect(),
+                        };
+                        Expr::Tuple(tuple)
+                    }
+                    MacroDelimiter::Brace(_) => {
+                        abort!(m, "expected parentheses or brackets");
+                    }
+                    MacroDelimiter::Bracket(_) => {
+                        let array = ExprArray {
+                            attrs: std::mem::take(&mut m.attrs),
+                            bracket_token: token::Bracket::default(),
+                            elems: elems.collect(),
+                        };
+                        Expr::Array(array)
+                    }
+                };
+                return Some(Stmt::Expr(expr, m.semi_token));
+            }
+        }
+        m.mac.tokens = self.replace_macro_token_stream(std::mem::take(&mut m.mac.tokens));
+        None
+    }
+
+    fn replace_macro_type(&self, m: &mut TypeMacro) -> Option<Type> {
         // typle_for!(i in .. => Option<T<{i}>) -> (Option<T0>, Option<T1>)
         // typle_for!(i in .. => T::<{i}>::default()) -> (T0::default(), T1::default())
         // as opposed to
         // Option<T> -> Option<(T0, T1)>
         // T::default() -> <(T0, T1)>::default()
-        // typle_for!(i in .. => t[[i]]) -> (t.0, t.1)
-        // typle_for![i in .. => t[[i]]] -> [t.0, t.1]
-        // typle_for!(i in .. => (T::<{i}>, T::<0>)) -> ((T0, T0), (T1, T0))
-        // typle_for!(0..2 => None) // (None, None)
-        if let Some(macro_name) = r#macro.path.get_ident() {
+        if let Some(macro_name) = m.mac.path.get_ident() {
             if macro_name == "typle_for" {
-                let default_span = macro_name.span();
-                r#macro.path = Path {
-                    leading_colon: None,
-                    segments: std::module_path!()
-                        .split("::")
-                        .take(1)
-                        .chain(std::iter::once("typle_identity"))
-                        .map(|name| PathSegment {
-                            ident: Ident::new(name, macro_name.span()),
-                            arguments: PathArguments::None,
-                        })
-                        .collect(),
-                };
-                let mut token_stream = std::mem::take(&mut r#macro.tokens);
+                let mut token_stream = std::mem::take(&mut m.mac.tokens);
                 let (pattern, range) = self.parse_pattern_range(&mut token_stream);
-                if let Some(typle_len) = self.typle_len {
-                    if context == EvaluationContext::Value
-                        && pattern.is_some()
-                        && range.end > typle_len
-                    {
-                        // Do not allow an iteration variable to be set higher then Tuple::LEN
-                        abort!(
-                            default_span,
-                            "restrict upper bound to {}::LEN",
-                            self.typle_macro.ident
-                        );
-                    }
-                }
                 let body_span = token_stream.span();
-                match context {
-                    EvaluationContext::Type => {
-                        let Ok(r#type) = parse2::<Type>(token_stream) else {
-                            abort!(body_span, "expected type");
-                        };
-                        let mut tuple = TypeTuple {
-                            paren_token: token::Paren::default(),
-                            elems: Punctuated::new(),
-                        };
-                        for index in range {
-                            let mut context = self.clone();
-                            if let Some(ident) = pattern.clone() {
-                                if ident != "_" {
-                                    context.constants.insert(ident, index);
-                                }
-                            }
-                            let mut component = r#type.clone();
-                            context.replace_type(&mut component);
-                            tuple.elems.push(component);
+                let Ok(r#type) = parse2::<Type>(token_stream) else {
+                    abort!(body_span, "expected type");
+                };
+                let mut tuple = TypeTuple {
+                    paren_token: token::Paren::default(),
+                    elems: Punctuated::new(),
+                };
+                for index in range {
+                    let mut context = self.clone();
+                    if let Some(ident) = pattern.clone() {
+                        if ident != "_" {
+                            context.constants.insert(ident, index);
                         }
-                        r#macro.tokens = tuple.into_token_stream();
                     }
-                    EvaluationContext::Value => {
-                        let Ok(expr) = parse2::<Expr>(token_stream.clone()) else {
-                            abort!(body_span, "expected value");
-                        };
-                        let mut elems = Punctuated::new();
-                        for index in range {
-                            let mut context = self.clone();
-                            if let Some(ident) = pattern.clone() {
-                                if ident != "_" {
-                                    context.constants.insert(ident, index);
-                                }
-                            }
-                            let mut element = expr.clone();
-                            context.replace_expr(&mut element, state);
-                            elems.push(element);
-                        }
-                        r#macro.tokens = match r#macro.delimiter {
-                            MacroDelimiter::Paren(_) => {
-                                let tuple = ExprTuple {
-                                    paren_token: token::Paren::default(),
-                                    elems,
-                                    attrs: Vec::new(),
-                                };
-                                tuple.into_token_stream()
-                            }
-                            MacroDelimiter::Brace(_) => {
-                                abort!(default_span, "expected parentheses or brackets");
-                            }
-                            MacroDelimiter::Bracket(_) => {
-                                let array = ExprArray {
-                                    attrs: Vec::new(),
-                                    bracket_token: token::Bracket::default(),
-                                    elems,
-                                };
-                                array.into_token_stream()
-                            }
-                        };
-                    }
+                    let mut component = r#type.clone();
+                    context.replace_type(&mut component);
+                    tuple.elems.push(component);
                 }
-                return;
+                return Some(Type::Tuple(tuple));
             }
         }
-        r#macro.tokens = self.replace_macro_token_stream(std::mem::take(&mut r#macro.tokens));
+        m.mac.tokens = self.replace_macro_token_stream(std::mem::take(&mut m.mac.tokens));
+        None
     }
 
     // Look for `typle_ty!(...)` or `typle_expr!(...)` and evaluate body.
@@ -1863,8 +1942,9 @@ impl<'a> TypleContext<'a> {
     fn replace_pat(&self, pat: &mut Pat) {
         match pat {
             Pat::Macro(m) => {
-                let mut state = BlockState::default();
-                self.replace_macro(&mut m.mac, EvaluationContext::Value, &mut state);
+                if let Some(p) = self.replace_macro_pat(m) {
+                    *pat = p;
+                }
             }
             Pat::Or(or) => {
                 for pat in &mut or.cases {
@@ -2010,9 +2090,10 @@ impl<'a> TypleContext<'a> {
             Type::Group(group) => {
                 self.replace_type(&mut group.elem);
             }
-            Type::Macro(r#macro) => {
-                let mut state = BlockState::default();
-                self.replace_macro(&mut r#macro.mac, EvaluationContext::Type, &mut state);
+            Type::Macro(m) => {
+                if let Some(typ) = self.replace_macro_type(m) {
+                    *ty = typ;
+                }
             }
             Type::Paren(paren) => {
                 self.replace_type(&mut paren.elem);

@@ -357,6 +357,18 @@
 //! assert_eq!(v, [2, 3]);
 //! # }
 //! ```
+//! - `typle_for!` can be used as a pattern but not all patterns are supported. Notably, `ref` and
+//! `mut` are unavailable.
+//! ```rust
+//! #[typle(Tuple for 1..=12)]
+//! fn multiply_by<T: Tuple<u32>>(t: T, m: u32) -> T {
+//!     // let (x0, x1, ...) = (t.0 * m, t.1 * m, ...);
+//!     let typle_for!(i in ..T::LEN => x::<typle_ident!(i)>)
+//!         = typle_for!(i in ..T::LEN => t[[i]] * m);
+//!     assert_eq!(x0, t.0 * m);
+//!     typle_for!(i in ..T::LEN => x::<typle_ident!(i)>)
+//! }
+//! ```
 //! - A `continue` referencing a label on a `for` loop using `typle_index!` works but displays an
 //! [unsuppressible warning](https://github.com/rust-lang/rust/issues/31745) during compilation.
 //! ```rust

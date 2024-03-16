@@ -1208,6 +1208,366 @@ pub mod pattern {
             x0 + x1
         }
     }
+    #[allow(non_camel_case_types)]
+    trait _typle_fn_multiply_by {
+        type Return;
+        fn apply(self) -> Self::Return;
+    }
+    fn multiply_by<T>(t: T, m: u32) -> <(T, u32) as _typle_fn_multiply_by>::Return
+    where
+        (T, u32): _typle_fn_multiply_by,
+    {
+        <(T, u32) as _typle_fn_multiply_by>::apply((t, m))
+    }
+    impl _typle_fn_multiply_by for ((u32,), u32) {
+        type Return = (u32,);
+        fn apply(self) -> Self::Return {
+            let (t, m) = self;
+            {
+                let (x0,) = (t.0 * m,);
+                match (&x0, &(t.0 * m)) {
+                    (left_val, right_val) => {
+                        if !(*left_val == *right_val) {
+                            let kind = ::core::panicking::AssertKind::Eq;
+                            ::core::panicking::assert_failed(
+                                kind,
+                                &*left_val,
+                                &*right_val,
+                                ::core::option::Option::None,
+                            );
+                        }
+                    }
+                };
+                (x0,)
+            }
+        }
+    }
+    impl _typle_fn_multiply_by for ((u32, u32), u32) {
+        type Return = (u32, u32);
+        fn apply(self) -> Self::Return {
+            let (t, m) = self;
+            {
+                let (x0, x1) = (t.0 * m, t.1 * m);
+                match (&x0, &(t.0 * m)) {
+                    (left_val, right_val) => {
+                        if !(*left_val == *right_val) {
+                            let kind = ::core::panicking::AssertKind::Eq;
+                            ::core::panicking::assert_failed(
+                                kind,
+                                &*left_val,
+                                &*right_val,
+                                ::core::option::Option::None,
+                            );
+                        }
+                    }
+                };
+                (x0, x1)
+            }
+        }
+    }
+    impl _typle_fn_multiply_by for ((u32, u32, u32), u32) {
+        type Return = (u32, u32, u32);
+        fn apply(self) -> Self::Return {
+            let (t, m) = self;
+            {
+                let (x0, x1, x2) = (t.0 * m, t.1 * m, t.2 * m);
+                match (&x0, &(t.0 * m)) {
+                    (left_val, right_val) => {
+                        if !(*left_val == *right_val) {
+                            let kind = ::core::panicking::AssertKind::Eq;
+                            ::core::panicking::assert_failed(
+                                kind,
+                                &*left_val,
+                                &*right_val,
+                                ::core::option::Option::None,
+                            );
+                        }
+                    }
+                };
+                (x0, x1, x2)
+            }
+        }
+    }
+    impl _typle_fn_multiply_by for ((u32, u32, u32, u32), u32) {
+        type Return = (u32, u32, u32, u32);
+        fn apply(self) -> Self::Return {
+            let (t, m) = self;
+            {
+                let (x0, x1, x2, x3) = (t.0 * m, t.1 * m, t.2 * m, t.3 * m);
+                match (&x0, &(t.0 * m)) {
+                    (left_val, right_val) => {
+                        if !(*left_val == *right_val) {
+                            let kind = ::core::panicking::AssertKind::Eq;
+                            ::core::panicking::assert_failed(
+                                kind,
+                                &*left_val,
+                                &*right_val,
+                                ::core::option::Option::None,
+                            );
+                        }
+                    }
+                };
+                (x0, x1, x2, x3)
+            }
+        }
+    }
+    impl _typle_fn_multiply_by for ((u32, u32, u32, u32, u32), u32) {
+        type Return = (u32, u32, u32, u32, u32);
+        fn apply(self) -> Self::Return {
+            let (t, m) = self;
+            {
+                let (x0, x1, x2, x3, x4) = (t.0 * m, t.1 * m, t.2 * m, t.3 * m, t.4 * m);
+                match (&x0, &(t.0 * m)) {
+                    (left_val, right_val) => {
+                        if !(*left_val == *right_val) {
+                            let kind = ::core::panicking::AssertKind::Eq;
+                            ::core::panicking::assert_failed(
+                                kind,
+                                &*left_val,
+                                &*right_val,
+                                ::core::option::Option::None,
+                            );
+                        }
+                    }
+                };
+                (x0, x1, x2, x3, x4)
+            }
+        }
+    }
+    impl _typle_fn_multiply_by for ((u32, u32, u32, u32, u32, u32), u32) {
+        type Return = (u32, u32, u32, u32, u32, u32);
+        fn apply(self) -> Self::Return {
+            let (t, m) = self;
+            {
+                let (x0, x1, x2, x3, x4, x5) = (
+                    t.0 * m,
+                    t.1 * m,
+                    t.2 * m,
+                    t.3 * m,
+                    t.4 * m,
+                    t.5 * m,
+                );
+                match (&x0, &(t.0 * m)) {
+                    (left_val, right_val) => {
+                        if !(*left_val == *right_val) {
+                            let kind = ::core::panicking::AssertKind::Eq;
+                            ::core::panicking::assert_failed(
+                                kind,
+                                &*left_val,
+                                &*right_val,
+                                ::core::option::Option::None,
+                            );
+                        }
+                    }
+                };
+                (x0, x1, x2, x3, x4, x5)
+            }
+        }
+    }
+    impl _typle_fn_multiply_by for ((u32, u32, u32, u32, u32, u32, u32), u32) {
+        type Return = (u32, u32, u32, u32, u32, u32, u32);
+        fn apply(self) -> Self::Return {
+            let (t, m) = self;
+            {
+                let (x0, x1, x2, x3, x4, x5, x6) = (
+                    t.0 * m,
+                    t.1 * m,
+                    t.2 * m,
+                    t.3 * m,
+                    t.4 * m,
+                    t.5 * m,
+                    t.6 * m,
+                );
+                match (&x0, &(t.0 * m)) {
+                    (left_val, right_val) => {
+                        if !(*left_val == *right_val) {
+                            let kind = ::core::panicking::AssertKind::Eq;
+                            ::core::panicking::assert_failed(
+                                kind,
+                                &*left_val,
+                                &*right_val,
+                                ::core::option::Option::None,
+                            );
+                        }
+                    }
+                };
+                (x0, x1, x2, x3, x4, x5, x6)
+            }
+        }
+    }
+    impl _typle_fn_multiply_by for ((u32, u32, u32, u32, u32, u32, u32, u32), u32) {
+        type Return = (u32, u32, u32, u32, u32, u32, u32, u32);
+        fn apply(self) -> Self::Return {
+            let (t, m) = self;
+            {
+                let (x0, x1, x2, x3, x4, x5, x6, x7) = (
+                    t.0 * m,
+                    t.1 * m,
+                    t.2 * m,
+                    t.3 * m,
+                    t.4 * m,
+                    t.5 * m,
+                    t.6 * m,
+                    t.7 * m,
+                );
+                match (&x0, &(t.0 * m)) {
+                    (left_val, right_val) => {
+                        if !(*left_val == *right_val) {
+                            let kind = ::core::panicking::AssertKind::Eq;
+                            ::core::panicking::assert_failed(
+                                kind,
+                                &*left_val,
+                                &*right_val,
+                                ::core::option::Option::None,
+                            );
+                        }
+                    }
+                };
+                (x0, x1, x2, x3, x4, x5, x6, x7)
+            }
+        }
+    }
+    impl _typle_fn_multiply_by for ((u32, u32, u32, u32, u32, u32, u32, u32, u32), u32) {
+        type Return = (u32, u32, u32, u32, u32, u32, u32, u32, u32);
+        fn apply(self) -> Self::Return {
+            let (t, m) = self;
+            {
+                let (x0, x1, x2, x3, x4, x5, x6, x7, x8) = (
+                    t.0 * m,
+                    t.1 * m,
+                    t.2 * m,
+                    t.3 * m,
+                    t.4 * m,
+                    t.5 * m,
+                    t.6 * m,
+                    t.7 * m,
+                    t.8 * m,
+                );
+                match (&x0, &(t.0 * m)) {
+                    (left_val, right_val) => {
+                        if !(*left_val == *right_val) {
+                            let kind = ::core::panicking::AssertKind::Eq;
+                            ::core::panicking::assert_failed(
+                                kind,
+                                &*left_val,
+                                &*right_val,
+                                ::core::option::Option::None,
+                            );
+                        }
+                    }
+                };
+                (x0, x1, x2, x3, x4, x5, x6, x7, x8)
+            }
+        }
+    }
+    impl _typle_fn_multiply_by
+    for ((u32, u32, u32, u32, u32, u32, u32, u32, u32, u32), u32) {
+        type Return = (u32, u32, u32, u32, u32, u32, u32, u32, u32, u32);
+        fn apply(self) -> Self::Return {
+            let (t, m) = self;
+            {
+                let (x0, x1, x2, x3, x4, x5, x6, x7, x8, x9) = (
+                    t.0 * m,
+                    t.1 * m,
+                    t.2 * m,
+                    t.3 * m,
+                    t.4 * m,
+                    t.5 * m,
+                    t.6 * m,
+                    t.7 * m,
+                    t.8 * m,
+                    t.9 * m,
+                );
+                match (&x0, &(t.0 * m)) {
+                    (left_val, right_val) => {
+                        if !(*left_val == *right_val) {
+                            let kind = ::core::panicking::AssertKind::Eq;
+                            ::core::panicking::assert_failed(
+                                kind,
+                                &*left_val,
+                                &*right_val,
+                                ::core::option::Option::None,
+                            );
+                        }
+                    }
+                };
+                (x0, x1, x2, x3, x4, x5, x6, x7, x8, x9)
+            }
+        }
+    }
+    impl _typle_fn_multiply_by
+    for ((u32, u32, u32, u32, u32, u32, u32, u32, u32, u32, u32), u32) {
+        type Return = (u32, u32, u32, u32, u32, u32, u32, u32, u32, u32, u32);
+        fn apply(self) -> Self::Return {
+            let (t, m) = self;
+            {
+                let (x0, x1, x2, x3, x4, x5, x6, x7, x8, x9, x10) = (
+                    t.0 * m,
+                    t.1 * m,
+                    t.2 * m,
+                    t.3 * m,
+                    t.4 * m,
+                    t.5 * m,
+                    t.6 * m,
+                    t.7 * m,
+                    t.8 * m,
+                    t.9 * m,
+                    t.10 * m,
+                );
+                match (&x0, &(t.0 * m)) {
+                    (left_val, right_val) => {
+                        if !(*left_val == *right_val) {
+                            let kind = ::core::panicking::AssertKind::Eq;
+                            ::core::panicking::assert_failed(
+                                kind,
+                                &*left_val,
+                                &*right_val,
+                                ::core::option::Option::None,
+                            );
+                        }
+                    }
+                };
+                (x0, x1, x2, x3, x4, x5, x6, x7, x8, x9, x10)
+            }
+        }
+    }
+    impl _typle_fn_multiply_by
+    for ((u32, u32, u32, u32, u32, u32, u32, u32, u32, u32, u32, u32), u32) {
+        type Return = (u32, u32, u32, u32, u32, u32, u32, u32, u32, u32, u32, u32);
+        fn apply(self) -> Self::Return {
+            let (t, m) = self;
+            {
+                let (x0, x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, x11) = (
+                    t.0 * m,
+                    t.1 * m,
+                    t.2 * m,
+                    t.3 * m,
+                    t.4 * m,
+                    t.5 * m,
+                    t.6 * m,
+                    t.7 * m,
+                    t.8 * m,
+                    t.9 * m,
+                    t.10 * m,
+                    t.11 * m,
+                );
+                match (&x0, &(t.0 * m)) {
+                    (left_val, right_val) => {
+                        if !(*left_val == *right_val) {
+                            let kind = ::core::panicking::AssertKind::Eq;
+                            ::core::panicking::assert_failed(
+                                kind,
+                                &*left_val,
+                                &*right_val,
+                                ::core::option::Option::None,
+                            );
+                        }
+                    }
+                };
+                (x0, x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, x11)
+            }
+        }
+    }
 }
 pub mod type_alias {
     #![allow(type_alias_bounds, unused)]
