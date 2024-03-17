@@ -74,6 +74,18 @@
 //! assert_eq!(split((3.0,)), (3.0, ()));
 //! ```
 //!
+//! The [`typle_fold!`] macro reduces a tuple to a single value.
+//!
+//! ```rust
+//! # use typle::typle;
+//! #[typle(Tuple for 0..=12)]
+//! pub fn sum<T: Tuple<u32>>(t: T) -> u32 {
+//!     typle_fold!(0; i in ..T::LEN => |total| total + t[[i]])
+//! }
+//! assert_eq!(sum(()), 0);
+//! assert_eq!(sum((1, 4, 9, 16)), 30);
+//! ```
+//!
 //! Specify constraints on the tuple components using one of the following
 //! forms. Except for the first form, these constraints can only appear in the
 //! `where` clause.
@@ -360,6 +372,7 @@
 //! - `typle_for!` can be used as a pattern but not all patterns are supported. Notably, `ref` and
 //! `mut` are unavailable.
 //! ```rust
+//! # use typle::typle;
 //! #[typle(Tuple for 1..=12)]
 //! fn multiply_by<T: Tuple<u32>>(t: T, m: u32) -> T {
 //!     // let (x0, x1, ...) = (t.0 * m, t.1 * m, ...);
@@ -541,6 +554,98 @@ impl From<TokenStream> for TypleMacro {
             never_type,
         }
     }
+}
+
+/// Reduce a tuple to a single value.
+///
+/// The `typle_fold!` macro applies a closure to collect tuple components into a
+/// single value. The arguments to the macro are an initial value terminated by
+/// a semi-colon and a closure to apply to the current value.
+///
+/// Examples:
+/// ```
+/// # use typle::typle;
+/// #[typle(Tuple for 0..=12)]
+/// pub fn sum<T: Tuple<u32>>(t: T) -> u32 {
+///     typle_fold!(0; i in ..T::LEN => |total| total + t[[i]])
+/// }
+/// // An empty tuple uses the initial value.
+/// assert_eq!(sum(()), 0);
+/// // Otherwise the value is passed to the closure to create a new value, which
+/// // is then passed to the next iteration.
+/// assert_eq!(sum((1, 4, 9, 16)), 30);
+/// ```
+/// This example can also be implemented using a `for` loop:
+/// ```rust
+/// # use typle::typle;
+/// #[typle(Tuple for 0..=12)]
+/// pub fn sum<T: Tuple<u32>>(t: T) -> u32 {
+///     let mut total = 0;
+///     for typle_index!(i) in 0..T::LEN {
+///         total += t[[i]];
+///     }
+///     total
+/// }
+/// # assert_eq!(sum(()), 0);
+/// # assert_eq!(sum((1, 4, 9, 16)), 30);
+/// ```
+///
+/// But the `typle_fold!` macro allows the accumulated value to change type on
+/// each iteration. In this example, the type of the accumulator after each
+/// iteration is an `Option` containing `i + 1` components.
+///
+/// ```rust
+/// # use typle::typle;
+/// trait CoalesceSome<T> {
+///     type Output;
+///
+///     /// Coalesce a tuple of options into an option of tuple that is `Some` only
+///     /// if all the components are `Some`.
+///     fn coalesce_some(self) -> Self::Output;
+/// }
+///
+/// #[typle(Tuple for 0..=12)]
+/// impl<T> CoalesceSome<T> for typle_for!(i in ..T::LEN => Option<T<{i}>>)
+/// where
+///     T: Tuple,
+///     T<_>: Copy,
+/// {
+///     type Output = Option<T>;
+///
+///     fn coalesce_some(self) -> Self::Output
+///     {
+///         typle_fold!(
+///             Some(());  // Initially an empty tuple
+///             i in ..T::LEN => |opt| opt.and_then(
+///                 |_prev| if let Some(curr) = self[[i]] {
+///                     // Append the current value to the existing tuple
+///                     Some(typle_for!(
+///                         j in ..=i => if typle_const!(j < i) { _prev[[j]] } else { curr }
+///                     ))
+///                 } else {
+///                     None
+///                 }
+///             )
+///         )
+///     }
+/// }
+/// assert_eq!(
+///     ().coalesce_some(),
+///     Some(())
+/// );
+/// assert_eq!(
+///     (Some(1), Some("x")).coalesce_some(),
+///     Some((1, "x"))
+/// );
+/// assert_eq!(
+///     (None::<i32>, Some("x")).coalesce_some(),
+///     None
+/// );
+/// ```
+#[proc_macro_error]
+#[proc_macro]
+pub fn typle_fold(_item: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    abort_call_site!("typle_fold macro only available in item with typle attribute");
 }
 
 /// Create a tuple or array.

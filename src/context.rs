@@ -8,7 +8,7 @@ use syn::punctuated::Punctuated;
 use syn::spanned::Spanned as _;
 use syn::{
     parse2, parse_quote, token, AttrStyle, Attribute, Block, Expr, ExprArray, ExprBlock, ExprField,
-    ExprLit, ExprMacro, ExprTuple, Fields, FieldsNamed, FieldsUnnamed, GenericArgument,
+    ExprLit, ExprMacro, ExprPath, ExprTuple, Fields, FieldsNamed, FieldsUnnamed, GenericArgument,
     GenericParam, Generics, ImplItem, Index, Item, ItemImpl, Label, Lit, LitInt, Macro,
     MacroDelimiter, Member, Meta, Pat, PatMacro, PatParen, PatReference, PatTuple, PatWild, Path,
     PathArguments, PathSegment, PredicateType, QSelf, RangeLimits, ReturnType, Stmt, StmtMacro,
@@ -1055,9 +1055,12 @@ impl<'a> TypleContext<'a> {
                         Type::Macro(TypeMacro { mac }) => {
                             if let Some(ident) = mac.path.get_ident() {
                                 if ident == "typle_bound" {
-                                    let mut token_stream = std::mem::take(&mut mac.tokens);
+                                    let token_stream = std::mem::take(&mut mac.tokens);
+                                    let default_span = token_stream.span();
+                                    let mut tokens = token_stream.into_iter();
                                     let (pattern, range) =
-                                        self.parse_pattern_range(&mut token_stream);
+                                        self.parse_pattern_range(&mut tokens, default_span);
+                                    let token_stream = tokens.collect::<TokenStream>();
                                     let body_span = token_stream.span();
                                     let Ok(r#type) = parse2::<Type>(token_stream) else {
                                         abort!(body_span, "expected type");
@@ -1248,10 +1251,12 @@ impl<'a> TypleContext<'a> {
                             if let Expr::Macro(r#macro) = discriminant {
                                 if let Some(ident) = r#macro.mac.path.get_ident() {
                                     if ident == "typle_variant" {
-                                        let mut token_stream =
-                                            std::mem::take(&mut r#macro.mac.tokens);
+                                        let token_stream = std::mem::take(&mut r#macro.mac.tokens);
+                                        let default_span = token_stream.span();
+                                        let mut tokens = token_stream.into_iter();
                                         let (pattern, range) =
-                                            context.parse_pattern_range(&mut token_stream);
+                                            context.parse_pattern_range(&mut tokens, default_span);
+                                        let token_stream = tokens.collect();
                                         let fields = match r#macro.mac.delimiter {
                                             MacroDelimiter::Paren(_) => {
                                                 let group = TokenTree::Group(Group::new(
@@ -1540,10 +1545,13 @@ impl<'a> TypleContext<'a> {
         mac: &mut Macro,
         state: &'a mut BlockState,
     ) -> impl Iterator<Item = Expr> + 'a {
-        let mut token_stream = std::mem::take(&mut mac.tokens);
-        let (pattern, range) = self.parse_pattern_range(&mut token_stream);
+        let token_stream = std::mem::take(&mut mac.tokens);
+        let default_span = token_stream.span();
+        let mut tokens = token_stream.into_iter();
+        let (pattern, range) = self.parse_pattern_range(&mut tokens, default_span);
+        let token_stream = tokens.collect::<TokenStream>();
         let body_span = token_stream.span();
-        let Ok(expr) = parse2::<Expr>(token_stream.clone()) else {
+        let Ok(expr) = parse2::<Expr>(token_stream) else {
             abort!(body_span, "expected expression");
         };
         range.map(move |index| {
@@ -1559,6 +1567,45 @@ impl<'a> TypleContext<'a> {
         })
     }
 
+    fn replace_typle_fold(&self, mac: &mut Macro, state: &mut BlockState) -> Block {
+        let token_stream = std::mem::take(&mut mac.tokens);
+        let default_span = token_stream.span();
+        let mut tokens = token_stream.into_iter();
+        let mut init_expr = self.parse_init_expr(&mut tokens, default_span);
+        self.replace_expr(&mut init_expr, state);
+        let (pattern, range) = self.parse_pattern_range(&mut tokens, default_span);
+        let ident = self.parse_fold_ident(&mut tokens, default_span);
+        let token_stream = tokens.collect::<TokenStream>();
+        let body_span = token_stream.span();
+        let Ok(expr) = parse2::<Expr>(token_stream) else {
+            abort!(body_span, "expected expression");
+        };
+        let mut stmts = Vec::with_capacity(range.len() + 2);
+        stmts.push(parse_quote!(let #ident = #init_expr;));
+        for index in range {
+            let mut context = self.clone();
+            if let Some(ident) = pattern.clone() {
+                if ident != "_" {
+                    context.constants.insert(ident, index);
+                }
+            }
+            let mut expr = expr.clone();
+            context.replace_expr(&mut expr, state);
+            stmts.push(parse_quote!(let #ident = #expr;))
+        }
+        stmts.push(Stmt::Expr(
+            Expr::Path(ExprPath {
+                attrs: Vec::new(),
+                qself: None,
+                path: ident_to_path(ident),
+            }),
+            None,
+        ));
+        Block {
+            brace_token: token::Brace::default(),
+            stmts,
+        }
+    }
     fn replace_macro_expr(&self, m: &mut ExprMacro, state: &mut BlockState) -> Option<Expr> {
         // typle_for!(i in .. => Some<t[[i]]) -> (Some<t.0>, Some<t.1>)
         // typle_for!(i in .. => t.to_string()) -> (t.0.to_string(), t.1.to_string())
@@ -1590,6 +1637,13 @@ impl<'a> TypleContext<'a> {
                         Expr::Array(array)
                     }
                 };
+                return Some(expr);
+            } else if macro_name == "typle_fold" {
+                let expr = Expr::Block(ExprBlock {
+                    attrs: std::mem::take(&mut m.attrs),
+                    label: None,
+                    block: self.replace_typle_fold(&mut m.mac, state),
+                });
                 return Some(expr);
             }
         }
@@ -1688,6 +1742,13 @@ impl<'a> TypleContext<'a> {
                     }
                 };
                 return Some(Stmt::Expr(expr, m.semi_token));
+            } else if macro_name == "typle_fold" {
+                let expr = Expr::Block(ExprBlock {
+                    attrs: std::mem::take(&mut m.attrs),
+                    label: None,
+                    block: self.replace_typle_fold(&mut m.mac, state),
+                });
+                return Some(Stmt::Expr(expr, m.semi_token));
             }
         }
         m.mac.tokens = self.replace_macro_token_stream(std::mem::take(&mut m.mac.tokens));
@@ -1702,8 +1763,11 @@ impl<'a> TypleContext<'a> {
         // T::default() -> <(T0, T1)>::default()
         if let Some(macro_name) = m.mac.path.get_ident() {
             if macro_name == "typle_for" {
-                let mut token_stream = std::mem::take(&mut m.mac.tokens);
-                let (pattern, range) = self.parse_pattern_range(&mut token_stream);
+                let token_stream = std::mem::take(&mut m.mac.tokens);
+                let default_span = token_stream.span();
+                let mut tokens = token_stream.into_iter();
+                let (pattern, range) = self.parse_pattern_range(&mut tokens, default_span);
+                let token_stream = tokens.collect::<TokenStream>();
                 let body_span = token_stream.span();
                 let Ok(r#type) = parse2::<Type>(token_stream) else {
                     abort!(body_span, "expected type");
@@ -1845,9 +1909,50 @@ impl<'a> TypleContext<'a> {
         output.into_iter().collect()
     }
 
-    fn parse_pattern_range(&self, token_stream: &mut TokenStream) -> (Option<Ident>, Range<usize>) {
-        let default_span = token_stream.span();
-        let mut tokens = std::mem::take(token_stream).into_iter();
+    fn parse_init_expr(&self, tokens: &mut impl Iterator<Item = TokenTree>, span: Span) -> Expr {
+        let mut collect = Vec::new();
+        while let Some(token) = tokens.next() {
+            match token {
+                TokenTree::Punct(punct) if punct.as_char() == ';' => {
+                    match parse2::<Expr>(TokenStream::from_iter(collect)) {
+                        Ok(expr) => {
+                            return expr;
+                        }
+                        Err(e) => abort!(span, "{}", e),
+                    }
+                }
+                tt => {
+                    collect.push(tt);
+                }
+            }
+        }
+        abort!(span, "typle expected init expression");
+    }
+
+    fn parse_fold_ident(&self, tokens: &mut impl Iterator<Item = TokenTree>, span: Span) -> Ident {
+        let Some(TokenTree::Punct(punct)) = tokens.next() else {
+            abort!(span, "expected closure");
+        };
+        if punct.as_char() != '|' {
+            abort!(span, "expected closure");
+        }
+        let Some(TokenTree::Ident(ident)) = tokens.next() else {
+            abort!(span, "expected closure");
+        };
+        let Some(TokenTree::Punct(punct)) = tokens.next() else {
+            abort!(span, "expected closure");
+        };
+        if punct.as_char() != '|' {
+            abort!(span, "expected closure");
+        }
+        ident
+    }
+
+    fn parse_pattern_range(
+        &self,
+        tokens: &mut impl Iterator<Item = TokenTree>,
+        span: Span,
+    ) -> (Option<Ident>, Range<usize>) {
         let mut collect = Vec::new();
         let mut pattern = None;
         let mut equals = None;
@@ -1874,7 +1979,6 @@ impl<'a> TypleContext<'a> {
                 }
                 TokenTree::Punct(punct) if equals.is_some() && punct.as_char() == '>' => {
                     equals = None;
-                    *token_stream = TokenStream::from_iter(tokens);
                     break;
                 }
                 tt => {
@@ -1889,7 +1993,7 @@ impl<'a> TypleContext<'a> {
             collect.push(TokenTree::Punct(punct))
         }
         if collect.is_empty() {
-            abort!(default_span, "expected range");
+            abort!(span, "expected range");
         }
         match parse2::<Expr>(TokenStream::from_iter(collect)) {
             Ok(mut expr) => {
@@ -1935,7 +2039,7 @@ impl<'a> TypleContext<'a> {
                     abort!(expr, "expected range");
                 }
             }
-            Err(e) => abort!(default_span, "{}", e),
+            Err(e) => abort!(span, "{}", e),
         }
     }
 
@@ -2266,7 +2370,7 @@ fn remove_constraints(
 fn pat_to_tuple(pat: Pat) -> Expr {
     match pat {
         Pat::Const(p) => Expr::Const(p),
-        Pat::Ident(p) => Expr::Path(syn::ExprPath {
+        Pat::Ident(p) => Expr::Path(ExprPath {
             attrs: p.attrs,
             qself: None,
             path: ident_to_path(p.ident),
@@ -2281,7 +2385,7 @@ fn pat_to_tuple(pat: Pat) -> Expr {
         Pat::Rest(_) => todo!(),
         Pat::Slice(_) => todo!(),
         Pat::Struct(_) => todo!(),
-        Pat::Tuple(p) => Expr::Tuple(syn::ExprTuple {
+        Pat::Tuple(p) => Expr::Tuple(ExprTuple {
             attrs: p.attrs,
             paren_token: p.paren_token,
             elems: p.elems.into_iter().map(pat_to_tuple).collect(),
