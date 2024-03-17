@@ -423,9 +423,9 @@ mod context;
 use constant::evaluate_usize;
 use context::TypleContext;
 use proc_macro2::{Ident, TokenStream, TokenTree};
-use proc_macro_error::{abort, abort_call_site, proc_macro_error};
 use quote::ToTokens;
-use syn::{Item, Type, TypeNever};
+use syn::spanned::Spanned as _;
+use syn::{Error, Item, Type, TypeNever};
 
 #[doc(hidden)]
 #[proc_macro]
@@ -434,23 +434,32 @@ pub fn typle_identity(item: proc_macro::TokenStream) -> proc_macro::TokenStream 
 }
 
 #[doc(hidden)]
-#[proc_macro_error]
 #[proc_macro_attribute]
 pub fn typle(
     args: proc_macro::TokenStream,
     item: proc_macro::TokenStream,
 ) -> proc_macro::TokenStream {
-    let typle_macro = TypleMacro::from(TokenStream::from(args));
+    let typle_macro = match TypleMacro::try_from(TokenStream::from(args)) {
+        Ok(typle_macro) => typle_macro,
+        Err(err) => {
+            return err.into_compile_error().into();
+        }
+    };
 
-    let Ok(item) = syn::parse::<Item>(item) else {
-        abort_call_site!("unsupported tokens");
+    let item = match syn::parse::<Item>(item) {
+        Ok(item) => item,
+        Err(err) => {
+            return err.into_compile_error().into();
+        }
     };
 
     let context = TypleContext::from(&typle_macro);
 
     let mut items = Vec::new();
 
-    context.replace_item(item, &mut items);
+    if let Err(err) = context.replace_item(item, &mut items) {
+        return err.into_compile_error().into();
+    }
 
     items
         .into_iter()
@@ -467,22 +476,25 @@ struct TypleMacro {
     never_type: Type,
 }
 
-impl From<TokenStream> for TypleMacro {
-    fn from(args: TokenStream) -> Self {
+impl TryFrom<TokenStream> for TypleMacro {
+    type Error = Error;
+
+    fn try_from(args: TokenStream) -> Result<Self, Self::Error> {
         // #[typle(Tuple for 2..=12, never=std::convert::Infallible)]
+        let default_span = args.span();
         let mut never_type = Type::Never(TypeNever {
             bang_token: syn::token::Not::default(),
         });
         let mut args_iter = args.into_iter();
         // Tuple
         let Some(TokenTree::Ident(trait_ident)) = args_iter.next() else {
-            abort_call_site!("expected identifier");
+            return Err(Error::new(default_span, "expected identifier"));
         };
         // for
         match args_iter.next() {
             Some(TokenTree::Ident(for_ident)) if for_ident == "for" => {}
             _ => {
-                abort_call_site!("expected for keyword");
+                return Err(Error::new(default_span, "expected for keyword"));
             }
         }
 
@@ -504,55 +516,57 @@ impl From<TokenStream> for TypleMacro {
         }
         // 2..=12
         let range_stream = range_tokens.into_iter().collect();
-        let range = syn::parse2::<syn::ExprRange>(range_stream)
-            .unwrap_or_else(|e| abort_call_site!("{}", e));
+        let range = syn::parse2::<syn::ExprRange>(range_stream)?;
         let min = range
             .start
             .as_ref()
             .map(|expr| {
-                evaluate_usize(&expr).unwrap_or_else(|| abort!(expr, "range start invalid"))
+                evaluate_usize(&expr).ok_or_else(|| Error::new(expr.span(), "range start invalid"))
             })
-            .unwrap_or_else(|| abort!(range, "range start must be bounded"));
+            .transpose()?
+            .ok_or_else(|| Error::new(range.span(), "range start must be bounded"))?;
         let end = range
             .end
             .as_ref()
-            .unwrap_or_else(|| abort!(range, "range end must be bounded"));
+            .ok_or_else(|| Error::new(range.span(), "range end must be bounded"))?;
         let max = match range.limits {
             syn::RangeLimits::HalfOpen(_) => evaluate_usize(&end)
                 .and_then(|max| max.checked_sub(1))
-                .unwrap_or_else(|| abort!(end, "range end invalid1")),
+                .ok_or_else(|| Error::new(end.span(), "range end invalid1"))?,
             syn::RangeLimits::Closed(_) => {
-                evaluate_usize(&end).unwrap_or_else(|| abort!(end, "range end invalid2"))
+                evaluate_usize(&end).ok_or_else(|| Error::new(end.span(), "range end invalid2"))?
             }
         };
         if max < min {
-            abort!(range, "range contains no values");
+            return Err(Error::new(range.span(), "range contains no values"));
         }
         if !never_tokens.is_empty() {
             // never=some::Type
             let mut iter = never_tokens.into_iter();
             let Some(TokenTree::Ident(ident)) = iter.next() else {
-                abort_call_site!("expected identifier after comma");
+                return Err(Error::new(default_span, "expected identifier after comma"));
             };
             if ident != "never" {
-                abort_call_site!("expected identifier 'never' after comma");
+                return Err(Error::new(
+                    default_span,
+                    "expected identifier 'never' after comma",
+                ));
             }
             let Some(TokenTree::Punct(punct)) = iter.next() else {
-                abort_call_site!("expected equals after never");
+                return Err(Error::new(default_span, "expected equals after never"));
             };
             if punct.as_char() != '=' {
-                abort_call_site!("expected equals after never");
+                return Err(Error::new(default_span, "expected equals after never"));
             }
             let type_stream = iter.collect();
-            never_type =
-                syn::parse2::<Type>(type_stream).unwrap_or_else(|e| abort_call_site!("{}", e));
+            never_type = syn::parse2::<Type>(type_stream)?;
         }
-        TypleMacro {
+        Ok(TypleMacro {
             ident: trait_ident,
             min_len: min,
             max_len: max,
             never_type,
-        }
+        })
     }
 }
 
@@ -642,10 +656,14 @@ impl From<TokenStream> for TypleMacro {
 ///     None
 /// );
 /// ```
-#[proc_macro_error]
 #[proc_macro]
-pub fn typle_fold(_item: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    abort_call_site!("typle_fold macro only available in item with typle attribute");
+pub fn typle_fold(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    Error::new_spanned(
+        TokenStream::from(item),
+        "typle_fold macro only available in item with typle attribute",
+    )
+    .into_compile_error()
+    .into()
 }
 
 /// Create a tuple or array.
@@ -707,10 +725,14 @@ pub fn typle_fold(_item: proc_macro::TokenStream) -> proc_macro::TokenStream {
 ///     }
 /// }
 /// ```
-#[proc_macro_error]
 #[proc_macro]
-pub fn typle_for(_item: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    abort_call_site!("typle_variant macro only available in item with typle attribute");
+pub fn typle_for(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    Error::new_spanned(
+        TokenStream::from(item),
+        "typle_for macro only available in item with typle attribute",
+    )
+    .into_compile_error()
+    .into()
 }
 
 /// Create variants in an enum.
@@ -765,8 +787,12 @@ pub fn typle_for(_item: proc_macro::TokenStream) -> proc_macro::TokenStream {
 ///     Done([u64; 2]),
 /// }
 /// ```
-#[proc_macro_error]
 #[proc_macro]
-pub fn typle_variant(_item: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    abort_call_site!("typle_variant macro only available in item with typle attribute");
+pub fn typle_variant(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    Error::new_spanned(
+        TokenStream::from(item),
+        "typle_variant macro only available in item with typle attribute",
+    )
+    .into_compile_error()
+    .into()
 }
