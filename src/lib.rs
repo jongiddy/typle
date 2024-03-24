@@ -428,12 +428,6 @@ use syn::spanned::Spanned as _;
 use syn::{Error, Item, Type, TypeNever};
 
 #[doc(hidden)]
-#[proc_macro]
-pub fn typle_identity(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    item
-}
-
-#[doc(hidden)]
 #[proc_macro_attribute]
 pub fn typle(
     args: proc_macro::TokenStream,
@@ -446,7 +440,7 @@ pub fn typle(
         }
     };
 
-    let item = match syn::parse::<Item>(item) {
+    let item = match syn::parse2::<Item>(item.into()) {
         Ok(item) => item,
         Err(err) => {
             return err.into_compile_error().into();
@@ -468,7 +462,6 @@ pub fn typle(
         .into()
 }
 
-#[derive(Clone)]
 struct TypleMacro {
     ident: Ident,
     min_len: usize,
@@ -498,7 +491,7 @@ impl TryFrom<TokenStream> for TypleMacro {
             }
         }
 
-        let mut range_tokens = Vec::new();
+        let mut range_tokens = TokenStream::new();
         let mut never_tokens = Vec::new();
         let mut comma_seen = false;
         for token in args_iter {
@@ -511,12 +504,11 @@ impl TryFrom<TokenStream> for TypleMacro {
                         continue;
                     }
                 }
-                range_tokens.push(token);
+                range_tokens.extend([token]);
             }
         }
         // 2..=12
-        let range_stream = range_tokens.into_iter().collect();
-        let range = syn::parse2::<syn::ExprRange>(range_stream)?;
+        let range = syn::parse2::<syn::ExprRange>(range_tokens)?;
         let min = range
             .start
             .as_ref()
