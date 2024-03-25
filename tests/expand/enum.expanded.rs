@@ -53,7 +53,9 @@ impl Process for () {
     type State = ProcessState<!, !, !>;
     type Output = [u64; 0];
     fn process(state: Self::State) -> Result<Self::Output, Error> {
-        { () }
+        loop {
+            break;
+        }
         if let Self::State::Done(output) = state {
             return output;
         }
@@ -67,7 +69,7 @@ where
     type State = ProcessState<T0, !, !>;
     type Output = [u64; 1];
     fn process(state: Self::State) -> Result<Self::Output, Error> {
-        {
+        loop {
             {
                 if let Self::State::S0(inner_state, output) = state {
                     match self.tuple.0.process(inner_state) {
@@ -88,7 +90,7 @@ where
                     }
                 }
             }
-            ()
+            break;
         }
         if let Self::State::Done(output) = state {
             return output;
@@ -104,7 +106,7 @@ where
     type State = ProcessState<T0, T1, !>;
     type Output = [u64; 2];
     fn process(state: Self::State) -> Result<Self::Output, Error> {
-        {
+        loop {
             {
                 if let Self::State::S0(inner_state, output) = state {
                     match self.tuple.0.process(inner_state) {
@@ -145,7 +147,7 @@ where
                     }
                 }
             }
-            ()
+            break;
         }
         if let Self::State::Done(output) = state {
             return output;
@@ -162,7 +164,7 @@ where
     type State = ProcessState<T0, T1, T2>;
     type Output = [u64; 3];
     fn process(state: Self::State) -> Result<Self::Output, Error> {
-        {
+        loop {
             {
                 if let Self::State::S0(inner_state, output) = state {
                     match self.tuple.0.process(inner_state) {
@@ -223,7 +225,7 @@ where
                     }
                 }
             }
-            ()
+            break;
         }
         if let Self::State::Done(output) = state {
             return output;

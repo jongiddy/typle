@@ -39,8 +39,9 @@ impl Typle {
 
 #[derive(Default)]
 pub struct BlockState {
-    unlabelled_control_flow: bool,
-    labelled_continue: HashSet<Ident>,
+    unlabelled_break: bool,
+    unlabelled_continue: bool,
+    labelled_control_flow: HashSet<Ident>,
 }
 
 impl BlockState {
@@ -48,20 +49,21 @@ impl BlockState {
     // We exclude any unlabelled_control_flow as it is contained by the inner
     // loop. We also exclude any label attached to the inner loop.
     fn propagate(&mut self, inner: Self, label: Option<&Label>) {
-        for ident in inner.labelled_continue {
+        for ident in inner.labelled_control_flow {
             if let Some(label) = label {
                 if label.name.ident == ident {
                     continue;
                 }
             }
-            self.labelled_continue.insert(ident);
+            self.labelled_control_flow.insert(ident);
         }
     }
 
-    // Return whether this loop has any labelled continue that refers to this loop's label.
-    fn has_labelled_continue<'a>(&self, label: Option<&'a Label>) -> Option<&'a Label> {
+    // Return whether this loop has any labelled control flow that refers to
+    // this loop's label.
+    fn has_labelled_control_flow<'a>(&self, label: Option<&'a Label>) -> Option<&'a Label> {
         if let Some(label) = label {
-            if self.labelled_continue.contains(&label.name.ident) {
+            if self.labelled_control_flow.contains(&label.name.ident) {
                 return Some(label);
             }
         }
@@ -386,8 +388,13 @@ impl<'a> TypleContext<'a> {
                 if let Some(expr) = &mut brk.expr {
                     self.replace_expr(expr, state)?;
                 }
-                if brk.label.is_none() {
-                    state.unlabelled_control_flow = true;
+                match &brk.label {
+                    Some(lt) => {
+                        state.labelled_control_flow.insert(lt.ident.clone());
+                    }
+                    None => {
+                        state.unlabelled_break = true;
+                    }
                 }
             }
             Expr::Call(call) => {
@@ -420,10 +427,10 @@ impl<'a> TypleContext<'a> {
                 self.replace_attrs(&mut cont.attrs)?;
                 match &cont.label {
                     Some(lt) => {
-                        state.labelled_continue.insert(lt.ident.clone());
+                        state.labelled_control_flow.insert(lt.ident.clone());
                     }
                     None => {
-                        state.unlabelled_control_flow = true;
+                        state.unlabelled_continue = true;
                     }
                 }
             }
@@ -479,105 +486,100 @@ impl<'a> TypleContext<'a> {
                                 end += 1;
                             }
                             let mut context = self.clone();
-                            let mut stmts = Vec::new();
+                            let mut stmts = Vec::with_capacity(end.saturating_sub(start) + 1);
                             context.constants.insert(pat_ident.clone(), 0);
+                            let mut has_typle_break = false;
                             let mut check_for_break = false;
                             for index in start..end {
                                 context.constants.get_mut(&pat_ident).map(|v| *v = index);
                                 let mut block = for_loop.body.clone();
                                 let mut inner_state = BlockState::default();
+                                // Evaluate the body for this iteration
                                 context.replace_block(&mut block, &mut inner_state)?;
+                                // If it evaluates to an empty body, ignore it
                                 if block.stmts.is_empty() {
                                     continue;
                                 }
+                                // If the previous iteration body called `break` exit the loop early.
+                                if check_for_break {
+                                    let stmt = parse_quote! {
+                                        if _typle_break {
+                                            break;
+                                        }
+                                    };
+                                    stmts.push(stmt);
+                                    check_for_break = false;
+                                }
+
                                 if let Some(label) =
-                                    inner_state.has_labelled_continue(for_loop.label.as_ref())
+                                    inner_state.has_labelled_control_flow(for_loop.label.as_ref())
                                 {
-                                    if !check_for_break {
-                                        check_for_break = true;
-                                        stmts.push(parse_quote! {
-                                            let mut _typle_break = false;
-                                        });
-                                    }
-                                    // If a labelled `continue` occurs inside the block then control
-                                    // goes to the start of the loop with `_typle_break = true`
-                                    // which causes the loop to be exited with `_typle_break = false`.
-                                    // This label shadows the label on the outer block. If there is
-                                    // a labelled break as well, then it will break from this loop
-                                    // without setting _typle_break back to false.
-                                    let stmt = parse_quote! {
-                                        if ! _typle_break {
-                                            #label loop {
-                                                if _typle_break {
-                                                    _typle_break = false;
-                                                    break;
-                                                }
-                                                _typle_break = true;
-                                                #block
-                                            }
-                                        }
-                                    };
-                                    stmts.push(stmt);
-                                } else if inner_state.unlabelled_control_flow {
-                                    if !check_for_break {
-                                        check_for_break = true;
-                                        stmts.push(parse_quote! {
-                                            let mut _typle_break = false;
-                                        });
-                                    }
-                                    // If a `break` occurs inside the block then the loop is exited
-                                    // with  `_typle_break = true` causing all subsequent iterations
-                                    // to be skipped.
-                                    // If a `continue` occurs inside the block, then control goes to
-                                    // the start of the loop with `_typle_break = true` which causes
-                                    // the loop to be exited with `_typle_break = false`.
-                                    let stmt = parse_quote! {
-                                        if ! _typle_break {
-                                            loop {
-                                                if _typle_break {
-                                                    _typle_break = false;
-                                                    break;
-                                                }
-                                                _typle_break = true;
-                                                #block
-                                            }
-                                        }
-                                    };
-                                    stmts.push(stmt);
-                                } else {
-                                    if check_for_break {
-                                        // If this block does not contain a break or continue, but
-                                        // previous blocks did we need to check for the `break`
-                                        // condition before running this block.
+                                    if !has_typle_break {
                                         let stmt = parse_quote! {
-                                            if ! _typle_break #block
+                                            let mut _typle_break = false;
                                         };
                                         stmts.push(stmt);
-                                    } else {
-                                        stmts.push(Stmt::Expr(
-                                            Expr::Block(ExprBlock {
-                                                attrs: Vec::new(),
-                                                label: None,
-                                                block,
-                                            }),
-                                            None,
-                                        ));
+                                        has_typle_break = true;
                                     }
+                                    let stmt = parse_quote! {
+                                         #label loop {
+                                            if _typle_break {
+                                                _typle_break = false;
+                                                break;
+                                            }
+                                            _typle_break = true;
+                                            #block
+                                        }
+                                    };
+                                    stmts.push(stmt);
+                                    check_for_break = true;
+                                } else if inner_state.unlabelled_break
+                                    || inner_state.unlabelled_continue
+                                {
+                                    if !has_typle_break {
+                                        let stmt = parse_quote! {let mut _typle_break = false;};
+                                        stmts.push(stmt);
+                                        has_typle_break = true;
+                                    }
+                                    let stmt = parse_quote! {
+                                        loop {
+                                            if _typle_break {
+                                                _typle_break = false;
+                                                break;
+                                            }
+                                            _typle_break = true;
+                                            #block
+                                        }
+                                    };
+                                    stmts.push(stmt);
+                                    check_for_break = inner_state.unlabelled_break;
+                                } else {
+                                    stmts.push(Stmt::Expr(
+                                        Expr::Block(ExprBlock {
+                                            attrs: Vec::new(),
+                                            label: None,
+                                            block,
+                                        }),
+                                        None,
+                                    ));
                                 }
                                 state.propagate(inner_state, for_loop.label.as_ref());
                             }
+                            // End the outer loop with an unconditional break
                             stmts.push(Stmt::Expr(
-                                Expr::Tuple(ExprTuple {
+                                Expr::Break(syn::ExprBreak {
                                     attrs: Vec::new(),
-                                    paren_token: token::Paren::default(),
-                                    elems: Punctuated::new(),
+                                    break_token: token::Break::default(),
+                                    label: None,
+                                    expr: None,
                                 }),
-                                None,
+                                Some(token::Semi::default()),
                             ));
-                            *expr = Expr::Block(ExprBlock {
+                            *expr = Expr::Loop(syn::ExprLoop {
                                 attrs: std::mem::take(&mut for_loop.attrs),
-                                label: for_loop.label.take(),
-                                block: Block {
+                                label: None,
+                                loop_token: token::Loop::default(),
+                                body: Block {
                                     brace_token: token::Brace::default(),
                                     stmts,
                                 },

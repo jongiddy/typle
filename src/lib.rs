@@ -299,7 +299,7 @@
 //!     );
 //!     fn extract(&self, state: Option<Self::State>) -> Self::Output {
 //!         let mut state = state.unwrap_or(Self::State::S0((), None));
-//!         {
+//!         loop {
 //!             {
 //!                 #[allow(unused_variables)]
 //!                 if let Self::State::S0(output, inner_state) = state {
@@ -328,7 +328,7 @@
 //!                     }
 //!                 }
 //!             }
-//!             ()
+//!             break;
 //!         }
 //!         unreachable!();
 //!     }
@@ -381,23 +381,6 @@
 //!     assert_eq!(x0, t.0 * m);
 //!     typle_for!(i in ..T::LEN => x::<typle_ident!(i)>)
 //! }
-//! ```
-//! - A `continue` referencing a label on a `for` loop using `typle_index!` works but displays an
-//! [unsuppressible warning](https://github.com/rust-lang/rust/issues/31745) during compilation.
-//! ```rust
-//! # use typle::typle;
-//! # #[typle(Tuple for 1..=1)]
-//! # fn test<T>(t: T) where T: Tuple {
-//! // warning: label name `'cont` shadows a label name that is already in scope
-//! 'cont: for typle_index!(i) in 2..=3 {
-//!     loop {
-//!         if i == 2 {
-//!             continue 'cont;
-//!         }
-//!         break;
-//!     }
-//! }
-//! # }
 //! ```
 //! - Due to interaction of `typle` with other macros, passing some types and
 //! expressions to a macro may produce unexpected results. To help work around

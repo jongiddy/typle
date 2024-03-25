@@ -10,11 +10,11 @@ where
 {
     #[inline]
     fn hash<S: Hasher>(&self, state: &mut S) {
-        {
+        loop {
             {
                 self.0.hash(state);
             }
-            ()
+            break;
         }
     }
 }
@@ -26,14 +26,14 @@ where
 {
     #[inline]
     fn hash<S: Hasher>(&self, state: &mut S) {
-        {
+        loop {
             {
                 self.0.hash(state);
             }
             {
                 self.1.hash(state);
             }
-            ()
+            break;
         }
     }
 }
@@ -46,7 +46,7 @@ where
 {
     #[inline]
     fn hash<S: Hasher>(&self, state: &mut S) {
-        {
+        loop {
             {
                 self.0.hash(state);
             }
@@ -56,7 +56,7 @@ where
             {
                 self.2.hash(state);
             }
-            ()
+            break;
         }
     }
 }
@@ -70,7 +70,7 @@ where
 {
     #[inline]
     fn hash<S: Hasher>(&self, state: &mut S) {
-        {
+        loop {
             {
                 self.0.hash(state);
             }
@@ -83,7 +83,7 @@ where
             {
                 self.3.hash(state);
             }
-            ()
+            break;
         }
     }
 }
@@ -98,7 +98,7 @@ where
 {
     #[inline]
     fn hash<S: Hasher>(&self, state: &mut S) {
-        {
+        loop {
             {
                 self.0.hash(state);
             }
@@ -114,7 +114,7 @@ where
             {
                 self.4.hash(state);
             }
-            ()
+            break;
         }
     }
 }
@@ -130,7 +130,7 @@ where
 {
     #[inline]
     fn hash<S: Hasher>(&self, state: &mut S) {
-        {
+        loop {
             {
                 self.0.hash(state);
             }
@@ -149,7 +149,7 @@ where
             {
                 self.5.hash(state);
             }
-            ()
+            break;
         }
     }
 }
@@ -166,7 +166,7 @@ where
 {
     #[inline]
     fn hash<S: Hasher>(&self, state: &mut S) {
-        {
+        loop {
             {
                 self.0.hash(state);
             }
@@ -188,7 +188,7 @@ where
             {
                 self.6.hash(state);
             }
-            ()
+            break;
         }
     }
 }
@@ -206,7 +206,7 @@ where
 {
     #[inline]
     fn hash<S: Hasher>(&self, state: &mut S) {
-        {
+        loop {
             {
                 self.0.hash(state);
             }
@@ -231,7 +231,7 @@ where
             {
                 self.7.hash(state);
             }
-            ()
+            break;
         }
     }
 }
@@ -250,7 +250,7 @@ where
 {
     #[inline]
     fn hash<S: Hasher>(&self, state: &mut S) {
-        {
+        loop {
             {
                 self.0.hash(state);
             }
@@ -278,7 +278,7 @@ where
             {
                 self.8.hash(state);
             }
-            ()
+            break;
         }
     }
 }
@@ -299,7 +299,7 @@ where
 {
     #[inline]
     fn hash<S: Hasher>(&self, state: &mut S) {
-        {
+        loop {
             {
                 self.0.hash(state);
             }
@@ -330,7 +330,7 @@ where
             {
                 self.9.hash(state);
             }
-            ()
+            break;
         }
     }
 }
@@ -352,7 +352,7 @@ where
 {
     #[inline]
     fn hash<S: Hasher>(&self, state: &mut S) {
-        {
+        loop {
             {
                 self.0.hash(state);
             }
@@ -386,7 +386,7 @@ where
             {
                 self.10.hash(state);
             }
-            ()
+            break;
         }
     }
 }
@@ -409,7 +409,7 @@ where
 {
     #[inline]
     fn hash<S: Hasher>(&self, state: &mut S) {
-        {
+        loop {
             {
                 self.0.hash(state);
             }
@@ -446,7 +446,7 @@ where
             {
                 self.11.hash(state);
             }
-            ()
+            break;
         }
     }
 }

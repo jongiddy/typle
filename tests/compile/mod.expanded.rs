@@ -8,20 +8,22 @@ pub mod doc_typle {
         fn max(&self) -> Option<u32> {
             #[allow(unused_mut)]
             let mut max = self.t.0;
-            { () }
+            loop {
+                break;
+            }
             Some(max)
         }
     }
     impl MyStruct<(u32, u32)> {
         fn max(&self) -> Option<u32> {
             let mut max = self.t.0;
-            {
+            loop {
                 {
                     if self.t.1 > max {
                         max = self.t.1;
                     }
                 }
-                ()
+                break;
             }
             Some(max)
         }
@@ -29,7 +31,7 @@ pub mod doc_typle {
     impl MyStruct<(u32, u32, u32)> {
         fn max(&self) -> Option<u32> {
             let mut max = self.t.0;
-            {
+            loop {
                 {
                     if self.t.1 > max {
                         max = self.t.1;
@@ -40,7 +42,7 @@ pub mod doc_typle {
                         max = self.t.2;
                     }
                 }
-                ()
+                break;
             }
             Some(max)
         }
@@ -82,7 +84,7 @@ pub mod doc_typle {
             fn extract(&self, state: Option<Self::State>) -> Self::Output {
                 #[allow(unused_mut)]
                 let mut state = state.unwrap_or(Self::State::S0((), None));
-                {
+                loop {
                     {
                         #[allow(irrefutable_let_patterns)] #[allow(unused_variables)]
                         if let Self::State::S0(output, inner_state) = state {
@@ -93,7 +95,7 @@ pub mod doc_typle {
                             }
                         }
                     }
-                    ()
+                    break;
                 }
                 ::core::panicking::panic("internal error: entered unreachable code");
             }
@@ -107,7 +109,7 @@ pub mod doc_typle {
             type Output = (<T0 as Extract>::Output, <T1 as Extract>::Output);
             fn extract(&self, state: Option<Self::State>) -> Self::Output {
                 let mut state = state.unwrap_or(Self::State::S0((), None));
-                {
+                loop {
                     {
                         #[allow(unused_variables)]
                         if let Self::State::S0(output, inner_state) = state {
@@ -127,7 +129,7 @@ pub mod doc_typle {
                             }
                         }
                     }
-                    ()
+                    break;
                 }
                 ::core::panicking::panic("internal error: entered unreachable code");
             }
@@ -146,7 +148,7 @@ pub mod doc_typle {
             );
             fn extract(&self, state: Option<Self::State>) -> Self::Output {
                 let mut state = state.unwrap_or(Self::State::S0((), None));
-                {
+                loop {
                     {
                         #[allow(unused_variables)]
                         if let Self::State::S0(output, inner_state) = state {
@@ -175,7 +177,7 @@ pub mod doc_typle {
                             }
                         }
                     }
-                    ()
+                    break;
                 }
                 ::core::panicking::panic("internal error: entered unreachable code");
             }
@@ -196,7 +198,7 @@ pub mod doc_typle {
             );
             fn extract(&self, state: Option<Self::State>) -> Self::Output {
                 let mut state = state.unwrap_or(Self::State::S0((), None));
-                {
+                loop {
                     {
                         #[allow(unused_variables)]
                         if let Self::State::S0(output, inner_state) = state {
@@ -239,7 +241,7 @@ pub mod doc_typle {
                             }
                         }
                     }
-                    ()
+                    break;
                 }
                 ::core::panicking::panic("internal error: entered unreachable code");
             }
@@ -254,7 +256,7 @@ pub mod for_loop {
     }
     impl<T0, T1, T2, T3, T4, T5, T6, T7> Looper<(T0, T1, T2, T3, T4, T5, T6, T7)> {
         fn for_loop(&self) {
-            'label: {
+            loop {
                 {
                     {
                         let _x = 0;
@@ -262,46 +264,55 @@ pub mod for_loop {
                     {}
                 }
                 let mut _typle_break = false;
-                if !_typle_break {
-                    loop {
-                        if _typle_break {
-                            _typle_break = false;
-                            break;
-                        }
-                        _typle_break = true;
-                        {
-                            {
-                                let _x = 2;
-                                break;
-                            }
-                            {}
-                        }
+                loop {
+                    if _typle_break {
+                        _typle_break = false;
+                        break;
                     }
-                }
-                if !_typle_break {
-                    loop {
-                        if _typle_break {
-                            _typle_break = false;
-                            break;
-                        }
-                        _typle_break = true;
-                        {
-                            {
-                                let _x = 3;
-                                continue;
-                            }
-                            {}
-                        }
-                    }
-                }
-                if !_typle_break {
+                    _typle_break = true;
                     {
-                        let _x = 4;
-                        break 'label;
+                        {
+                            let _x = 2;
+                            break;
+                        }
+                        {}
                     }
-                    {}
                 }
-                if !_typle_break {
+                if _typle_break {
+                    break;
+                }
+                loop {
+                    if _typle_break {
+                        _typle_break = false;
+                        break;
+                    }
+                    _typle_break = true;
+                    {
+                        {
+                            let _x = 3;
+                            continue;
+                        }
+                        {}
+                    }
+                }
+                'label: loop {
+                    if _typle_break {
+                        _typle_break = false;
+                        break;
+                    }
+                    _typle_break = true;
+                    {
+                        {
+                            let _x = 4;
+                            break 'label;
+                        }
+                        {}
+                    }
+                }
+                if _typle_break {
+                    break;
+                }
+                {
                     {
                         for _j in 0..2 {
                             continue;
@@ -314,7 +325,7 @@ pub mod for_loop {
                         }
                     }
                 }
-                ()
+                break;
             }
         }
     }
@@ -335,7 +346,7 @@ pub mod for_loop {
             let (t,) = self;
             {
                 let mut output = Vec::new();
-                {
+                loop {
                     {
                         output.push(0);
                     }
@@ -343,25 +354,23 @@ pub mod for_loop {
                         output.push(1);
                     }
                     let mut _typle_break = false;
-                    if !_typle_break {
-                        loop {
-                            if _typle_break {
-                                _typle_break = false;
-                                break;
-                            }
-                            _typle_break = true;
+                    loop {
+                        if _typle_break {
+                            _typle_break = false;
+                            break;
+                        }
+                        _typle_break = true;
+                        {
                             {
-                                {
-                                    continue;
-                                }
-                                output.push(2);
+                                continue;
                             }
+                            output.push(2);
                         }
                     }
-                    if !_typle_break {
+                    {
                         output.push(3);
                     }
-                    ()
+                    break;
                 }
                 output
             }
@@ -386,7 +395,7 @@ pub mod for_loop {
             let (t,) = self;
             {
                 let mut output = Vec::new();
-                'label: {
+                loop {
                     {
                         loop {
                             output.push(0);
@@ -400,31 +409,32 @@ pub mod for_loop {
                         }
                     }
                     let mut _typle_break = false;
-                    if !_typle_break {
-                        'label: loop {
-                            if _typle_break {
-                                _typle_break = false;
-                                break;
-                            }
-                            _typle_break = true;
-                            {
-                                loop {
-                                    {
-                                        continue 'label;
-                                    }
-                                    output.push(2);
-                                    break;
+                    'label: loop {
+                        if _typle_break {
+                            _typle_break = false;
+                            break;
+                        }
+                        _typle_break = true;
+                        {
+                            loop {
+                                {
+                                    continue 'label;
                                 }
+                                output.push(2);
+                                break;
                             }
                         }
                     }
-                    if !_typle_break {
+                    if _typle_break {
+                        break;
+                    }
+                    {
                         loop {
                             output.push(3);
                             break;
                         }
                     }
-                    ()
+                    break;
                 }
                 output
             }
@@ -447,7 +457,7 @@ pub mod for_loop {
             let (t,) = self;
             {
                 let mut output = Vec::new();
-                {
+                loop {
                     {
                         output.push(0);
                     }
@@ -455,25 +465,26 @@ pub mod for_loop {
                         output.push(1);
                     }
                     let mut _typle_break = false;
-                    if !_typle_break {
-                        loop {
-                            if _typle_break {
-                                _typle_break = false;
+                    loop {
+                        if _typle_break {
+                            _typle_break = false;
+                            break;
+                        }
+                        _typle_break = true;
+                        {
+                            {
                                 break;
                             }
-                            _typle_break = true;
-                            {
-                                {
-                                    break;
-                                }
-                                output.push(2);
-                            }
+                            output.push(2);
                         }
                     }
-                    if !_typle_break {
+                    if _typle_break {
+                        break;
+                    }
+                    {
                         output.push(3);
                     }
-                    ()
+                    break;
                 }
                 output
             }
@@ -496,7 +507,7 @@ pub mod for_loop {
             let (t,) = self;
             {
                 let mut output = Vec::new();
-                'label: {
+                loop {
                     {
                         loop {
                             output.push(0);
@@ -509,14 +520,25 @@ pub mod for_loop {
                             break;
                         }
                     }
-                    {
-                        loop {
-                            {
-                                break 'label;
-                            }
-                            output.push(2);
+                    let mut _typle_break = false;
+                    'label: loop {
+                        if _typle_break {
+                            _typle_break = false;
                             break;
                         }
+                        _typle_break = true;
+                        {
+                            loop {
+                                {
+                                    break 'label;
+                                }
+                                output.push(2);
+                                break;
+                            }
+                        }
+                    }
+                    if _typle_break {
+                        break;
                     }
                     {
                         loop {
@@ -524,7 +546,7 @@ pub mod for_loop {
                             break;
                         }
                     }
-                    ()
+                    break;
                 }
                 output
             }
@@ -550,7 +572,7 @@ pub mod for_loop {
             let (t,) = self;
             {
                 let mut count = 0;
-                {
+                loop {
                     {
                         count += 1;
                     }
@@ -560,7 +582,7 @@ pub mod for_loop {
                     {
                         count += 1;
                     }
-                    ()
+                    break;
                 }
                 count
             }
@@ -586,7 +608,9 @@ pub mod for_loop {
             let (t,) = self;
             {
                 let mut count = 0;
-                { () }
+                loop {
+                    break;
+                }
                 count
             }
         }
@@ -619,11 +643,11 @@ pub mod function {
         fn apply(self) -> Self::Return {
             let (tuple, state) = self;
             {
-                {
+                loop {
                     {
                         tuple.0.hash(state);
                     }
-                    ()
+                    break;
                 }
             }
         }
@@ -638,14 +662,14 @@ pub mod function {
         fn apply(self) -> Self::Return {
             let (tuple, state) = self;
             {
-                {
+                loop {
                     {
                         tuple.0.hash(state);
                     }
                     {
                         tuple.1.hash(state);
                     }
-                    ()
+                    break;
                 }
             }
         }
@@ -661,7 +685,7 @@ pub mod function {
         fn apply(self) -> Self::Return {
             let (tuple, state) = self;
             {
-                {
+                loop {
                     {
                         tuple.0.hash(state);
                     }
@@ -671,7 +695,7 @@ pub mod function {
                     {
                         tuple.2.hash(state);
                     }
-                    ()
+                    break;
                 }
             }
         }
