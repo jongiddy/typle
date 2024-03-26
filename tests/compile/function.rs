@@ -42,3 +42,8 @@ pub fn zip<A: Tuple, B: Tuple>(
 {
     typle_for!(i in ..Tuple::LEN => (first[[i]], second[[i]]))
 }
+
+#[typle(Tuple for 0..=3)]
+pub fn double<T: Tuple<u32>>(t: T) -> T {
+    typle_for!(i in ..Tuple::LEN => t[[i]] * 2)
+}

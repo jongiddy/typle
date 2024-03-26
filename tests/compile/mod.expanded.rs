@@ -1171,6 +1171,49 @@ pub mod function {
             }
         }
     }
+    #[allow(non_camel_case_types)]
+    pub trait _typle_fn_double {
+        type Return;
+        fn apply(self) -> Self::Return;
+    }
+    pub fn double<T>(t: T) -> <(T,) as _typle_fn_double>::Return
+    where
+        (T,): _typle_fn_double,
+    {
+        <(T,) as _typle_fn_double>::apply((t,))
+    }
+    impl _typle_fn_double for ((),) {
+        type Return = ();
+        fn apply(self) -> Self::Return {
+            #[allow(unused_variables)]
+            let (t,) = self;
+            { () }
+        }
+    }
+    impl _typle_fn_double for ((u32,),) {
+        type Return = (u32,);
+        fn apply(self) -> Self::Return {
+            #[allow(unused_variables)]
+            let (t,) = self;
+            { (t.0 * 2,) }
+        }
+    }
+    impl _typle_fn_double for ((u32, u32),) {
+        type Return = (u32, u32);
+        fn apply(self) -> Self::Return {
+            #[allow(unused_variables)]
+            let (t,) = self;
+            { (t.0 * 2, t.1 * 2) }
+        }
+    }
+    impl _typle_fn_double for ((u32, u32, u32),) {
+        type Return = (u32, u32, u32);
+        fn apply(self) -> Self::Return {
+            #[allow(unused_variables)]
+            let (t,) = self;
+            { (t.0 * 2, t.1 * 2, t.2 * 2) }
+        }
+    }
 }
 pub mod macros {
     #![allow(dead_code)]

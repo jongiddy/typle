@@ -112,44 +112,6 @@ impl<'a> TypleContext<'a> {
         }
     }
 
-    fn has_typle_constraints(&self, generics: &Generics) -> bool {
-        for param in &generics.params {
-            if let GenericParam::Type(type_param) = param {
-                for bound in &type_param.bounds {
-                    if let syn::TypeParamBound::Trait(trait_bound) = bound {
-                        let trait_path = &trait_bound.path;
-                        if trait_path.leading_colon.is_none()
-                            && trait_path.segments.len() == 1
-                            && trait_path.segments[0].ident == self.typle_macro.ident
-                        {
-                            return true;
-                        }
-                    }
-                }
-            }
-        }
-
-        if let Some(where_clause) = &generics.where_clause {
-            for predicate in &where_clause.predicates {
-                if let syn::WherePredicate::Type(predicate_type) = predicate {
-                    for bound in &predicate_type.bounds {
-                        if let syn::TypeParamBound::Trait(trait_bound) = bound {
-                            let trait_path = &trait_bound.path;
-                            if trait_path.leading_colon.is_none()
-                                && trait_path.segments.len() == 1
-                                && trait_path.segments[0].ident == self.typle_macro.ident
-                            {
-                                return true;
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        false
-    }
-
     pub fn extract_typle_constraints(&self, generics: &mut Generics) -> Result<Option<Self>> {
         fn get_type_ident(predicate_type: &PredicateType) -> Option<&Ident> {
             if let Type::Path(type_path) = &predicate_type.bounded_ty {
@@ -467,19 +429,19 @@ impl<'a> TypleContext<'a> {
                                 (&expr_range.start, &expr_range.end)
                             else {
                                 return Err(Error::new(
-                                    for_loop.expr.span(),
+                                    expr_range.span(),
                                     "expected bounded range",
                                 ));
                             };
                             let Some(start) = evaluate_usize(start_expr) else {
                                 return Err(Error::new(
-                                    for_loop.expr.span(),
+                                    start_expr.span(),
                                     "cannot evaluate lower bound in constant context",
                                 ));
                             };
                             let Some(mut end) = evaluate_usize(end_expr) else {
                                 return Err(Error::new(
-                                    for_loop.expr.span(),
+                                    end_expr.span(),
                                     "cannot evaluate upper bound in constant context",
                                 ));
                             };
@@ -1186,7 +1148,8 @@ impl<'a> TypleContext<'a> {
             match generic_param {
                 GenericParam::Type(type_param) => match self.typles.get(&type_param.ident) {
                     Some(Typle::Generic(component_names)) => {
-                        for component_name in component_names.as_slice() {
+                        let typle_len = self.typle_len.unwrap_or(self.typle_macro.max_len);
+                        for component_name in &component_names[..typle_len] {
                             let mut param = type_param.clone();
                             param.ident = Ident::new(component_name, type_param.ident.span());
                             generics.params.push(GenericParam::Type(param));
@@ -1408,171 +1371,158 @@ impl<'a> TypleContext<'a> {
                 items.push(Item::Enum(enum_item));
             }
             Item::Fn(mut function) => {
-                if self.typle_len.is_none() && self.has_typle_constraints(&function.sig.generics) {
-                    let fn_name = &function.sig.ident;
-                    let fn_meta = &function.attrs;
-                    let fn_vis = &function.vis;
-                    let trait_name = format_ident!("_typle_fn_{}", fn_name);
-                    let fn_type_params = &function.sig.generics.params;
-                    let fn_type_params_no_constraints = remove_constraints(fn_type_params);
-                    let fn_input_params = &function.sig.inputs;
-                    let mut type_tuple = syn::TypeTuple {
-                        paren_token: token::Paren::default(),
-                        elems: Punctuated::new(),
-                    };
-                    let mut pat_tuple = syn::PatTuple {
-                        attrs: Vec::new(),
-                        paren_token: token::Paren::default(),
-                        elems: Punctuated::new(),
-                    };
-                    let mut value_tuple = syn::ExprTuple {
-                        attrs: Vec::new(),
-                        paren_token: token::Paren::default(),
-                        elems: Punctuated::new(),
-                    };
-                    for arg in fn_input_params {
-                        match arg {
-                            syn::FnArg::Receiver(_) => {
-                                return Err(Error::new(arg.span(), "unexpected self"))
-                            }
-                            syn::FnArg::Typed(pat_type) => {
-                                type_tuple.elems.push(pat_type.ty.as_ref().clone());
-                                pat_tuple.elems.push(pat_type.pat.as_ref().clone());
-                                value_tuple
-                                    .elems
-                                    .push(pat_to_tuple(pat_type.pat.as_ref().clone()));
-                            }
-                        }
-                    }
-                    // A trait with an apply method to implement for each tuple
-                    let trait_item = parse_quote!(
-                        #[allow(non_camel_case_types)]
-                        #fn_vis trait #trait_name {
-                            type Return;
-
-                            fn apply(self) -> Self::Return;
-                        }
-                    );
-                    items.push(trait_item);
-                    // A function that takes a generic type that implements the trait and
-                    // calls the apply method from the trait.
-                    let fn_item = parse_quote!(
-                        #(#fn_meta)*
-                        #fn_vis fn #fn_name <#fn_type_params_no_constraints>(#fn_input_params) -> <#type_tuple as #trait_name>::Return
-                        where
-                            #type_tuple: #trait_name,
-                        {
-                            <#type_tuple as #trait_name>::apply(#value_tuple)
-                        }
-                    );
-                    items.push(fn_item);
-                    let return_type = match function.sig.output {
-                        syn::ReturnType::Default => parse_quote!(()),
-                        syn::ReturnType::Type(_, t) => *t,
-                    };
-                    let fn_body = function.block;
-                    let let_stmt: syn::Stmt = if self.typle_macro.min_len == 0 {
-                        parse_quote!(
-                            #[allow(unused_variables)]
-                            let #pat_tuple = self;
-                        )
-                    } else {
-                        parse_quote!(let #pat_tuple = self;)
-                    };
-                    let impl_items = vec![
-                        syn::ImplItem::Type(syn::ImplItemType {
+                if self.typle_len.is_none() {
+                    if let Some(mut context) =
+                        self.extract_typle_constraints(&mut function.sig.generics)?
+                    {
+                        let fn_name = &function.sig.ident;
+                        let fn_meta = &function.attrs;
+                        let fn_vis = &function.vis;
+                        let trait_name = format_ident!("_typle_fn_{}", fn_name);
+                        let fn_type_params = &function.sig.generics.params;
+                        let fn_type_params_no_constraints = remove_constraints(fn_type_params);
+                        let fn_input_params = &function.sig.inputs;
+                        let mut type_tuple = syn::TypeTuple {
+                            paren_token: token::Paren::default(),
+                            elems: Punctuated::new(),
+                        };
+                        let mut pat_tuple = syn::PatTuple {
                             attrs: Vec::new(),
-                            vis: syn::Visibility::Inherited,
-                            defaultness: None,
-                            type_token: token::Type::default(),
-                            ident: Ident::new("Return", Span::call_site()),
-                            generics: Generics::default(),
-                            eq_token: token::Eq::default(),
-                            ty: return_type,
-                            semi_token: token::Semi::default(),
-                        }),
-                        parse_quote!(
-                            fn apply(self) -> Self::Return {
-                                #let_stmt
-                                #fn_body
+                            paren_token: token::Paren::default(),
+                            elems: Punctuated::new(),
+                        };
+                        let mut value_tuple = syn::ExprTuple {
+                            attrs: Vec::new(),
+                            paren_token: token::Paren::default(),
+                            elems: Punctuated::new(),
+                        };
+                        for arg in fn_input_params {
+                            match arg {
+                                syn::FnArg::Receiver(_) => {
+                                    return Err(Error::new(arg.span(), "unexpected self"))
+                                }
+                                syn::FnArg::Typed(pat_type) => {
+                                    type_tuple.elems.push(pat_type.ty.as_ref().clone());
+                                    pat_tuple.elems.push(pat_type.pat.as_ref().clone());
+                                    value_tuple
+                                        .elems
+                                        .push(pat_to_tuple(pat_type.pat.as_ref().clone()));
+                                }
                             }
-                        ),
-                    ];
-
-                    let item = Item::Impl(ItemImpl {
-                        attrs: Vec::new(),
-                        defaultness: None,
-                        unsafety: None,
-                        impl_token: token::Impl::default(),
-                        generics: function.sig.generics,
-                        trait_: Some((None, ident_to_path(trait_name), token::For::default())),
-                        self_ty: Box::new(syn::Type::Tuple(type_tuple)),
-                        brace_token: token::Brace::default(),
-                        items: impl_items,
-                    });
-
-                    self.replace_item(item, items)?;
-                } else {
-                    let context = self.extract_typle_constraints(&mut function.sig.generics)?;
-                    let context = context.as_ref().unwrap_or(self);
-                    context.replace_attrs(&mut function.attrs)?;
-                    context.replace_signature(&mut function.sig)?;
-                    let mut state = BlockState::default();
-                    context.replace_block(&mut function.block, &mut state)?;
-                    items.push(Item::Fn(function));
-                }
-            }
-            Item::Impl(mut impl_item) => {
-                if self.typle_len.is_none() && self.has_typle_constraints(&impl_item.generics) {
-                    let mut context = self.clone();
-                    items.reserve(self.typle_macro.max_len - self.typle_macro.min_len + 1);
-                    for typle_len in self.typle_macro.min_len..self.typle_macro.max_len {
-                        context.typle_len = Some(typle_len);
-                        context.replace_item(Item::Impl(impl_item.clone()), items)?;
-                    }
-                    context.typle_len = Some(self.typle_macro.max_len);
-                    context.replace_item(Item::Impl(impl_item), items)?;
-                } else {
-                    let context = self.extract_typle_constraints(&mut impl_item.generics)?;
-                    let context = context.as_ref().unwrap_or(self);
-                    context.replace_attrs(&mut impl_item.attrs)?;
-                    context.replace_generics(&mut impl_item.generics)?;
-                    if let Some((_, path, _)) = &mut impl_item.trait_ {
-                        context.replace_path_arguments(path)?;
-                    }
-                    context.replace_type(&mut *impl_item.self_ty)?;
-                    for subitem in &mut impl_item.items {
-                        match subitem {
-                            ImplItem::Const(constant) => {
-                                context.replace_attrs(&mut constant.attrs)?;
-                                context.replace_type(&mut constant.ty)?;
-                                let mut state = BlockState::default();
-                                context.replace_expr(&mut constant.expr, &mut state)?;
-                            }
-                            ImplItem::Fn(function) => {
-                                context.replace_attrs(&mut function.attrs)?;
-                                let inner_context = context
-                                    .extract_typle_constraints(&mut function.sig.generics)?;
-                                let inner_context = inner_context.as_ref().unwrap_or(context);
-                                inner_context.replace_signature(&mut function.sig)?;
-                                let mut state = BlockState::default();
-                                inner_context.replace_block(&mut function.block, &mut state)?;
-                            }
-                            ImplItem::Type(ty) => {
-                                context.replace_attrs(&mut ty.attrs)?;
-                                context.replace_type(&mut ty.ty)?;
-                            }
-                            ImplItem::Macro(subitem) => {
-                                context.replace_attrs(&mut subitem.attrs)?;
-                                subitem.mac.tokens = context.replace_macro_token_stream(
-                                    std::mem::take(&mut subitem.mac.tokens),
-                                )?;
-                            }
-                            _ => {}
                         }
+                        items.reserve(self.typle_macro.max_len - self.typle_macro.min_len + 3);
+                        // A trait with an apply method to implement for each tuple
+                        let trait_item = parse_quote!(
+                            #[allow(non_camel_case_types)]
+                            #fn_vis trait #trait_name {
+                                type Return;
+
+                                fn apply(self) -> Self::Return;
+                            }
+                        );
+                        items.push(trait_item);
+                        // A function that takes a generic type that implements the trait and
+                        // calls the apply method from the trait.
+                        let fn_item = parse_quote!(
+                            #(#fn_meta)*
+                            #fn_vis fn #fn_name <#fn_type_params_no_constraints>(#fn_input_params) -> <#type_tuple as #trait_name>::Return
+                            where
+                                #type_tuple: #trait_name,
+                            {
+                                <#type_tuple as #trait_name>::apply(#value_tuple)
+                            }
+                        );
+                        items.push(fn_item);
+                        let return_type = match function.sig.output {
+                            syn::ReturnType::Default => Type::Tuple(TypeTuple {
+                                paren_token: token::Paren::default(),
+                                elems: Punctuated::new(),
+                            }),
+                            syn::ReturnType::Type(_, t) => *t,
+                        };
+                        let fn_body = function.block;
+                        let let_stmt: syn::Stmt = if self.typle_macro.min_len == 0 {
+                            parse_quote! {
+                                #[allow(unused_variables)]
+                                let #pat_tuple = self;
+                            }
+                        } else {
+                            parse_quote! {
+                                let #pat_tuple = self;
+                            }
+                        };
+                        let impl_items = vec![
+                            syn::ImplItem::Type(syn::ImplItemType {
+                                attrs: Vec::new(),
+                                vis: syn::Visibility::Inherited,
+                                defaultness: None,
+                                type_token: token::Type::default(),
+                                ident: Ident::new("Return", Span::call_site()),
+                                generics: Generics::default(),
+                                eq_token: token::Eq::default(),
+                                ty: return_type,
+                                semi_token: token::Semi::default(),
+                            }),
+                            parse_quote!(
+                                fn apply(self) -> Self::Return {
+                                    #let_stmt
+                                    #fn_body
+                                }
+                            ),
+                        ];
+
+                        let mut item = ItemImpl {
+                            attrs: Vec::new(),
+                            defaultness: None,
+                            unsafety: None,
+                            impl_token: token::Impl::default(),
+                            generics: function.sig.generics,
+                            trait_: Some((None, ident_to_path(trait_name), token::For::default())),
+                            self_ty: Box::new(syn::Type::Tuple(type_tuple)),
+                            brace_token: token::Brace::default(),
+                            items: impl_items,
+                        };
+
+                        for typle_len in self.typle_macro.min_len..self.typle_macro.max_len {
+                            context.typle_len = Some(typle_len);
+                            let mut item = item.clone();
+                            context.replace_item_impl(&mut item)?;
+                            items.push(Item::Impl(item));
+                        }
+                        context.typle_len = Some(self.typle_macro.max_len);
+                        context.replace_item_impl(&mut item)?;
+                        items.push(Item::Impl(item));
+                        return Ok(());
                     }
-                    items.push(Item::Impl(impl_item));
                 }
+                let context = self.extract_typle_constraints(&mut function.sig.generics)?;
+                let context = context.as_ref().unwrap_or(self);
+                context.replace_attrs(&mut function.attrs)?;
+                context.replace_signature(&mut function.sig)?;
+                let mut state = BlockState::default();
+                context.replace_block(&mut function.block, &mut state)?;
+                items.push(Item::Fn(function));
+            }
+            Item::Impl(mut item) => {
+                if self.typle_len.is_none() {
+                    if let Some(mut context) = self.extract_typle_constraints(&mut item.generics)? {
+                        items.reserve(self.typle_macro.max_len - self.typle_macro.min_len + 1);
+                        for typle_len in self.typle_macro.min_len..self.typle_macro.max_len {
+                            context.typle_len = Some(typle_len);
+                            let mut item = item.clone();
+                            context.replace_item_impl(&mut item)?;
+                            items.push(Item::Impl(item));
+                        }
+                        context.typle_len = Some(self.typle_macro.max_len);
+                        context.replace_item_impl(&mut item)?;
+                        items.push(Item::Impl(item));
+                        return Ok(());
+                    }
+                }
+                let context = self.extract_typle_constraints(&mut item.generics)?;
+                let context = context.as_ref().unwrap_or(self);
+                context.replace_item_impl(&mut item)?;
+                items.push(Item::Impl(item));
             }
             Item::Macro(mut item) => {
                 self.replace_attrs(&mut item.attrs)?;
@@ -1613,6 +1563,45 @@ impl<'a> TypleContext<'a> {
         Ok(())
     }
 
+    fn replace_item_impl(&self, item: &mut ItemImpl) -> Result<()> {
+        self.replace_attrs(&mut item.attrs)?;
+        self.replace_generics(&mut item.generics)?;
+        if let Some((_, path, _)) = &mut item.trait_ {
+            self.replace_path_arguments(path)?;
+        }
+        self.replace_type(&mut *item.self_ty)?;
+        for subitem in &mut item.items {
+            match subitem {
+                ImplItem::Const(constant) => {
+                    self.replace_attrs(&mut constant.attrs)?;
+                    self.replace_type(&mut constant.ty)?;
+                    let mut state = BlockState::default();
+                    self.replace_expr(&mut constant.expr, &mut state)?;
+                }
+                ImplItem::Fn(function) => {
+                    self.replace_attrs(&mut function.attrs)?;
+                    let inner_context =
+                        self.extract_typle_constraints(&mut function.sig.generics)?;
+                    let inner_context = inner_context.as_ref().unwrap_or(self);
+                    inner_context.replace_signature(&mut function.sig)?;
+                    let mut state = BlockState::default();
+                    inner_context.replace_block(&mut function.block, &mut state)?;
+                }
+                ImplItem::Type(ty) => {
+                    self.replace_attrs(&mut ty.attrs)?;
+                    self.replace_type(&mut ty.ty)?;
+                }
+                ImplItem::Macro(subitem) => {
+                    self.replace_attrs(&mut subitem.attrs)?;
+                    subitem.mac.tokens =
+                        self.replace_macro_token_stream(std::mem::take(&mut subitem.mac.tokens))?;
+                }
+                _ => {}
+            }
+        }
+        Ok(())
+    }
+
     fn replace_typle_for_expr(
         &'a self,
         mac: &mut Macro,
@@ -1624,8 +1613,8 @@ impl<'a> TypleContext<'a> {
         let (pattern, range) = self.parse_pattern_range(&mut tokens, default_span)?;
         let expr = parse2::<Expr>(tokens.collect())?;
         let mut context = self.clone();
-        if let Some(ident) = pattern.clone() {
-            context.constants.insert(ident, 0);
+        if let Some(ident) = &pattern {
+            context.constants.insert(ident.clone(), 0);
         }
         Ok(range.map(move |index| {
             if let Some(ident) = &pattern {
@@ -1644,12 +1633,12 @@ impl<'a> TypleContext<'a> {
         let mut init_expr = self.parse_init_expr(&mut tokens, default_span)?;
         self.replace_expr(&mut init_expr, state)?;
         let (pattern, mut range) = self.parse_pattern_range(&mut tokens, default_span)?;
-        let fold_var = self.parse_fold_ident(&mut tokens, default_span)?;
+        let fold_ident = self.parse_fold_ident(&mut tokens, default_span)?;
         let fold_pat = Pat::Ident(syn::PatIdent {
             attrs: Vec::new(),
             by_ref: None,
             mutability: None,
-            ident: fold_var.clone(),
+            ident: fold_ident.clone(),
             subpat: None,
         });
         let expr = parse2::<Expr>(tokens.collect())?;
@@ -1713,7 +1702,7 @@ impl<'a> TypleContext<'a> {
             Expr::Path(ExprPath {
                 attrs: Vec::new(),
                 qself: None,
-                path: ident_to_path(fold_var),
+                path: ident_to_path(fold_ident),
             }),
             None,
         ));
@@ -2486,11 +2475,12 @@ impl<'a> TypleContext<'a> {
 }
 
 pub fn ident_to_path(ident: Ident) -> Path {
-    let mut segments = Punctuated::new();
-    segments.push(PathSegment {
+    let segments = [PathSegment {
         ident,
         arguments: PathArguments::None,
-    });
+    }]
+    .into_iter()
+    .collect();
     syn::Path {
         leading_colon: None,
         segments,

@@ -7,7 +7,7 @@ use crate::compile::for_loop::{
     check_negative_range, check_out_of_bounds, do_break, do_break_labelled, do_continue,
     do_continue_labelled,
 };
-use crate::compile::function::{hash, zip};
+use crate::compile::function::{double, hash, zip};
 
 mod compile;
 
@@ -48,6 +48,11 @@ fn test_zip() {
     let s = (2.0, "test".to_string());
     let t = (9u8, ());
     assert_eq!(zip(s, t), ((2.0, 9u8), ("test".to_string(), ())));
+}
+
+#[test]
+fn test_double() {
+    assert_eq!(double((3, 4, 5)), (6, 8, 10));
 }
 
 #[test]
