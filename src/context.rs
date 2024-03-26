@@ -446,6 +446,7 @@ impl<'a> TypleContext<'a> {
                     if let Some(macro_ident) = pat_macro.mac.path.get_ident() {
                         if macro_ident == "typle_index" {
                             let span = pat_macro.mac.tokens.span();
+                            let brace_token = for_loop.body.brace_token;
                             let mut tokens = std::mem::take(&mut pat_macro.mac.tokens).into_iter();
                             let Some(TokenTree::Ident(pat_ident)) = tokens.next() else {
                                 return Err(Error::new(
@@ -487,12 +488,22 @@ impl<'a> TypleContext<'a> {
                             }
                             let mut context = self.clone();
                             let mut stmts = Vec::with_capacity(end.saturating_sub(start) + 1);
-                            context.constants.insert(pat_ident.clone(), 0);
                             let mut has_typle_break = false;
                             let mut check_for_break = false;
+                            context.constants.insert(pat_ident.clone(), 0);
                             for index in start..end {
                                 context.constants.get_mut(&pat_ident).map(|v| *v = index);
-                                let mut block = for_loop.body.clone();
+                                let mut block = if index == end - 1 {
+                                    std::mem::replace(
+                                        &mut for_loop.body,
+                                        Block {
+                                            brace_token,
+                                            stmts: Vec::new(),
+                                        },
+                                    )
+                                } else {
+                                    for_loop.body.clone()
+                                };
                                 let mut inner_state = BlockState::default();
                                 // Evaluate the body for this iteration
                                 context.replace_block(&mut block, &mut inner_state)?;
@@ -514,6 +525,7 @@ impl<'a> TypleContext<'a> {
                                 if let Some(label) =
                                     inner_state.has_labelled_control_flow(for_loop.label.as_ref())
                                 {
+                                    // Labelled control flow requires a labelled inner loop.
                                     if !has_typle_break {
                                         let stmt = parse_quote! {
                                             let mut _typle_break = false;
@@ -533,11 +545,12 @@ impl<'a> TypleContext<'a> {
                                     };
                                     stmts.push(stmt);
                                     check_for_break = true;
-                                } else if inner_state.unlabelled_break
-                                    || inner_state.unlabelled_continue
-                                {
+                                } else if inner_state.unlabelled_continue {
+                                    // Unlabelled `continue` needs an inner loop to continue to.
                                     if !has_typle_break {
-                                        let stmt = parse_quote! {let mut _typle_break = false;};
+                                        let stmt = parse_quote! {
+                                            let mut _typle_break = false;
+                                        };
                                         stmts.push(stmt);
                                         has_typle_break = true;
                                     }
@@ -554,6 +567,8 @@ impl<'a> TypleContext<'a> {
                                     stmts.push(stmt);
                                     check_for_break = inner_state.unlabelled_break;
                                 } else {
+                                    // Bodies with no `break` or `continue`, or with only an
+                                    // unlabelled `break`, can run without an inner loop.
                                     stmts.push(Stmt::Expr(
                                         Expr::Block(ExprBlock {
                                             attrs: Vec::new(),
@@ -565,7 +580,7 @@ impl<'a> TypleContext<'a> {
                                 }
                                 state.propagate(inner_state, for_loop.label.as_ref());
                             }
-                            // End the outer loop with an unconditional break
+                            // End the bodies with an unconditional `break` out of the outer loop.
                             stmts.push(Stmt::Expr(
                                 Expr::Break(syn::ExprBreak {
                                     attrs: Vec::new(),
@@ -575,14 +590,12 @@ impl<'a> TypleContext<'a> {
                                 }),
                                 Some(token::Semi::default()),
                             ));
+                            // Enclose all the statements in an outer loop.
                             *expr = Expr::Loop(syn::ExprLoop {
                                 attrs: std::mem::take(&mut for_loop.attrs),
                                 label: None,
                                 loop_token: token::Loop::default(),
-                                body: Block {
-                                    brace_token: token::Brace::default(),
-                                    stmts,
-                                },
+                                body: Block { brace_token, stmts },
                             });
                             return Ok(());
                         }
@@ -612,10 +625,17 @@ impl<'a> TypleContext<'a> {
                                 return Err(Error::new(span, "expected boolean expression"));
                             };
                             if b {
+                                let brace_token = r#if.then_branch.brace_token;
                                 *expr = Expr::Block(ExprBlock {
                                     attrs: std::mem::take(&mut r#if.attrs),
                                     label: None,
-                                    block: r#if.then_branch.clone(),
+                                    block: std::mem::replace(
+                                        &mut r#if.then_branch,
+                                        Block {
+                                            brace_token,
+                                            stmts: Vec::new(),
+                                        },
+                                    ),
                                 });
                                 self.replace_expr(expr, state)?;
                             } else {

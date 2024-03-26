@@ -263,24 +263,14 @@ pub mod for_loop {
                     }
                     {}
                 }
-                let mut _typle_break = false;
-                loop {
-                    if _typle_break {
-                        _typle_break = false;
+                {
+                    {
+                        let _x = 2;
                         break;
                     }
-                    _typle_break = true;
-                    {
-                        {
-                            let _x = 2;
-                            break;
-                        }
-                        {}
-                    }
+                    {}
                 }
-                if _typle_break {
-                    break;
-                }
+                let mut _typle_break = false;
                 loop {
                     if _typle_break {
                         _typle_break = false;
@@ -464,22 +454,11 @@ pub mod for_loop {
                     {
                         output.push(1);
                     }
-                    let mut _typle_break = false;
-                    loop {
-                        if _typle_break {
-                            _typle_break = false;
+                    {
+                        {
                             break;
                         }
-                        _typle_break = true;
-                        {
-                            {
-                                break;
-                            }
-                            output.push(2);
-                        }
-                    }
-                    if _typle_break {
-                        break;
+                        output.push(2);
                     }
                     {
                         output.push(3);
