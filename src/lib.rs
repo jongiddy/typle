@@ -645,12 +645,19 @@ pub fn typle_fold(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
 ///
 /// Loop over the indices of the tuple, performing the expression for each index.
 ///
-/// If the macro uses parentheses, the returned value is a tuple. If the macro uses brackets, the
-/// returned value is an array.
+/// With parentheses, this macro can be used to create a new tuple type or expression.
 ///
-/// With parentheses, this macro can be used in type or value position.
+/// ```
+/// # use typle::typle;
+/// #[typle(Tuple for 0..=12)]
+/// pub fn reverse<T: Tuple>(t: T) -> typle_for!(i in 1..=T::LEN => T<{T::LEN - i}>) {
+///     typle_for!(i in 1..=T::LEN => t[[T::LEN - i]])
+/// }
+/// assert_eq!(reverse((Some(3), "four", 5)), (5, "four", Some(3)));
+/// ```
 ///
-/// Examples:
+/// If the macro uses brackets, the created value is an array.
+///
 /// ```
 /// # use typle::typle;
 /// struct S<T>

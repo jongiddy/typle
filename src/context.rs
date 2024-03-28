@@ -42,6 +42,7 @@ pub struct BlockState {
     unlabelled_break: bool,
     unlabelled_continue: bool,
     labelled_control_flow: HashSet<Ident>,
+    suspicious_ident: Option<Ident>,
 }
 
 impl BlockState {
@@ -877,6 +878,21 @@ impl<'a> TypleContext<'a> {
                     }
                     path.path.segments = segments.collect();
                     self.replace_path_arguments(&mut path.path)?;
+                    // If a path looks like a typle associated constant, but has not been evaluated,
+                    // the caller may have omitted the typle constraint.
+                    if path.path.segments.len() == 2 {
+                        let mut iter = path.path.segments.iter();
+                        if let Some(last) = iter.next_back() {
+                            if let PathArguments::None = last.arguments {
+                                if last.ident == "LEN" || last.ident == "MAX" || last.ident == "MIN"
+                                {
+                                    if let Some(segment) = iter.next_back() {
+                                        state.suspicious_ident = Some(segment.ident.clone());
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
             Expr::Range(range) => {
@@ -1378,7 +1394,6 @@ impl<'a> TypleContext<'a> {
                         let fn_name = &function.sig.ident;
                         let fn_meta = &function.attrs;
                         let fn_vis = &function.vis;
-                        let trait_name = format_ident!("_typle_fn_{}", fn_name);
                         let fn_type_params = &function.sig.generics.params;
                         let fn_type_params_no_constraints = remove_constraints(fn_type_params);
                         let fn_input_params = &function.sig.inputs;
@@ -1406,12 +1421,13 @@ impl<'a> TypleContext<'a> {
                                     pat_tuple.elems.push(pat_type.pat.as_ref().clone());
                                     value_tuple
                                         .elems
-                                        .push(pat_to_tuple(pat_type.pat.as_ref().clone()));
+                                        .push(pat_to_expr(pat_type.pat.as_ref().clone()));
                                 }
                             }
                         }
                         items.reserve(self.typle_macro.max_len - self.typle_macro.min_len + 3);
                         // A trait with an apply method to implement for each tuple
+                        let trait_name = format_ident!("_typle_fn_{}", fn_name);
                         let trait_item = parse_quote!(
                             #[allow(non_camel_case_types)]
                             #fn_vis trait #trait_name {
@@ -1421,8 +1437,8 @@ impl<'a> TypleContext<'a> {
                             }
                         );
                         items.push(trait_item);
-                        // A function that takes a generic type that implements the trait and
-                        // calls the apply method from the trait.
+                        // A function that turns the function argument list into a tuple that
+                        // implements the trait and calls the apply method from the trait.
                         let fn_item = parse_quote!(
                             #(#fn_meta)*
                             #fn_vis fn #fn_name <#fn_type_params_no_constraints>(#fn_input_params) -> <#type_tuple as #trait_name>::Return
@@ -1441,16 +1457,7 @@ impl<'a> TypleContext<'a> {
                             syn::ReturnType::Type(_, t) => *t,
                         };
                         let fn_body = function.block;
-                        let let_stmt: syn::Stmt = if self.typle_macro.min_len == 0 {
-                            parse_quote! {
-                                #[allow(unused_variables)]
-                                let #pat_tuple = self;
-                            }
-                        } else {
-                            parse_quote! {
-                                let #pat_tuple = self;
-                            }
-                        };
+                        let typle_trait_name = &self.typle_macro.ident;
                         let impl_items = vec![
                             syn::ImplItem::Type(syn::ImplItemType {
                                 attrs: Vec::new(),
@@ -1465,7 +1472,8 @@ impl<'a> TypleContext<'a> {
                             }),
                             parse_quote!(
                                 fn apply(self) -> Self::Return {
-                                    #let_stmt
+                                    #[typle_attr_if(#typle_trait_name::LEN == 0, allow(unused_variables))]
+                                    let #pat_tuple = self;
                                     #fn_body
                                 }
                             ),
@@ -2134,8 +2142,19 @@ impl<'a> TypleContext<'a> {
                 .start
                 .as_ref()
                 .map(|expr| {
-                    evaluate_usize(&expr)
-                        .ok_or_else(|| Error::new(expr.span(), "range start invalid"))
+                    evaluate_usize(&expr).ok_or_else(|| {
+                        if let Some(suspicious_ident) = &state.suspicious_ident {
+                            Error::new(
+                                suspicious_ident.span(),
+                                format!(
+                                    "range start invalid, possibly missing `{}: {}` bound",
+                                    suspicious_ident, self.typle_macro.ident
+                                ),
+                            )
+                        } else {
+                            Error::new(expr.span(), "range start invalid")
+                        }
+                    })
                 })
                 .transpose()?
                 .unwrap_or(0);
@@ -2143,8 +2162,19 @@ impl<'a> TypleContext<'a> {
                 .end
                 .as_ref()
                 .map(|expr| {
-                    evaluate_usize(expr)
-                        .ok_or_else(|| Error::new(range.end.span(), "range end invalid"))
+                    evaluate_usize(expr).ok_or_else(|| {
+                        if let Some(suspicious_ident) = &state.suspicious_ident {
+                            Error::new(
+                                suspicious_ident.span(),
+                                format!(
+                                    "range end invalid, possibly missing `{}: {}` bound",
+                                    suspicious_ident, self.typle_macro.ident
+                                ),
+                            )
+                        } else {
+                            Error::new(range.end.span(), "range end invalid")
+                        }
+                    })
                 })
                 .transpose()?
                 .unwrap_or(self.typle_macro.max_len)
@@ -2161,15 +2191,6 @@ impl<'a> TypleContext<'a> {
                         ),
                     )
                 })?;
-            if end < start {
-                return Err(Error::new(
-                    range.span(),
-                    format!(
-                        "for length {} range contains no values",
-                        self.typle_len.unwrap_or(self.typle_macro.max_len)
-                    ),
-                ));
-            }
             Ok((pattern, start..end))
         } else {
             Err(Error::new(expr.span(), "expected range"))
@@ -2499,7 +2520,7 @@ fn remove_constraints(
     output
 }
 
-fn pat_to_tuple(pat: Pat) -> Expr {
+fn pat_to_expr(pat: Pat) -> Expr {
     match pat {
         Pat::Const(p) => Expr::Const(p),
         Pat::Ident(p) => Expr::Path(ExprPath {
@@ -2520,7 +2541,7 @@ fn pat_to_tuple(pat: Pat) -> Expr {
         Pat::Tuple(p) => Expr::Tuple(ExprTuple {
             attrs: p.attrs,
             paren_token: p.paren_token,
-            elems: p.elems.into_iter().map(pat_to_tuple).collect(),
+            elems: p.elems.into_iter().map(pat_to_expr).collect(),
         }),
         Pat::TupleStruct(_) => todo!(),
         Pat::Type(_) => todo!(),
