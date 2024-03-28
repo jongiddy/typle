@@ -1194,6 +1194,50 @@ pub mod function {
         }
     }
 }
+pub mod issue1 {
+    #![allow(unused)]
+    use typle::typle;
+    pub trait Verifier {
+        type Error;
+        fn verify(&self, report: &()) -> Result<(), Self::Error>;
+    }
+    impl<T0> Verifier for (T0,)
+    where
+        T0: Verifier,
+        <T0 as Verifier>::Error: Into<Box<dyn std::error::Error>>,
+    {
+        type Error = Box<dyn std::error::Error>;
+        fn verify(&self, _report: &()) -> Result<(), Self::Error> {
+            Ok(())
+        }
+    }
+    impl<T0, T1> Verifier for (T0, T1)
+    where
+        T0: Verifier,
+        T1: Verifier,
+        <T0 as Verifier>::Error: Into<Box<dyn std::error::Error>>,
+        <T1 as Verifier>::Error: Into<Box<dyn std::error::Error>>,
+    {
+        type Error = Box<dyn std::error::Error>;
+        fn verify(&self, _report: &()) -> Result<(), Self::Error> {
+            Ok(())
+        }
+    }
+    impl<T0, T1, T2> Verifier for (T0, T1, T2)
+    where
+        T0: Verifier,
+        T1: Verifier,
+        T2: Verifier,
+        <T0 as Verifier>::Error: Into<Box<dyn std::error::Error>>,
+        <T1 as Verifier>::Error: Into<Box<dyn std::error::Error>>,
+        <T2 as Verifier>::Error: Into<Box<dyn std::error::Error>>,
+    {
+        type Error = Box<dyn std::error::Error>;
+        fn verify(&self, _report: &()) -> Result<(), Self::Error> {
+            Ok(())
+        }
+    }
+}
 pub mod macros {
     #![allow(dead_code)]
     use typle::typle;

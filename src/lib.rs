@@ -93,9 +93,9 @@
 //! - `T<_>: Copy` - each component of the tuple implements `Copy`
 //! - `T<0>: Copy` - the first component of the tuple implements `Copy`
 //! - `T<{1..=2}>: Copy` - the second and third components implement `Copy`
-//! - `typle_bound!` - the most general way to bound components,
-//! allowing the typle index variable to be used in the trait bounds, as shown
-//! below:
+//! - `typle_bound!` - the most general way to bound components, allowing
+//! arbitrary expressions using the typle index variable on both sides of the
+//! colon, as shown below:
 //!
 //! ```rust
 //! # use typle::typle;
