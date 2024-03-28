@@ -635,7 +635,9 @@ impl<'a> TypleContext<'a> {
                 self.replace_expr(&mut index.expr, state)?;
                 if let Expr::Array(array) = &mut *index.index {
                     // t[[0]]
-                    assert_eq!(array.elems.len(), 1);
+                    if array.elems.len() != 1 {
+                        return Err(Error::new(index.index.span(), "unsupported tuple index"));
+                    }
                     self.replace_expr(&mut array.elems[0], state)?;
                     let Some(i) = evaluate_usize(&array.elems[0]) else {
                         return Err(Error::new(index.index.span(), "unsupported tuple index"));
@@ -1899,24 +1901,52 @@ impl<'a> TypleContext<'a> {
                 let (pattern, range) = self.parse_pattern_range(&mut tokens, default_span)?;
                 let token_stream = tokens.collect::<TokenStream>();
                 let body_span = token_stream.span();
-                let Ok(r#type) = parse2::<Type>(token_stream) else {
-                    return Err(Error::new(body_span, "expected type"));
-                };
                 let mut tuple = TypeTuple {
                     paren_token: token::Paren::default(),
                     elems: Punctuated::new(),
                 };
-                let mut context = self.clone();
-                if let Some(ident) = &pattern {
-                    context.constants.insert(ident.clone(), 0);
-                }
-                for index in range {
-                    if let Some(ident) = &pattern {
-                        *context.constants.get_mut(ident).unwrap() = index;
+                match m.mac.delimiter {
+                    MacroDelimiter::Paren(_) => {
+                        let ty = parse2::<Type>(token_stream)?;
+                        let mut context = self.clone();
+                        if let Some(ident) = &pattern {
+                            context.constants.insert(ident.clone(), 0);
+                        }
+                        for index in range {
+                            if let Some(ident) = &pattern {
+                                *context.constants.get_mut(ident).unwrap() = index;
+                            }
+                            let mut component = ty.clone();
+                            context.replace_type(&mut component)?;
+                            tuple.elems.push(component);
+                        }
                     }
-                    let mut component = r#type.clone();
-                    context.replace_type(&mut component)?;
-                    tuple.elems.push(component);
+                    MacroDelimiter::Brace(_) => {
+                        let Ok(expr) = parse2::<Expr>(token_stream) else {
+                            return Err(Error::new(
+                                body_span,
+                                "cannot parse, wrap types in `typle_ty!()`",
+                            ));
+                        };
+                        let mut context = self.clone();
+                        if let Some(ident) = &pattern {
+                            context.constants.insert(ident.clone(), 0);
+                        }
+                        for index in range {
+                            if let Some(ident) = &pattern {
+                                *context.constants.get_mut(ident).unwrap() = index;
+                            }
+                            let mut expr = expr.clone();
+                            let mut state = BlockState::default();
+                            context.replace_expr(&mut expr, &mut state)?;
+                            let mut ty = expr_to_type(expr)?;
+                            context.replace_type(&mut ty)?;
+                            tuple.elems.push(ty);
+                        }
+                    }
+                    MacroDelimiter::Bracket(_) => {
+                        return Err(Error::new(m.span(), "expected parentheses or braces"));
+                    }
                 }
                 return Ok(Some(Type::Tuple(tuple)));
             }
@@ -2548,5 +2578,65 @@ fn pat_to_expr(pat: Pat) -> Expr {
         Pat::Verbatim(_) => todo!(),
         Pat::Wild(_) => todo!(),
         _ => todo!(),
+    }
+}
+
+fn expr_to_type(expr: Expr) -> Result<Type> {
+    match expr {
+        Expr::Block(expr) => {
+            let mut block = expr.block;
+            if block.stmts.len() == 1 {
+                match std::mem::take(&mut block.stmts).into_iter().next() {
+                    Some(Stmt::Local(_)) => {
+                        Err(Error::new(block.span(), "let statement not supported here"))
+                    }
+                    Some(Stmt::Item(_)) => Err(Error::new(block.span(), "item not supported here")),
+                    Some(Stmt::Expr(ref expr, None)) => expr_to_type(expr.clone()),
+                    Some(Stmt::Expr(_, Some(semi))) => {
+                        Err(Error::new(semi.span(), "unexpected semicolon"))
+                    }
+                    Some(Stmt::Macro(m)) => match m.mac.path.get_ident() {
+                        Some(ident) if ident == "typle_ty" => parse2(m.mac.tokens),
+                        _ => Ok(Type::Macro(TypeMacro { mac: m.mac })),
+                    },
+                    None => todo!(),
+                }
+            } else {
+                return Err(Error::new(
+                    block.span(),
+                    "typle requires a block with a single type",
+                ));
+            }
+        }
+        Expr::Macro(expr) => match expr.mac.path.get_ident() {
+            Some(ident) if ident == "typle_ty" => parse2(expr.mac.tokens),
+            _ => Ok(Type::Macro(TypeMacro { mac: expr.mac })),
+        },
+        Expr::Paren(expr) => Ok(Type::Paren(syn::TypeParen {
+            paren_token: expr.paren_token,
+            elem: Box::new(expr_to_type(*expr.expr)?),
+        })),
+        Expr::Path(expr) => Ok(Type::Path(TypePath {
+            qself: None,
+            path: expr.path,
+        })),
+        Expr::Reference(expr) => Ok(Type::Reference(syn::TypeReference {
+            and_token: expr.and_token,
+            lifetime: None,
+            mutability: expr.mutability,
+            elem: Box::new(expr_to_type(*expr.expr)?),
+        })),
+        Expr::Tuple(expr) => Ok(Type::Tuple(TypeTuple {
+            paren_token: expr.paren_token,
+            elems: expr
+                .elems
+                .into_iter()
+                .map(expr_to_type)
+                .collect::<Result<_>>()?,
+        })),
+        _ => Err(Error::new(
+            expr.span(),
+            "typle does not handle this expression here",
+        )),
     }
 }

@@ -643,9 +643,9 @@ pub fn typle_fold(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
 
 /// Create a tuple or array.
 ///
-/// Loop over the indices of the tuple, performing the expression for each index.
+/// Loop over the indices of the tuple, returning an expression or type for each index.
 ///
-/// With parentheses, this macro can be used to create a new tuple type or expression.
+/// With parentheses, `typle_for!` creates a new tuple type or expression.
 ///
 /// ```
 /// # use typle::typle;
@@ -653,10 +653,27 @@ pub fn typle_fold(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
 /// pub fn reverse<T: Tuple>(t: T) -> typle_for!(i in 1..=T::LEN => T<{T::LEN - i}>) {
 ///     typle_for!(i in 1..=T::LEN => t[[T::LEN - i]])
 /// }
+///
 /// assert_eq!(reverse((Some(3), "four", 5)), (5, "four", Some(3)));
 /// ```
 ///
-/// If the macro uses brackets, the created value is an array.
+/// With braces, `typle_for!` creates a tuple type from an expression. Types
+/// where the last path member has generic arguments must be wrapped in the
+/// `typle_ty!` macro.
+/// ```
+/// # use typle::typle;
+/// #[typle(Tuple for 0..=12)]
+/// fn append<T: Tuple, A>(
+///     t: T,
+///     a: A,
+/// ) -> typle_for!{i in 0..=T::LEN => if typle_const!(i < T::LEN) {typle_ty!(T<{i}>)} else {A}} {
+///     typle_for!(i in 0..=T::LEN => if typle_const!(i < T::LEN) {t[[i]]} else {a})
+/// }
+///
+/// assert_eq!(append((1, 2, 3), 4), (1, 2, 3, 4));
+/// ```
+///
+/// With brackets, `typle_for!` creates an array expression.
 ///
 /// ```
 /// # use typle::typle;
@@ -670,7 +687,7 @@ pub fn typle_fold(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
 /// {
 ///     fn new(t: typle_for!(i in ..T::LEN => &T<{i}>)) {
 ///         // Square brackets create an array
-///         let a: [u32; T::LEN] = typle_for![i in 0..T::LEN => *t[[i]] * 2];
+///         let a: [u32; T::LEN] = typle_for![i in ..T::LEN => *t[[i]] * 2];
 ///         // Parentheses create a tuple
 ///         let b = typle_for!(i in ..T::LEN => *t[[i]] * 2);
 ///         // Arbitrary expressions can be used for the indices and
