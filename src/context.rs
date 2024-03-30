@@ -19,6 +19,12 @@ use syn::{
 use crate::constant::{evaluate_bool, evaluate_range, evaluate_usize};
 use crate::TypleMacro;
 
+macro_rules! abort {
+    ($spanned:expr, $message:expr) => {
+        return Err(Error::new($spanned.span(), $message));
+    };
+}
+
 #[derive(Clone)]
 pub enum Typle {
     Specific(Type),
@@ -178,22 +184,16 @@ impl<'a> TypleContext<'a> {
                                 }
                                 PathArguments::AngleBracketed(arguments) => {
                                     if arguments.args.len() != 1 {
-                                        return Err(Error::new(
-                                            arguments.span(),
-                                            "expected single argument",
-                                        ));
+                                        abort!(arguments, "expected single argument");
                                     }
                                     if let Some(GenericArgument::Type(ty)) = arguments.args.first()
                                     {
                                         return Ok(Some(Typle::Specific(ty.clone())));
                                     }
-                                    return Err(Error::new(arguments.span(), "expected type"));
+                                    abort!(arguments, "expected type");
                                 }
                                 PathArguments::Parenthesized(arguments) => {
-                                    return Err(Error::new(
-                                        arguments.span(),
-                                        "parenthesized arguments not supported",
-                                    ));
+                                    abort!(arguments, "parenthesized arguments not supported");
                                 }
                             }
                         }
@@ -228,10 +228,7 @@ impl<'a> TypleContext<'a> {
                             let mut state = BlockState::default();
                             self.replace_expr(&mut expr, &mut state)?;
                             let Some(cond) = evaluate_bool(&expr) else {
-                                return Err(Error::new(
-                                    ident.span(),
-                                    "expected boolean expression",
-                                ));
+                                abort!(ident, "expected boolean expression");
                             };
                             if cond {
                                 meta_list.tokens = tokens.collect();
@@ -418,33 +415,24 @@ impl<'a> TypleContext<'a> {
                                 ));
                             };
                             if let Some(tt) = tokens.next() {
-                                return Err(Error::new(
-                                    tt.span(),
-                                    "unexpected token in typle_index",
-                                ));
+                                abort!(tt, "unexpected token in typle_index");
                             };
                             let Expr::Range(expr_range) = &*for_loop.expr else {
-                                return Err(Error::new(for_loop.expr.span(), "expected range"));
+                                abort!(for_loop.expr, "expected range");
                             };
                             let (Some(start_expr), Some(end_expr)) =
                                 (&expr_range.start, &expr_range.end)
                             else {
-                                return Err(Error::new(
-                                    expr_range.span(),
-                                    "expected bounded range",
-                                ));
+                                abort!(expr_range, "expected bounded range");
                             };
                             let Some(start) = evaluate_usize(start_expr) else {
-                                return Err(Error::new(
-                                    start_expr.span(),
-                                    "cannot evaluate lower bound in constant context",
-                                ));
+                                abort!(
+                                    start_expr,
+                                    "cannot evaluate lower bound in constant context"
+                                );
                             };
                             let Some(mut end) = evaluate_usize(end_expr) else {
-                                return Err(Error::new(
-                                    end_expr.span(),
-                                    "cannot evaluate upper bound in constant context",
-                                ));
+                                abort!(end_expr, "cannot evaluate upper bound in constant context");
                             };
                             if let RangeLimits::Closed(_) = expr_range.limits {
                                 end += 1;
@@ -636,11 +624,11 @@ impl<'a> TypleContext<'a> {
                 if let Expr::Array(array) = &mut *index.index {
                     // t[[0]]
                     if array.elems.len() != 1 {
-                        return Err(Error::new(index.index.span(), "unsupported tuple index"));
+                        abort!(index.index, "unsupported tuple index");
                     }
                     self.replace_expr(&mut array.elems[0], state)?;
                     let Some(i) = evaluate_usize(&array.elems[0]) else {
-                        return Err(Error::new(index.index.span(), "unsupported tuple index"));
+                        abort!(index.index, "unsupported tuple index");
                     };
                     *expr = Expr::Field(ExprField {
                         attrs: std::mem::take(&mut index.attrs),
@@ -719,10 +707,10 @@ impl<'a> TypleContext<'a> {
                                     // Tuple::LEN or <T as Tuple>::LEN
                                     // todo: check that any qself is a type tuple of the correct length
                                     let Some(typle_len) = self.typle_len else {
-                                        return Err(Error::new(
-                                            second.ident.span(),
-                                            "LEN not available outside fn or impl",
-                                        ));
+                                        abort!(
+                                            second.ident,
+                                            "LEN not available outside fn or impl"
+                                        );
                                     };
                                     *expr = Expr::Lit(ExprLit {
                                         attrs: std::mem::take(&mut path.attrs),
@@ -765,10 +753,10 @@ impl<'a> TypleContext<'a> {
                                         if second.ident == "LEN" {
                                             // T::LEN
                                             let Some(typle_len) = self.typle_len else {
-                                                return Err(Error::new(
-                                                    second.ident.span(),
-                                                    "LEN not available outside fn or impl",
-                                                ));
+                                                abort!(
+                                                    second.ident,
+                                                    "LEN not available outside fn or impl"
+                                                );
                                             };
                                             *expr = Expr::Lit(ExprLit {
                                                 attrs: std::mem::take(&mut path.attrs),
@@ -819,20 +807,14 @@ impl<'a> TypleContext<'a> {
                                         path.path.leading_colon = Some(token::PathSep::default());
                                     }
                                     None => {
-                                        return Err(Error::new(
-                                            first.span(),
-                                            "type in value position",
-                                        ));
+                                        abort!(first, "type in value position");
                                     }
                                 }
                             }
                             PathArguments::AngleBracketed(args) => {
                                 // T::<0>::default() -> <T0>::default()
                                 if args.args.len() != 1 {
-                                    return Err(Error::new(
-                                        first.span(),
-                                        "expected one type parameter",
-                                    ));
+                                    abort!(first, "expected one type parameter");
                                 }
                                 match args.args.first_mut() {
                                     Some(GenericArgument::Const(expr)) => {
@@ -840,15 +822,12 @@ impl<'a> TypleContext<'a> {
                                         self.replace_expr(expr, state)?;
                                         // T<{5 - 1}>
                                         let Some(value) = evaluate_usize(expr) else {
-                                            return Err(Error::new(
-                                                expr.span(),
-                                                "unsupported tuple type index",
-                                            ));
+                                            abort!(expr, "unsupported tuple type index");
                                         };
                                         // T<{4}>
                                         let qself = self.get_type(typle, value, first.span())?;
                                         if path.qself.is_some() {
-                                            return Err(Error::new(first.span(), "not a trait"));
+                                            abort!(first, "not a trait");
                                         }
                                         path.qself = Some(QSelf {
                                             lt_token: token::Lt::default(),
@@ -860,10 +839,10 @@ impl<'a> TypleContext<'a> {
                                         path.path.leading_colon = Some(token::PathSep::default());
                                     }
                                     _ => {
-                                        return Err(Error::new(
-                                            args.span(),
-                                            "Require const parameter (wrap {} around expression)",
-                                        ));
+                                        abort!(
+                                            args,
+                                            "Require const parameter (wrap {} around expression)"
+                                        );
                                     }
                                 }
                             }
@@ -1000,17 +979,11 @@ impl<'a> TypleContext<'a> {
                                     // T<0>: Copy gets replaced in the fallback
                                     let PathArguments::AngleBracketed(arguments) = &first.arguments
                                     else {
-                                        return Err(Error::new(
-                                            first.span(),
-                                            "expected angle brackets",
-                                        ));
+                                        abort!(first, "expected angle brackets");
                                     };
                                     let mut iter = arguments.args.iter();
                                     let (Some(arg), None) = (iter.next(), iter.next()) else {
-                                        return Err(Error::new(
-                                            arguments.span(),
-                                            "expected constant expression",
-                                        ));
+                                        abort!(arguments, "expected constant expression");
                                     };
                                     let mut expr = match arg {
                                         GenericArgument::Type(Type::Infer(_)) => {
@@ -1020,10 +993,7 @@ impl<'a> TypleContext<'a> {
                                         }
                                         GenericArgument::Const(expr) => expr.clone(),
                                         _ => {
-                                            return Err(Error::new(
-                                                arg.span(),
-                                                "expected const expression or `_`",
-                                            ))
+                                            abort!(arg, "expected const expression or `_`");
                                         }
                                     };
                                     let mut state = BlockState::default();
@@ -1315,10 +1285,10 @@ impl<'a> TypleContext<'a> {
                                             }
                                             MacroDelimiter::Bracket(_) => {
                                                 if !token_stream.is_empty() {
-                                                    return Err(Error::new(
-                                                        token_stream.span(),
-                                                        "braces require empty body",
-                                                    ));
+                                                    abort!(
+                                                        token_stream,
+                                                        "braces require empty body"
+                                                    );
                                                 }
                                                 Fields::Unit
                                             }
@@ -1398,7 +1368,7 @@ impl<'a> TypleContext<'a> {
                         for arg in fn_input_params {
                             match arg {
                                 syn::FnArg::Receiver(_) => {
-                                    return Err(Error::new(arg.span(), "unexpected self"))
+                                    abort!(arg, "unexpected self");
                                 }
                                 syn::FnArg::Typed(pat_type) => {
                                     type_tuple.elems.push(pat_type.ty.as_ref().clone());
@@ -1728,7 +1698,7 @@ impl<'a> TypleContext<'a> {
                         Expr::Tuple(tuple)
                     }
                     MacroDelimiter::Brace(_) => {
-                        return Err(Error::new(m.span(), "expected parentheses or brackets"));
+                        abort!(m, "expected parentheses or brackets");
                     }
                     MacroDelimiter::Bracket(_) => {
                         let array = ExprArray {
@@ -1788,10 +1758,7 @@ impl<'a> TypleContext<'a> {
                     .collect::<Result<_>>()?,
             }),
             _ => {
-                return Err(Error::new(
-                    expr.span(),
-                    "typle does not support this pattern",
-                ))
+                abort!(expr, "typle does not support this pattern");
             }
         };
         Ok(pat)
@@ -1815,7 +1782,7 @@ impl<'a> TypleContext<'a> {
                         Pat::Tuple(tuple)
                     }
                     _ => {
-                        return Err(Error::new(m.span(), "expected parentheses"));
+                        abort!(m, "expected parentheses");
                     }
                 };
                 return Ok(Some(pat));
@@ -1844,7 +1811,7 @@ impl<'a> TypleContext<'a> {
                         Expr::Tuple(tuple)
                     }
                     MacroDelimiter::Brace(_) => {
-                        return Err(Error::new(m.span(), "expected parentheses or brackets"));
+                        abort!(m, "expected parentheses or brackets");
                     }
                     MacroDelimiter::Bracket(_) => {
                         let array = ExprArray {
@@ -1927,7 +1894,7 @@ impl<'a> TypleContext<'a> {
                         }
                     }
                     MacroDelimiter::Bracket(_) => {
-                        return Err(Error::new(m.span(), "expected parentheses or braces"));
+                        abort!(m, "expected parentheses or braces");
                     }
                 }
                 return Ok(Some(Type::Tuple(tuple)));
@@ -1988,7 +1955,7 @@ impl<'a> TypleContext<'a> {
                             output.extend([TokenTree::Ident(prev)]);
                         }
                         TTState::TypleTy | TTState::TypleExpr => {
-                            return Err(Error::new(ident.span(), "typle: expected macro body"));
+                            abort!(ident, "typle: expected macro body");
                         }
                     }
                     state = TTState::FoundIdent(ident);
@@ -2009,7 +1976,7 @@ impl<'a> TypleContext<'a> {
                             output.extend([TokenTree::Ident(ident)]);
                         }
                         TTState::TypleTy | TTState::TypleExpr => {
-                            return Err(Error::new(punct.span(), "typle: expected macro body"));
+                            abort!(punct, "typle: expected macro body");
                         }
                     }
                     output.extend([TokenTree::Punct(punct)]);
@@ -2022,7 +1989,7 @@ impl<'a> TypleContext<'a> {
                             output.extend([TokenTree::Ident(ident)]);
                         }
                         TTState::TypleTy | TTState::TypleExpr => {
-                            return Err(Error::new(literal.span(), "typle: expected macro body"));
+                            abort!(literal, "typle: expected macro body");
                         }
                     }
                     output.extend([TokenTree::Literal(literal)]);
@@ -2108,20 +2075,14 @@ impl<'a> TypleContext<'a> {
                                 pattern = Some(ident);
                             }
                             if let Some(tt) = tokens.next() {
-                                return Err(Error::new(tt.span(), "unexpected token"));
+                                abort!(tt, "unexpected token");
                             }
                         }
                         Some(tt) => {
-                            return Err(Error::new(
-                                tt.span(),
-                                "expected identifier before keyword `in`",
-                            ))
+                            abort!(tt, "expected identifier before keyword `in`");
                         }
                         None => {
-                            return Err(Error::new(
-                                ident.span(),
-                                "expected identifier before keyword `in`",
-                            ))
+                            abort!(ident, "expected identifier before keyword `in`");
                         }
                     }
                 }
@@ -2496,7 +2457,7 @@ impl<'a> TypleContext<'a> {
                         let mut state = BlockState::default();
                         self.replace_expr(&mut expr, &mut state)?;
                         let Some(index) = evaluate_usize(&expr) else {
-                            return Err(Error::new(mac.tokens.span(), "expect constant integer"));
+                            abort!(mac.tokens, "expect constant integer");
                         };
                         return Ok(Some(index));
                     }
@@ -2584,10 +2545,10 @@ fn expr_to_type(expr: Expr) -> Result<Type> {
                     None => todo!(),
                 }
             } else {
-                return Err(Error::new(
+                Err(Error::new(
                     block.span(),
                     "typle requires a block with a single type",
-                ));
+                ))
             }
         }
         Expr::Macro(expr) => match expr.mac.path.get_ident() {
