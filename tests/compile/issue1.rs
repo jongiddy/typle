@@ -12,10 +12,7 @@ impl<T> Verifier for T
 where
     T: Tuple,
     T<_>: Verifier,
-    // Cannot expand nested bounds directly. Instead of:
-    // <T<_> as Verifier>::Error: Into<Box<dyn std::error::Error>>,
-    // this requires:
-    typle_bound!(i in ..T::LEN => <T<{i}> as Verifier>::Error): Into<Box<dyn std::error::Error>>,
+    <T<_> as Verifier>::Error: Into<Box<dyn std::error::Error>>,
 {
     type Error = Box<dyn std::error::Error>;
 

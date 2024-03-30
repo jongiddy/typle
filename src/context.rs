@@ -992,110 +992,92 @@ impl<'a> TypleContext<'a> {
                 if let WherePredicate::Type(predicate_type) = &mut predicate {
                     match &mut predicate_type.bounded_ty {
                         Type::Path(type_path) => {
-                            if type_path.qself.is_none() && type_path.path.leading_colon.is_none() {
-                                let mut segments = type_path.path.segments.iter();
-                                if let Some(first) = segments.next() {
-                                    if let Some(Typle::Generic(component_names)) =
-                                        self.typles.get(&first.ident)
-                                    {
-                                        // T<0>: Copy, T<{..}>: Copy, T<_>::Output: Copy, T<_>: Mul<M<{_}>>
-                                        let PathArguments::AngleBracketed(arguments) =
-                                            &first.arguments
-                                        else {
-                                            return Err(Error::new(
-                                                first.span(),
-                                                "expected angle brackets",
-                                            ));
-                                        };
-                                        let mut iter = arguments.args.iter();
-                                        let (Some(arg), None) = (iter.next(), iter.next()) else {
-                                            return Err(Error::new(
-                                                arguments.span(),
-                                                "expected constant expression",
-                                            ));
-                                        };
-                                        let mut expr = match arg {
-                                            GenericArgument::Type(Type::Infer(_)) => {
-                                                if let Some(typle_len) = self.typle_len {
-                                                    parse_quote!(.. #typle_len)
-                                                } else {
-                                                    let typle_len = self.typle_macro.max_len;
-                                                    parse_quote!(.. #typle_len)
-                                                }
-                                            }
-                                            GenericArgument::Const(expr) => expr.clone(),
-                                            _ => {
-                                                return Err(Error::new(
-                                                    arg.span(),
-                                                    "expected const expression or `_`",
-                                                ))
-                                            }
-                                        };
-                                        let mut state = BlockState::default();
-                                        self.replace_expr(&mut expr, &mut state)?;
-                                        if let Some(range) = evaluate_range(&expr) {
-                                            let start = range
-                                                .start
-                                                .as_deref()
-                                                .map(|start| {
-                                                    evaluate_usize(start).ok_or_else(|| {
-                                                        Error::new(start.span(), "expected integer")
-                                                    })
-                                                })
-                                                .transpose()?
-                                                .unwrap_or(0);
-                                            let end = range
-                                                .end
-                                                .as_deref()
-                                                .map(|end| {
-                                                    evaluate_usize(end).ok_or_else(|| {
-                                                        Error::new(start.span(), "expected integer")
-                                                    })
-                                                })
-                                                .transpose()?
-                                                .unwrap_or(self.typle_macro.max_len);
-                                            let end = match range.limits {
-                                                RangeLimits::HalfOpen(_) => end,
-                                                RangeLimits::Closed(_) => end.saturating_add(1),
-                                            };
-                                            for index in start..end {
-                                                let component_ident = Ident::new(
-                                                    &component_names[index],
-                                                    first.ident.span(),
-                                                );
-                                                let mut path = ident_to_path(component_ident);
-                                                for segment in segments.clone() {
-                                                    path.segments.push(segment.clone());
-                                                }
-                                                let bounds = predicate_type
-                                                    .bounds
-                                                    .iter()
-                                                    .map(|bound| {
-                                                        let mut bound = bound.clone();
-                                                        if let TypeParamBound::Trait(trait_bound) =
-                                                            &mut bound
-                                                        {
-                                                            self.replace_path_arguments(
-                                                                &mut trait_bound.path,
-                                                            )?;
-                                                        }
-                                                        Ok(bound)
-                                                    })
-                                                    .collect::<Result<_>>()?;
-                                                where_clause.predicates.push(WherePredicate::Type(
-                                                    PredicateType {
-                                                        lifetimes: None,
-                                                        bounded_ty: Type::Path(TypePath {
-                                                            qself: None,
-                                                            path,
-                                                        }),
-                                                        colon_token: token::Colon::default(),
-                                                        bounds,
-                                                    },
-                                                ));
-                                            }
-                                            continue;
+                            if let Some(first) = first_path_segment_mut(type_path) {
+                                if let Some(Typle::Generic(component_names)) =
+                                    self.typles.get(&first.ident)
+                                {
+                                    // T<{..}>: Copy, T<_>::Output: Copy
+                                    // T<0>: Copy gets replaced in the fallback
+                                    let PathArguments::AngleBracketed(arguments) = &first.arguments
+                                    else {
+                                        return Err(Error::new(
+                                            first.span(),
+                                            "expected angle brackets",
+                                        ));
+                                    };
+                                    let mut iter = arguments.args.iter();
+                                    let (Some(arg), None) = (iter.next(), iter.next()) else {
+                                        return Err(Error::new(
+                                            arguments.span(),
+                                            "expected constant expression",
+                                        ));
+                                    };
+                                    let mut expr = match arg {
+                                        GenericArgument::Type(Type::Infer(_)) => {
+                                            let typle_len =
+                                                self.typle_len.unwrap_or(self.typle_macro.max_len);
+                                            parse_quote!(.. #typle_len)
                                         }
+                                        GenericArgument::Const(expr) => expr.clone(),
+                                        _ => {
+                                            return Err(Error::new(
+                                                arg.span(),
+                                                "expected const expression or `_`",
+                                            ))
+                                        }
+                                    };
+                                    let mut state = BlockState::default();
+                                    self.replace_expr(&mut expr, &mut state)?;
+                                    if let Some(range) = evaluate_range(&expr) {
+                                        let start = range
+                                            .start
+                                            .as_deref()
+                                            .map(|start| {
+                                                evaluate_usize(start).ok_or_else(|| {
+                                                    Error::new(start.span(), "expected integer")
+                                                })
+                                            })
+                                            .transpose()?
+                                            .unwrap_or(0);
+                                        let end = range
+                                            .end
+                                            .as_deref()
+                                            .map(|end| {
+                                                evaluate_usize(end).ok_or_else(|| {
+                                                    Error::new(start.span(), "expected integer")
+                                                })
+                                            })
+                                            .transpose()?
+                                            .unwrap_or(self.typle_macro.max_len);
+                                        let end = match range.limits {
+                                            RangeLimits::HalfOpen(_) => end,
+                                            RangeLimits::Closed(_) => end.saturating_add(1),
+                                        };
+                                        for bound in &mut predicate_type.bounds {
+                                            if let TypeParamBound::Trait(trait_bound) = bound {
+                                                self.replace_path_arguments(&mut trait_bound.path)?;
+                                            }
+                                        }
+                                        for index in start..end {
+                                            let mut type_path = type_path.clone();
+                                            let first =
+                                                first_path_segment_mut(&mut type_path).unwrap();
+                                            let component_ident = Ident::new(
+                                                &component_names[index],
+                                                first.ident.span(),
+                                            );
+                                            first.ident = component_ident;
+                                            first.arguments = PathArguments::None;
+                                            where_clause.predicates.push(WherePredicate::Type(
+                                                PredicateType {
+                                                    lifetimes: None,
+                                                    bounded_ty: Type::Path(type_path),
+                                                    colon_token: token::Colon::default(),
+                                                    bounds: predicate_type.bounds.clone(),
+                                                },
+                                            ));
+                                        }
+                                        continue;
                                     }
                                 }
                             }
@@ -2638,5 +2620,26 @@ fn expr_to_type(expr: Expr) -> Result<Type> {
             expr.span(),
             "typle does not handle this expression here",
         )),
+    }
+}
+
+pub fn first_path_segment_mut(type_path: &mut TypePath) -> Option<&mut PathSegment> {
+    match &mut type_path.qself {
+        Some(qself) => {
+            // <<T<_> as Trait>::Value as std::ops::Mul>::Output: Copy
+            if let Type::Path(type_path) = &mut *qself.ty {
+                first_path_segment_mut(type_path)
+            } else {
+                None
+            }
+        }
+        None => {
+            let mut segments = type_path.path.segments.iter_mut();
+            if let Some(first) = segments.next() {
+                return Some(first);
+            } else {
+                None
+            }
+        }
     }
 }
