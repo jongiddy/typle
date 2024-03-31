@@ -17,13 +17,11 @@ where
 }
 
 #[typle(Tuple for 0..=2)]
-#[derive(Default)]
 pub enum State<T>
 where
     T: Tuple,
     T<_>: std::io::Read,
 {
-    #[default]
     Invalid,
     S = typle_variant! {i in ..T::MAX => field: typle_for!(j in ..=i => Option<T<{j}>>)},
 }
