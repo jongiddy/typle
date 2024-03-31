@@ -623,11 +623,12 @@ impl<'a> TypleContext<'a> {
                 self.replace_expr(&mut index.expr, state)?;
                 if let Expr::Array(array) = &mut *index.index {
                     // t[[0]]
-                    if array.elems.len() != 1 {
+                    let mut iter = array.elems.iter_mut();
+                    let (Some(field), None) = (iter.next(), iter.next()) else {
                         abort!(index.index, "unsupported tuple index");
-                    }
-                    self.replace_expr(&mut array.elems[0], state)?;
-                    let Some(i) = evaluate_usize(&array.elems[0]) else {
+                    };
+                    self.replace_expr(field, state)?;
+                    let Some(i) = evaluate_usize(field) else {
                         abort!(index.index, "unsupported tuple index");
                     };
                     *expr = Expr::Field(ExprField {
@@ -1028,14 +1029,12 @@ impl<'a> TypleContext<'a> {
                                                 self.replace_path_arguments(&mut trait_bound.path)?;
                                             }
                                         }
-                                        for index in start..end {
+                                        for component_name in &component_names[start..end] {
                                             let mut type_path = type_path.clone();
                                             let first =
                                                 first_path_segment_mut(&mut type_path).unwrap();
-                                            let component_ident = Ident::new(
-                                                &component_names[index],
-                                                first.ident.span(),
-                                            );
+                                            let component_ident =
+                                                Ident::new(component_name, first.ident.span());
                                             first.ident = component_ident;
                                             first.arguments = PathArguments::None;
                                             where_clause.predicates.push(WherePredicate::Type(
@@ -1725,8 +1724,8 @@ impl<'a> TypleContext<'a> {
 
     // Expanding a macro in pattern position using expression parsing allows use of const-if and
     // other macros that are not valid in a pattern. This means that `typle_for!` only accepts
-    // patterns that have an equivalent type. This covers the most common patterns but, notably,
-    // `ref` and `mut` are not available.
+    // patterns that have an equivalent expression. This covers the most common patterns but,
+    // notably, `ref` and `mut` are not available.
     fn expr_to_pat(expr: Expr) -> Result<Pat> {
         let pat = match expr {
             Expr::Const(expr) => Pat::Const(expr),
