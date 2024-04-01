@@ -645,7 +645,9 @@ pub fn typle_fold(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
 ///
 /// Loop over the indices of the tuple, returning an expression or type for each index.
 ///
-/// With parentheses, `typle_for!` creates a new tuple type or expression.
+/// The `typle_for!` macro behavior depends on the delimiters around the macro tokens.
+///
+/// With parentheses, `typle_for!` creates a new tuple type, pattern, or expression.
 ///
 /// ```
 /// # use typle::typle;
@@ -657,11 +659,39 @@ pub fn typle_fold(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
 /// assert_eq!(reverse((Some(3), "four", 5)), (5, "four", Some(3)));
 /// ```
 ///
-/// With braces, `typle_for!` creates a tuple type from an expression. Types
-/// where the last path member has generic arguments must be wrapped in the
-/// `typle_ty!` macro.
+/// If a type or pattern requires a const-if expression, use braces to
+/// create a tuple type or tuple pattern from an expression. The
+/// `typle_ty!` and `typle_pat!` macros must be used where the type or pattern
+/// is not a valid expression.
 /// ```
 /// # use typle::typle;
+/// #[typle(Tuple for 0..=12)]
+/// fn split_components<T: Tuple>(
+///     t: T
+/// ) -> (
+///     typle_for!(i in ..(T::LEN + 1) / 2 => T<{i * 2}>),
+///     typle_for!(i in ..T::LEN / 2 => T<{i * 2 + 1}>)
+/// ) {
+///     // let (a0, b0, a1, b1, a2) = (1, 2, 3, 4, 5)
+///     let typle_for!{
+///         i in ..T::LEN => if typle_const!(i % 2 == 0) {
+///             a::<typle_ident!(i / 2)>
+///         } else {
+///             b::<typle_ident!(i / 2)>
+///         }
+///     } = t;
+///     // ((a0, a1, a2), (b0, b1))
+///     (
+///         typle_for!(i in ..(T::LEN + 1) / 2 => a::<typle_ident!(i)>),
+///         typle_for!(i in ..T::LEN / 2 => b::<typle_ident!(i)>),
+///     )
+/// }
+///
+/// assert_eq!(
+///     split_components((1, 2, 3, 4, 5)),
+///     ((1, 3, 5), (2, 4))
+/// );
+///
 /// #[typle(Tuple for 0..=12)]
 /// fn append<T: Tuple, A>(
 ///     t: T,
@@ -677,52 +707,19 @@ pub fn typle_fold(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
 ///
 /// ```
 /// # use typle::typle;
-/// struct S<T>
+/// #[typle(Tuple for 0..=12)]
+/// fn to_strings<T>(t: T) -> [String; T::LEN]
+/// where
+///     T: Tuple,
+///     T<_>: ToString,
 /// {
-///     t: T
+///     typle_for![i in ..T::LEN => t[[i]].to_string()]
 /// }
 ///
-/// #[typle(Tuple for 0..=2)]
-/// impl<T: Tuple<u32>> S<T>
-/// {
-///     fn new(t: typle_for!(i in ..T::LEN => &T<{i}>)) {
-///         // Square brackets create an array
-///         let a: [u32; T::LEN] = typle_for![i in ..T::LEN => *t[[i]] * 2];
-///         // Parentheses create a tuple
-///         let b = typle_for!(i in ..T::LEN => *t[[i]] * 2);
-///         // Arbitrary expressions can be used for the indices and
-///         // the iterator variable can be left out if not needed
-///         let init: [Option<u32>; T::LEN] = typle_for![T::LEN * 2..T::LEN * 3 => None];
-///     }
-/// }
-/// ```
-/// generates
-/// ```
-/// # struct S<T>
-/// # {
-/// #     t: T
-/// # }
-/// impl S<()> {
-///     fn new(t: ()) {
-///         let a: [u32; 0] = [];
-///         let b = ();
-///         let init: [Option<u32>; 0] = [];
-///     }
-/// }
-/// impl S<(u32,)> {
-///     fn new(t: (&u32,)) {
-///         let a: [u32; 1] = [*t.0 * 2];
-///         let b = (*t.0 * 2,);
-///         let init: [Option<u32>; 1] = [None];
-///     }
-/// }
-/// impl S<(u32, u32)> {
-///     fn new(t: (&u32, &u32)) {
-///         let a: [u32; 2] = [*t.0 * 2, *t.1 * 2];
-///         let b = (*t.0 * 2, *t.1 * 2);
-///         let init: [Option<u32>; 2] = [None, None];
-///     }
-/// }
+/// assert_eq!(
+///     to_strings((3, std::io::Error::new(std::io::ErrorKind::Other, "test"))),
+///     [String::from("3"), String::from("test")]
+/// );
 /// ```
 #[proc_macro]
 pub fn typle_for(item: proc_macro::TokenStream) -> proc_macro::TokenStream {

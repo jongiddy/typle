@@ -129,6 +129,13 @@ pub fn evaluate_usize(expr: &Expr) -> Option<usize> {
                     }
                 }
             }
+            syn::BinOp::Div(_) => {
+                if let Some(left) = evaluate_usize(&binary.left) {
+                    if let Some(right) = evaluate_usize(&binary.right) {
+                        return left.checked_div(right);
+                    }
+                }
+            }
             syn::BinOp::Sub(_) => {
                 if let Some(left) = evaluate_usize(&binary.left) {
                     if let Some(right) = evaluate_usize(&binary.right) {
@@ -152,6 +159,9 @@ pub fn evaluate_usize(expr: &Expr) -> Option<usize> {
             }
             _ => {}
         },
+        Expr::Paren(expr) => {
+            return evaluate_usize(&expr.expr);
+        }
         _ => {}
     }
     None
