@@ -369,19 +369,6 @@
 //! assert_eq!(v, [2, 3]);
 //! # }
 //! ```
-//! - `typle_for!` can be used as a pattern but not all patterns are supported. Notably, `ref` and
-//! `mut` are unavailable.
-//! ```rust
-//! # use typle::typle;
-//! #[typle(Tuple for 1..=12)]
-//! fn multiply_by<T: Tuple<u32>>(t: T, m: u32) -> T {
-//!     // let (x0, x1, ...) = (t.0 * m, t.1 * m, ...);
-//!     let typle_for!(i in ..T::LEN => x::<typle_ident!(i)>)
-//!         = typle_for!(i in ..T::LEN => t[[i]] * m);
-//!     assert_eq!(x0, t.0 * m);
-//!     typle_for!(i in ..T::LEN => x::<typle_ident!(i)>)
-//! }
-//! ```
 //! - Due to interaction of `typle` with other macros, passing some types and
 //! expressions to a macro may produce unexpected results. To help work around
 //! this, inside a macro invocation the `typle_ty!` macro expands types and the
@@ -659,39 +646,11 @@ pub fn typle_fold(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
 /// assert_eq!(reverse((Some(3), "four", 5)), (5, "four", Some(3)));
 /// ```
 ///
-/// If a type or pattern requires a const-if expression, use braces to
-/// create a tuple type or tuple pattern from an expression. The
-/// `typle_ty!` and `typle_pat!` macros must be used where the type or pattern
+/// With braces, `typle_for!` expects an expression that evaluates to the components
+/// of the tuple. Use the `typle_ty!` or `typle_pat!` macros where the type or pattern
 /// is not a valid expression.
 /// ```
 /// # use typle::typle;
-/// #[typle(Tuple for 0..=12)]
-/// fn split_components<T: Tuple>(
-///     t: T
-/// ) -> (
-///     typle_for!(i in ..(T::LEN + 1) / 2 => T<{i * 2}>),
-///     typle_for!(i in ..T::LEN / 2 => T<{i * 2 + 1}>)
-/// ) {
-///     // let (a0, b0, a1, b1, a2) = (1, 2, 3, 4, 5)
-///     let typle_for!{
-///         i in ..T::LEN => if typle_const!(i % 2 == 0) {
-///             a::<typle_ident!(i / 2)>
-///         } else {
-///             b::<typle_ident!(i / 2)>
-///         }
-///     } = t;
-///     // ((a0, a1, a2), (b0, b1))
-///     (
-///         typle_for!(i in ..(T::LEN + 1) / 2 => a::<typle_ident!(i)>),
-///         typle_for!(i in ..T::LEN / 2 => b::<typle_ident!(i)>),
-///     )
-/// }
-///
-/// assert_eq!(
-///     split_components((1, 2, 3, 4, 5)),
-///     ((1, 3, 5), (2, 4))
-/// );
-///
 /// #[typle(Tuple for 0..=12)]
 /// fn append<T: Tuple, A>(
 ///     t: T,
@@ -701,6 +660,30 @@ pub fn typle_fold(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
 /// }
 ///
 /// assert_eq!(append((1, 2, 3), 4), (1, 2, 3, 4));
+/// ```
+///
+/// In a braced `typle_for!` components can be filtered using a const-if expression with no `else` clause.
+/// ```
+/// # use typle::typle;
+/// #[typle(Tuple for 0..=12)]
+/// fn split_components<T: Tuple>(
+///     t: T
+/// ) -> (
+///     // (T0, T2,...)
+///     typle_for!{i in ..T::LEN => if typle_const!(i % 2 == 0) { typle_ty!(T<{i}>) }},
+///     // (T1, T3,...)
+///     typle_for!{i in ..T::LEN => if typle_const!(i % 2 == 1) { typle_ty!(T<{i}>) }},
+/// ) {
+///     (
+///         typle_for!{i in ..T::LEN => if typle_const!(i % 2 == 0) { t[[i]] }},
+///         typle_for!{i in ..T::LEN => if typle_const!(i % 2 == 1) { t[[i]] }},
+///     )
+/// }
+///
+/// assert_eq!(
+///     split_components((1, 2, 3, 4, 5, 6)),
+///     ((1, 3, 5), (2, 4, 6))
+/// );
 /// ```
 ///
 /// With brackets, `typle_for!` creates an array expression.
