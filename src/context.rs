@@ -13,7 +13,7 @@ use syn::{
     GenericArgument, GenericParam, Generics, ImplItem, Index, Item, ItemImpl, Label, Lit, LitInt,
     Macro, MacroDelimiter, Member, Meta, Pat, PatMacro, PatParen, PatReference, PatTuple, PatWild,
     Path, PathArguments, PathSegment, PredicateType, QSelf, RangeLimits, Result, ReturnType, Stmt,
-    StmtMacro, Token, Type, TypeMacro, TypeParamBound, TypePath, TypeTuple, Variant,
+    StmtMacro, Token, Type, TypeInfer, TypeMacro, TypeParamBound, TypePath, TypeTuple, Variant,
     WherePredicate,
 };
 
@@ -1698,7 +1698,30 @@ impl<'a> TypleContext<'a> {
                         Expr::Tuple(tuple)
                     }
                     MacroDelimiter::Brace(_) => {
-                        abort!(m, "expected parentheses or brackets");
+                        let tuple = ExprTuple {
+                            attrs: std::mem::take(&mut m.attrs),
+                            paren_token: token::Paren::default(),
+                            elems: elems
+                                .filter_map(|result| {
+                                    result
+                                        .map(|expr| {
+                                            if let Expr::Block(ExprBlock {
+                                                block: Block { stmts, .. },
+                                                ..
+                                            }) = &expr
+                                            {
+                                                if stmts.is_empty() {
+                                                    // Empty block causes typle to omit the component from the tuple
+                                                    return None;
+                                                }
+                                            }
+                                            Some(expr)
+                                        })
+                                        .transpose()
+                                })
+                                .collect::<Result<_>>()?,
+                        };
+                        Expr::Tuple(tuple)
                     }
                     MacroDelimiter::Bracket(_) => {
                         let array = ExprArray {
@@ -1798,16 +1821,13 @@ impl<'a> TypleContext<'a> {
             if macro_name == "typle_for" {
                 let elems = self.replace_typle_for_expr(&mut m.mac, state)?;
                 let expr = match m.mac.delimiter {
-                    MacroDelimiter::Paren(_) => {
+                    MacroDelimiter::Paren(_) | MacroDelimiter::Brace(_) => {
                         let tuple = ExprTuple {
                             attrs: std::mem::take(&mut m.attrs),
                             paren_token: token::Paren::default(),
                             elems: elems.collect::<Result<_>>()?,
                         };
                         Expr::Tuple(tuple)
-                    }
-                    MacroDelimiter::Brace(_) => {
-                        abort!(m, "expected parentheses or brackets");
                     }
                     MacroDelimiter::Bracket(_) => {
                         let array = ExprArray {
@@ -1885,8 +1905,13 @@ impl<'a> TypleContext<'a> {
                             let mut state = BlockState::default();
                             context.replace_expr(&mut expr, &mut state)?;
                             let mut ty = expr_to_type(expr)?;
-                            context.replace_type(&mut ty)?;
-                            tuple.elems.push(ty);
+                            if let Type::Verbatim(_) = ty {
+                                // Verbatim with an empty TokenStream omits the type from the tuple.
+                                // `expr_to_type` only returns Verbatim with an empty TokenStream.
+                            } else {
+                                context.replace_type(&mut ty)?;
+                                tuple.elems.push(ty);
+                            }
                         }
                     }
                     MacroDelimiter::Bracket(_) => {
@@ -2494,31 +2519,30 @@ fn expr_to_pat(expr: Expr) -> Result<Pat> {
     match expr {
         Expr::Block(expr) => {
             let mut iter = expr.block.stmts.into_iter();
-            if let (Some(stmt), None) = (iter.next(), iter.next()) {
-                match stmt {
-                    Stmt::Local(local) => {
-                        Err(Error::new(local.span(), "let statement not supported here"))
-                    }
-                    Stmt::Item(item) => Err(Error::new(item.span(), "item not supported here")),
-                    Stmt::Expr(expr, None) => expr_to_pat(expr),
-                    Stmt::Expr(_, Some(semi)) => {
-                        Err(Error::new(semi.span(), "unexpected semicolon"))
-                    }
-                    Stmt::Macro(m) => match m.mac.path.get_ident() {
-                        Some(ident) if ident == "typle_pat" => {
-                            Pat::parse_single.parse2(m.mac.tokens)
-                        }
-                        _ => Ok(Pat::Macro(ExprMacro {
-                            attrs: m.attrs,
-                            mac: m.mac,
-                        })),
-                    },
-                }
-            } else {
-                Err(Error::new(
+            let Some(stmt) = iter.next() else {
+                // empty block represents missing pattern
+                return Ok(Pat::Verbatim(TokenStream::new()));
+            };
+            if iter.next().is_some() {
+                return Err(Error::new(
                     default_span,
                     "typle requires a block with a single pattern",
-                ))
+                ));
+            }
+            match stmt {
+                Stmt::Local(local) => {
+                    Err(Error::new(local.span(), "let statement not supported here"))
+                }
+                Stmt::Item(item) => Err(Error::new(item.span(), "item not supported here")),
+                Stmt::Expr(expr, None) => expr_to_pat(expr),
+                Stmt::Expr(_, Some(semi)) => Err(Error::new(semi.span(), "unexpected semicolon")),
+                Stmt::Macro(m) => match m.mac.path.get_ident() {
+                    Some(ident) if ident == "typle_pat" => Pat::parse_single.parse2(m.mac.tokens),
+                    _ => Ok(Pat::Macro(ExprMacro {
+                        attrs: m.attrs,
+                        mac: m.mac,
+                    })),
+                },
             }
         }
         Expr::Const(expr) => Ok(Pat::Const(expr)),
@@ -2595,28 +2619,32 @@ fn expr_to_type(expr: Expr) -> Result<Type> {
         Expr::Block(expr) => {
             let span = expr.span();
             let mut iter = expr.block.stmts.into_iter();
-            if let (Some(stmt), None) = (iter.next(), iter.next()) {
-                match stmt {
-                    Stmt::Local(local) => {
-                        Err(Error::new(local.span(), "let statement not supported here"))
-                    }
-                    Stmt::Item(item) => Err(Error::new(item.span(), "item not supported here")),
-                    Stmt::Expr(expr, None) => expr_to_type(expr),
-                    Stmt::Expr(_, Some(semi)) => {
-                        Err(Error::new(semi.span(), "unexpected semicolon"))
-                    }
-                    Stmt::Macro(m) => match m.mac.path.get_ident() {
-                        Some(ident) if ident == "typle_ty" => parse2(m.mac.tokens),
-                        _ => Ok(Type::Macro(TypeMacro { mac: m.mac })),
-                    },
-                }
-            } else {
-                Err(Error::new(
+            let Some(stmt) = iter.next() else {
+                // empty block represents missing type
+                return Ok(Type::Verbatim(TokenStream::new()));
+            };
+            if iter.next().is_some() {
+                return Err(Error::new(
                     span,
                     "typle requires a block with a single type",
-                ))
+                ));
+            }
+            match stmt {
+                Stmt::Local(local) => {
+                    Err(Error::new(local.span(), "let statement not supported here"))
+                }
+                Stmt::Item(item) => Err(Error::new(item.span(), "item not supported here")),
+                Stmt::Expr(expr, None) => expr_to_type(expr),
+                Stmt::Expr(_, Some(semi)) => Err(Error::new(semi.span(), "unexpected semicolon")),
+                Stmt::Macro(m) => match m.mac.path.get_ident() {
+                    Some(ident) if ident == "typle_ty" => parse2(m.mac.tokens),
+                    _ => Ok(Type::Macro(TypeMacro { mac: m.mac })),
+                },
             }
         }
+        Expr::Infer(expr) => Ok(Type::Infer(TypeInfer {
+            underscore_token: expr.underscore_token,
+        })),
         Expr::Macro(expr) => match expr.mac.path.get_ident() {
             Some(ident) if ident == "typle_ty" => parse2(expr.mac.tokens),
             _ => Ok(Type::Macro(TypeMacro { mac: expr.mac })),
