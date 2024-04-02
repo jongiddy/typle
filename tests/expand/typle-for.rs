@@ -19,7 +19,10 @@ where
         // Arbitrary expressions can be used for the indices and
         // the iterator variable can be left out if not needed
         let init: [Option<u32>; T::LEN] = typle_for![T::LEN * 2..T::LEN * 3 => None];
-        // const-if can be used to filter components in braced typle_for!
-        let c = typle_for!{i in ..T::LEN => if typle_const!(i % 2 == 0) {b[[i]]}};
+        // const-if can be used to filter components in `typle_for!`. Braces
+        // always use const-if.
+        let c = typle_for!(i in ..T::LEN => if typle_const!(i == 0) {b[[i]]});
+        let d = typle_for!{i in ..T::LEN => if i == 0 {b[[i]]}};
+        let e = typle_for![i in ..T::LEN => if typle_const!(i == 0) {b[[i]]}];
     }
 }
