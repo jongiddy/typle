@@ -309,23 +309,6 @@ impl<'a> TypleContext<'a> {
                         }
                         _ => {}
                     }
-                    if let Expr::Block(ExprBlock {
-                        attrs,
-                        label,
-                        block: inner_block,
-                    }) = &expr
-                    {
-                        if attrs.is_empty()
-                            && label.is_none()
-                            && inner_block.stmts.is_empty()
-                            && (block.stmts.is_empty() || stmts.peek().is_some())
-                        {
-                            // Don't keep empty blocks inside blocks unless it affects the return value.
-                            // i.e. only remove if there have been no statements before the empty block or
-                            // if there are more statements afterwards.
-                            continue;
-                        }
-                    }
                     block.stmts.push(Stmt::Expr(expr, semi));
                 }
                 Stmt::Macro(mut stmt_macro) => {

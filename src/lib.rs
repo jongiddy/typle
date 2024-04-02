@@ -650,15 +650,15 @@ pub fn typle_fold(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
 /// `typle_for!{...}` with braces requires an expression that evaluates to the
 /// components of the tuple. Use the `typle_pat!` or `typle_ty!` macros where a
 /// pattern or type is not a valid expression. Inside `typle_for!{...}`, `if`
-/// expressions are always const so `typle_const!` can be omitted.
+/// expressions are always const so `typle_const!` is not required.
 /// ```
 /// # use typle::typle;
 /// #[typle(Tuple for 0..=12)]
 /// fn append<T: Tuple, A>(
 ///     t: T,
 ///     a: A,
-/// ) -> typle_for!{i in 0..=T::LEN => if i < T::LEN {typle_ty!(T<{i}>)} else {A}} {
-///     typle_for!{i in 0..=T::LEN => if i < T::LEN {t[[i]]} else {a}}
+/// ) -> typle_for!{i in 0..=T::LEN => if i < T::LEN { typle_ty!(T<{i}>) } else { A }} {
+///     typle_for!{i in 0..=T::LEN => if i < T::LEN { t[[i]] } else { a }}
 /// }
 ///
 /// assert_eq!(append((1, 2, 3), 4), (1, 2, 3, 4));
