@@ -71,9 +71,9 @@ mod tuple {
                 #[typle_attr_if(i == 0, allow(unused_variables))]
                 if let Self::State::S::<typle_ident!(i)>(output, inner_state) = state {
                     let matched = self.tuple[[i]].extract(inner_state);
-                    let output = typle_for!(j in ..=i =>
-                        if typle_const!(j < i) { output[[j]] } else { matched }
-                    );
+                    let output = typle_for! {j in ..=i =>
+                        if j < i { output[[j]] } else { matched }
+                    };
                     if typle_const!(i + 1 == T::LEN) {
                         return output;
                     } else {

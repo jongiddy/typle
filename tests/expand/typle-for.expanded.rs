@@ -8,6 +8,8 @@ impl S<()> {
         let b = ();
         let init: [Option<u32>; 0] = [];
         let c = ();
+        let d = ();
+        let e = [];
     }
 }
 impl S<(u32,)> {
@@ -16,6 +18,8 @@ impl S<(u32,)> {
         let b = (*t.0 * 2,);
         let init: [Option<u32>; 1] = [None];
         let c = ({ b.0 },);
+        let d = ({ b.0 },);
+        let e = [{ b.0 }];
     }
 }
 impl S<(u32, u32)> {
@@ -24,5 +28,7 @@ impl S<(u32, u32)> {
         let b = (*t.0 * 2, *t.1 * 2);
         let init: [Option<u32>; 2] = [None, None];
         let c = ({ b.0 },);
+        let d = ({ b.0 },);
+        let e = [{ b.0 }];
     }
 }

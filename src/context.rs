@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 use std::ops::Range;
 use std::rc::Rc;
 
-use proc_macro2::{Group, Ident, Span, TokenStream, TokenTree};
+use proc_macro2::{Delimiter, Group, Ident, Span, TokenStream, TokenTree};
 use quote::{format_ident, ToTokens};
 use syn::parse::Parser as _;
 use syn::punctuated::Punctuated;
@@ -85,6 +85,7 @@ pub(crate) struct TypleContext<'a> {
     pub(crate) typle_len: Option<usize>,
     pub(crate) constants: HashMap<Ident, usize>,
     pub(crate) typles: HashMap<Ident, Typle>,
+    pub(crate) const_if: bool,
 }
 
 impl<'a> From<&'a TypleMacro> for TypleContext<'a> {
@@ -94,6 +95,7 @@ impl<'a> From<&'a TypleMacro> for TypleContext<'a> {
             typle_len: None,
             constants: HashMap::new(),
             typles: HashMap::new(),
+            const_if: false,
         }
     }
 }
@@ -282,6 +284,31 @@ impl<'a> TypleContext<'a> {
                     self.replace_expr(&mut expr, state)?;
                     // Remove empty blocks in blocks to allow control statements in const-for loop
                     // to be eliminated.
+                    match &expr {
+                        Expr::Block(ExprBlock {
+                            attrs,
+                            label,
+                            block: inner_block,
+                        }) => {
+                            if attrs.is_empty()
+                                && label.is_none()
+                                && inner_block.stmts.is_empty()
+                                && (block.stmts.is_empty() || stmts.peek().is_some())
+                            {
+                                // Don't keep empty blocks inside blocks unless it affects the return value.
+                                // i.e. only remove if there have been no statements before the empty block or
+                                // if there are more statements afterwards.
+                                continue;
+                            }
+                        }
+                        Expr::Verbatim(_token_stream) => {
+                            if block.stmts.is_empty() || stmts.peek().is_some() {
+                                // Verbatim is only used to provide an empty block
+                                continue;
+                            }
+                        }
+                        _ => {}
+                    }
                     if let Expr::Block(ExprBlock {
                         attrs,
                         label,
@@ -312,6 +339,36 @@ impl<'a> TypleContext<'a> {
             }
         }
         Ok(())
+    }
+
+    // Return Some(bool) if expression is a const-if. Otherwise, return None.
+    fn evaluate_as_const_if(
+        &self,
+        cond: &mut Expr,
+        state: &mut BlockState,
+    ) -> Result<Option<bool>> {
+        if let Expr::Macro(expr_macro) = cond {
+            if let Some(macro_ident) = expr_macro.mac.path.get_ident() {
+                if macro_ident == "typle_const" {
+                    let span = expr_macro.mac.tokens.span();
+                    let tokens = std::mem::take(&mut expr_macro.mac.tokens);
+                    let mut cond = parse2::<Expr>(tokens)?;
+                    self.replace_expr(&mut cond, state)?;
+                    let Some(b) = evaluate_bool(&cond) else {
+                        return Err(Error::new(span, "expected boolean expression"));
+                    };
+                    return Ok(Some(b));
+                }
+            }
+        }
+        if self.const_if {
+            self.replace_expr(cond, state)?;
+            let Some(b) = evaluate_bool(&*cond) else {
+                abort!(cond, "expected boolean expression");
+            };
+            return Ok(Some(b));
+        }
+        Ok(None)
     }
 
     fn replace_expr(&self, expr: &mut Expr, state: &mut BlockState) -> Result<()> {
@@ -566,51 +623,39 @@ impl<'a> TypleContext<'a> {
             Expr::If(r#if) => {
                 self.replace_attrs(&mut r#if.attrs)?;
                 // Check for if typle_const!(i == T::LEN) {}
-                if let Expr::Macro(expr_macro) = &mut *r#if.cond {
-                    if let Some(macro_ident) = expr_macro.mac.path.get_ident() {
-                        if macro_ident == "typle_const" {
-                            let span = expr_macro.mac.tokens.span();
-                            let tokens = std::mem::take(&mut expr_macro.mac.tokens);
-                            let mut cond = parse2::<Expr>(tokens)?;
-                            self.replace_expr(&mut cond, state)?;
-                            let Some(b) = evaluate_bool(&cond) else {
-                                return Err(Error::new(span, "expected boolean expression"));
-                            };
-                            if b {
-                                let brace_token = r#if.then_branch.brace_token;
-                                *expr = Expr::Block(ExprBlock {
-                                    attrs: std::mem::take(&mut r#if.attrs),
-                                    label: None,
-                                    block: std::mem::replace(
-                                        &mut r#if.then_branch,
-                                        Block {
-                                            brace_token,
-                                            stmts: Vec::new(),
-                                        },
-                                    ),
-                                });
+                if let Some(b) = self.evaluate_as_const_if(&mut r#if.cond, state)? {
+                    if b {
+                        let brace_token = r#if.then_branch.brace_token;
+                        *expr = Expr::Block(ExprBlock {
+                            attrs: std::mem::take(&mut r#if.attrs),
+                            label: None,
+                            block: std::mem::replace(
+                                &mut r#if.then_branch,
+                                Block {
+                                    brace_token,
+                                    stmts: Vec::new(),
+                                },
+                            ),
+                        });
+                        self.replace_expr(expr, state)?;
+                    } else {
+                        match r#if.else_branch.take() {
+                            Some((_, branch)) => {
+                                *expr = *branch;
                                 self.replace_expr(expr, state)?;
-                            } else {
-                                match r#if.else_branch.take() {
-                                    Some((_, branch)) => {
-                                        *expr = *branch;
-                                        self.replace_expr(expr, state)?;
-                                    }
-                                    None => {
-                                        *expr = Expr::Block(ExprBlock {
-                                            attrs: std::mem::take(&mut r#if.attrs),
-                                            label: None,
-                                            block: Block {
-                                                brace_token: token::Brace::default(),
-                                                stmts: Vec::new(),
-                                            },
-                                        });
-                                    }
-                                }
                             }
-                            return Ok(());
+                            None => {
+                                *expr = Expr::Verbatim(
+                                    TokenTree::Group(Group::new(
+                                        Delimiter::Brace,
+                                        TokenStream::new(),
+                                    ))
+                                    .into(),
+                                );
+                            }
                         }
                     }
+                    return Ok(());
                 }
 
                 self.replace_expr(&mut r#if.cond, state)?;
@@ -1568,6 +1613,7 @@ impl<'a> TypleContext<'a> {
         &'a self,
         mac: &mut Macro,
         state: &'a mut BlockState,
+        const_if: bool,
     ) -> Result<impl Iterator<Item = Result<Expr>> + 'a> {
         let token_stream = std::mem::take(&mut mac.tokens);
         let default_span = token_stream.span();
@@ -1575,16 +1621,26 @@ impl<'a> TypleContext<'a> {
         let (pattern, range) = self.parse_pattern_range(&mut tokens, default_span)?;
         let expr = parse2::<Expr>(tokens.collect())?;
         let mut context = self.clone();
+        context.const_if = const_if;
         if let Some(ident) = &pattern {
             context.constants.insert(ident.clone(), 0);
         }
-        Ok(range.map(move |index| {
+        Ok(range.flat_map(move |index| {
             if let Some(ident) = &pattern {
                 *context.constants.get_mut(ident).unwrap() = index;
             }
             let mut expr = expr.clone();
-            context.replace_expr(&mut expr, state)?;
-            Ok(expr)
+            match context.replace_expr(&mut expr, state) {
+                Ok(_) => {
+                    if let Expr::Verbatim(_token_stream) = expr {
+                        // Verbatim causes typle to omit the component from the tuple
+                        None
+                    } else {
+                        Some(Ok(expr))
+                    }
+                }
+                Err(error) => Some(Err(error)),
+            }
         }))
     }
 
@@ -1687,9 +1743,9 @@ impl<'a> TypleContext<'a> {
         self.replace_attrs(&mut m.attrs)?;
         if let Some(macro_name) = m.mac.path.get_ident() {
             if macro_name == "typle_for" {
-                let elems = self.replace_typle_for_expr(&mut m.mac, state)?;
                 let expr = match &m.mac.delimiter {
                     MacroDelimiter::Paren(_) => {
+                        let elems = self.replace_typle_for_expr(&mut m.mac, state, false)?;
                         let tuple = ExprTuple {
                             attrs: std::mem::take(&mut m.attrs),
                             paren_token: token::Paren::default(),
@@ -1698,32 +1754,16 @@ impl<'a> TypleContext<'a> {
                         Expr::Tuple(tuple)
                     }
                     MacroDelimiter::Brace(_) => {
+                        let elems = self.replace_typle_for_expr(&mut m.mac, state, true)?;
                         let tuple = ExprTuple {
                             attrs: std::mem::take(&mut m.attrs),
                             paren_token: token::Paren::default(),
-                            elems: elems
-                                .filter_map(|result| {
-                                    result
-                                        .map(|expr| {
-                                            if let Expr::Block(ExprBlock {
-                                                block: Block { stmts, .. },
-                                                ..
-                                            }) = &expr
-                                            {
-                                                if stmts.is_empty() {
-                                                    // Empty block causes typle to omit the component from the tuple
-                                                    return None;
-                                                }
-                                            }
-                                            Some(expr)
-                                        })
-                                        .transpose()
-                                })
-                                .collect::<Result<_>>()?,
+                            elems: elems.collect::<Result<_>>()?,
                         };
                         Expr::Tuple(tuple)
                     }
                     MacroDelimiter::Bracket(_) => {
+                        let elems = self.replace_typle_for_expr(&mut m.mac, state, false)?;
                         let array = ExprArray {
                             attrs: std::mem::take(&mut m.attrs),
                             bracket_token: token::Bracket::default(),
@@ -1785,6 +1825,7 @@ impl<'a> TypleContext<'a> {
                             ));
                         };
                         let mut context = self.clone();
+                        context.const_if = true;
                         if let Some(ident) = &pattern {
                             context.constants.insert(ident.clone(), 0);
                         }
@@ -1795,9 +1836,13 @@ impl<'a> TypleContext<'a> {
                             let mut expr = expr.clone();
                             let mut state = BlockState::default();
                             context.replace_expr(&mut expr, &mut state)?;
-                            let mut pat = expr_to_pat(expr)?;
-                            context.replace_pat(&mut pat)?;
-                            tuple.elems.push(pat);
+                            if let Expr::Verbatim(_) = expr {
+                                // Verbatim omits the pattern from the tuple.
+                            } else {
+                                let mut pat = expr_to_pat(expr)?;
+                                context.replace_pat(&mut pat)?;
+                                tuple.elems.push(pat);
+                            }
                         }
                     }
                     MacroDelimiter::Bracket(_) => {
@@ -1819,9 +1864,18 @@ impl<'a> TypleContext<'a> {
         self.replace_attrs(&mut m.attrs)?;
         if let Some(macro_name) = m.mac.path.get_ident() {
             if macro_name == "typle_for" {
-                let elems = self.replace_typle_for_expr(&mut m.mac, state)?;
                 let expr = match m.mac.delimiter {
-                    MacroDelimiter::Paren(_) | MacroDelimiter::Brace(_) => {
+                    MacroDelimiter::Paren(_) => {
+                        let elems = self.replace_typle_for_expr(&mut m.mac, state, false)?;
+                        let tuple = ExprTuple {
+                            attrs: std::mem::take(&mut m.attrs),
+                            paren_token: token::Paren::default(),
+                            elems: elems.collect::<Result<_>>()?,
+                        };
+                        Expr::Tuple(tuple)
+                    }
+                    MacroDelimiter::Brace(_) => {
+                        let elems = self.replace_typle_for_expr(&mut m.mac, state, true)?;
                         let tuple = ExprTuple {
                             attrs: std::mem::take(&mut m.attrs),
                             paren_token: token::Paren::default(),
@@ -1830,6 +1884,7 @@ impl<'a> TypleContext<'a> {
                         Expr::Tuple(tuple)
                     }
                     MacroDelimiter::Bracket(_) => {
+                        let elems = self.replace_typle_for_expr(&mut m.mac, state, false)?;
                         let array = ExprArray {
                             attrs: std::mem::take(&mut m.attrs),
                             bracket_token: token::Bracket::default(),
@@ -1894,6 +1949,7 @@ impl<'a> TypleContext<'a> {
                             ));
                         };
                         let mut context = self.clone();
+                        context.const_if = true;
                         if let Some(ident) = &pattern {
                             context.constants.insert(ident.clone(), 0);
                         }
@@ -1904,11 +1960,10 @@ impl<'a> TypleContext<'a> {
                             let mut expr = expr.clone();
                             let mut state = BlockState::default();
                             context.replace_expr(&mut expr, &mut state)?;
-                            let mut ty = expr_to_type(expr)?;
-                            if let Type::Verbatim(_) = ty {
-                                // Verbatim with an empty TokenStream omits the type from the tuple.
-                                // `expr_to_type` only returns Verbatim with an empty TokenStream.
+                            if let Expr::Verbatim(_) = expr {
+                                // Verbatim omits the type from the tuple.
                             } else {
+                                let mut ty = expr_to_type(expr)?;
                                 context.replace_type(&mut ty)?;
                                 tuple.elems.push(ty);
                             }
@@ -2576,6 +2631,7 @@ fn expr_to_pat(expr: Expr) -> Result<Pat> {
                 .map(|expr| expr_to_pat(expr))
                 .collect::<Result<_>>()?,
         })),
+        Expr::Verbatim(token_stream) => Ok(Pat::Verbatim(token_stream)),
         _ => Err(Error::new(
             default_span,
             "typle does not support this pattern",
@@ -2671,6 +2727,7 @@ fn expr_to_type(expr: Expr) -> Result<Type> {
                 .map(expr_to_type)
                 .collect::<Result<_>>()?,
         })),
+        Expr::Verbatim(token_stream) => Ok(Type::Verbatim(token_stream)),
         _ => Err(Error::new(
             expr.span(),
             "typle does not handle this expression here",
