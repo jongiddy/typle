@@ -7,6 +7,7 @@ struct Looper<T> {
 }
 
 #[typle(Tuple for 8..=8)]
+#[allow(clippy::never_loop)]
 impl<T: Tuple> Looper<T> {
     fn for_loop(&self) {
         'label: for typle_index!(i) in 0..T::LEN {
@@ -60,6 +61,7 @@ pub fn do_continue<T: Tuple>(t: T) -> Vec<usize> {
 }
 
 #[typle(Tuple for 4..=4)]
+#[allow(clippy::never_loop)]
 pub fn do_continue_labelled<T: Tuple>(t: T) -> Vec<usize> {
     let mut output = Vec::new();
     'label: for typle_index!(i) in 0..T::LEN {
@@ -87,6 +89,7 @@ pub fn do_break<T: Tuple>(t: T) -> Vec<usize> {
 }
 
 #[typle(Tuple for 4..=4)]
+#[allow(clippy::never_loop)]
 pub fn do_break_labelled<T: Tuple>(t: T) -> Vec<usize> {
     let mut output = Vec::new();
     'label: for typle_index!(i) in 0..T::LEN {

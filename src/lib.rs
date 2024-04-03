@@ -484,7 +484,7 @@ impl TryFrom<TokenStream> for TypleMacro {
             .start
             .as_ref()
             .map(|expr| {
-                evaluate_usize(&expr).ok_or_else(|| Error::new(expr.span(), "range start invalid"))
+                evaluate_usize(expr).ok_or_else(|| Error::new(expr.span(), "range start invalid"))
             })
             .transpose()?
             .ok_or_else(|| Error::new(range.span(), "range start must be bounded"))?;
@@ -493,11 +493,11 @@ impl TryFrom<TokenStream> for TypleMacro {
             .as_ref()
             .ok_or_else(|| Error::new(range.span(), "range end must be bounded"))?;
         let max = match range.limits {
-            syn::RangeLimits::HalfOpen(_) => evaluate_usize(&end)
+            syn::RangeLimits::HalfOpen(_) => evaluate_usize(end)
                 .and_then(|max| max.checked_sub(1))
                 .ok_or_else(|| Error::new(end.span(), "range end invalid1"))?,
             syn::RangeLimits::Closed(_) => {
-                evaluate_usize(&end).ok_or_else(|| Error::new(end.span(), "range end invalid2"))?
+                evaluate_usize(end).ok_or_else(|| Error::new(end.span(), "range end invalid"))?
             }
         };
         if max < min {

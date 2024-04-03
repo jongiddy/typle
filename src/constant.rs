@@ -1,93 +1,57 @@
-use syn::{Expr, Stmt};
+use syn::spanned::Spanned as _;
+use syn::{Error, Expr, Result, Stmt};
 
-pub fn evaluate_bool(expr: &Expr) -> Option<bool> {
+#[allow(clippy::single_match)]
+pub fn evaluate_bool(expr: &Expr) -> Result<bool> {
     match expr {
-        Expr::Array(_) => todo!(),
-        Expr::Assign(_) => todo!(),
-        Expr::Async(_) => todo!(),
-        Expr::Await(_) => todo!(),
         Expr::Binary(binary) => match binary.op {
             syn::BinOp::Eq(_) => {
                 if let Some(left) = evaluate_usize(&binary.left) {
                     if let Some(right) = evaluate_usize(&binary.right) {
-                        return Some(left == right);
+                        return Ok(left == right);
                     }
                 }
             }
             syn::BinOp::Ne(_) => {
                 if let Some(left) = evaluate_usize(&binary.left) {
                     if let Some(right) = evaluate_usize(&binary.right) {
-                        return Some(left != right);
+                        return Ok(left != right);
                     }
                 }
             }
             syn::BinOp::Lt(_) => {
                 if let Some(left) = evaluate_usize(&binary.left) {
                     if let Some(right) = evaluate_usize(&binary.right) {
-                        return Some(left < right);
+                        return Ok(left < right);
                     }
                 }
             }
             syn::BinOp::Le(_) => {
                 if let Some(left) = evaluate_usize(&binary.left) {
                     if let Some(right) = evaluate_usize(&binary.right) {
-                        return Some(left <= right);
+                        return Ok(left <= right);
                     }
                 }
             }
             syn::BinOp::Gt(_) => {
                 if let Some(left) = evaluate_usize(&binary.left) {
                     if let Some(right) = evaluate_usize(&binary.right) {
-                        return Some(left > right);
+                        return Ok(left > right);
                     }
                 }
             }
             syn::BinOp::Ge(_) => {
                 if let Some(left) = evaluate_usize(&binary.left) {
                     if let Some(right) = evaluate_usize(&binary.right) {
-                        return Some(left >= right);
+                        return Ok(left >= right);
                     }
                 }
             }
             _ => {}
         },
-        Expr::Block(_) => todo!(),
-        Expr::Break(_) => todo!(),
-        Expr::Call(_) => todo!(),
-        Expr::Cast(_) => todo!(),
-        Expr::Closure(_) => todo!(),
-        Expr::Const(_) => todo!(),
-        Expr::Continue(_) => todo!(),
-        Expr::Field(_) => todo!(),
-        Expr::ForLoop(_) => todo!(),
-        Expr::Group(_) => todo!(),
-        Expr::If(_) => todo!(),
-        Expr::Index(_) => todo!(),
-        Expr::Infer(_) => todo!(),
-        Expr::Let(_) => todo!(),
-        Expr::Lit(_) => todo!(),
-        Expr::Loop(_) => todo!(),
-        Expr::Macro(_) => todo!(),
-        Expr::Match(_) => todo!(),
-        Expr::MethodCall(_) => todo!(),
-        Expr::Paren(_) => todo!(),
-        Expr::Path(_) => todo!(),
-        Expr::Range(_) => todo!(),
-        Expr::Reference(_) => todo!(),
-        Expr::Repeat(_) => todo!(),
-        Expr::Return(_) => todo!(),
-        Expr::Struct(_) => todo!(),
-        Expr::Try(_) => todo!(),
-        Expr::TryBlock(_) => todo!(),
-        Expr::Tuple(_) => todo!(),
-        Expr::Unary(_) => todo!(),
-        Expr::Unsafe(_) => todo!(),
-        Expr::Verbatim(_) => todo!(),
-        Expr::While(_) => todo!(),
-        Expr::Yield(_) => todo!(),
-        _ => todo!(),
+        _ => {}
     }
-    None
+    Err(Error::new(expr.span(), "unsupported boolean expression"))
 }
 
 pub fn evaluate_range(expr: &Expr) -> Option<&syn::ExprRange> {

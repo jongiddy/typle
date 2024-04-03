@@ -32,9 +32,7 @@ mod tuple {
         type State = ();
         type Output = ();
 
-        fn extract(&self, _state: Option<Self::State>) -> Self::Output {
-            ()
-        }
+        fn extract(&self, _state: Option<Self::State>) -> Self::Output {}
     }
 
     pub enum TupleSequenceState<T>
