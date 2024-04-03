@@ -13,7 +13,7 @@ use syn::{
     GenericArgument, GenericParam, Generics, ImplItem, Index, Item, ItemImpl, Label, Lit, LitInt,
     Macro, MacroDelimiter, Member, Meta, Pat, PatMacro, PatParen, PatReference, PatTuple, PatWild,
     Path, PathArguments, PathSegment, PredicateType, QSelf, RangeLimits, Result, ReturnType, Stmt,
-    StmtMacro, Token, Type, TypeInfer, TypeMacro, TypeParamBound, TypePath, TypeTuple, Variant,
+    Token, Type, TypeInfer, TypeMacro, TypeParamBound, TypePath, TypeTuple, Variant,
     WherePredicate,
 };
 
@@ -309,9 +309,10 @@ impl<'a> TypleContext<'a> {
                     block.stmts.push(Stmt::Expr(expr, semi));
                 }
                 Stmt::Macro(mut stmt_macro) => {
-                    self.replace_attrs(&mut stmt_macro.attrs)?;
-                    if let Some(stmt) = self.replace_macro_stmt(&mut stmt_macro, state)? {
-                        block.stmts.push(stmt);
+                    if let Some(stmt) =
+                        self.replace_macro_expr(&mut stmt_macro.mac, &mut stmt_macro.attrs, state)?
+                    {
+                        block.stmts.push(Stmt::Expr(stmt, stmt_macro.semi_token));
                     } else {
                         block.stmts.push(Stmt::Macro(stmt_macro));
                     }
@@ -679,7 +680,9 @@ impl<'a> TypleContext<'a> {
                 state.propagate(inner_state, r#loop.label.as_ref());
             }
             Expr::Macro(r#macro) => {
-                if let Some(e) = self.replace_macro_expr(r#macro, state)? {
+                if let Some(e) =
+                    self.replace_macro_expr(&mut r#macro.mac, &mut r#macro.attrs, state)?
+                {
                     *expr = e;
                 }
             }
@@ -1693,7 +1696,8 @@ impl<'a> TypleContext<'a> {
 
     fn replace_macro_expr(
         &self,
-        m: &mut ExprMacro,
+        mac: &mut Macro,
+        attrs: &mut Vec<Attribute>,
         state: &mut BlockState,
     ) -> Result<Option<Expr>> {
         // typle_for!(i in .. => Some<t[[i]]) -> (Some<t.0>, Some<t.1>)
@@ -1701,32 +1705,32 @@ impl<'a> TypleContext<'a> {
         // as opposed to
         // Some(t) -> Some((t.0, t.1))
         // t.to_string() -> (t.0, t.1).to_string()
-        self.replace_attrs(&mut m.attrs)?;
-        if let Some(macro_name) = m.mac.path.get_ident() {
+        self.replace_attrs(attrs)?;
+        if let Some(macro_name) = mac.path.get_ident() {
             if macro_name == "typle_for" {
-                let expr = match &m.mac.delimiter {
+                let expr = match &mac.delimiter {
                     MacroDelimiter::Paren(_) => {
-                        let elems = self.replace_typle_for_expr(&mut m.mac, state, false)?;
+                        let elems = self.replace_typle_for_expr(mac, state, false)?;
                         let tuple = ExprTuple {
-                            attrs: std::mem::take(&mut m.attrs),
+                            attrs: std::mem::take(attrs),
                             paren_token: token::Paren::default(),
                             elems: elems.collect::<Result<_>>()?,
                         };
                         Expr::Tuple(tuple)
                     }
                     MacroDelimiter::Brace(_) => {
-                        let elems = self.replace_typle_for_expr(&mut m.mac, state, true)?;
+                        let elems = self.replace_typle_for_expr(mac, state, true)?;
                         let tuple = ExprTuple {
-                            attrs: std::mem::take(&mut m.attrs),
+                            attrs: std::mem::take(attrs),
                             paren_token: token::Paren::default(),
                             elems: elems.collect::<Result<_>>()?,
                         };
                         Expr::Tuple(tuple)
                     }
                     MacroDelimiter::Bracket(_) => {
-                        let elems = self.replace_typle_for_expr(&mut m.mac, state, false)?;
+                        let elems = self.replace_typle_for_expr(mac, state, false)?;
                         let array = ExprArray {
-                            attrs: std::mem::take(&mut m.attrs),
+                            attrs: std::mem::take(attrs),
                             bracket_token: token::Bracket::default(),
                             elems: elems.collect::<Result<_>>()?,
                         };
@@ -1736,14 +1740,14 @@ impl<'a> TypleContext<'a> {
                 return Ok(Some(expr));
             } else if macro_name == "typle_fold" {
                 let expr = Expr::Block(ExprBlock {
-                    attrs: std::mem::take(&mut m.attrs),
+                    attrs: std::mem::take(attrs),
                     label: None,
-                    block: self.replace_typle_fold(&mut m.mac, state)?,
+                    block: self.replace_typle_fold(mac, state)?,
                 });
                 return Ok(Some(expr));
             }
         }
-        m.mac.tokens = self.replace_macro_token_stream(std::mem::take(&mut m.mac.tokens))?;
+        mac.tokens = self.replace_macro_token_stream(std::mem::take(&mut mac.tokens))?;
         Ok(None)
     }
 
@@ -1811,57 +1815,6 @@ impl<'a> TypleContext<'a> {
                     }
                 }
                 return Ok(Some(Pat::Tuple(tuple)));
-            }
-        }
-        m.mac.tokens = self.replace_macro_token_stream(std::mem::take(&mut m.mac.tokens))?;
-        Ok(None)
-    }
-
-    fn replace_macro_stmt(
-        &self,
-        m: &mut StmtMacro,
-        state: &mut BlockState,
-    ) -> Result<Option<Stmt>> {
-        self.replace_attrs(&mut m.attrs)?;
-        if let Some(macro_name) = m.mac.path.get_ident() {
-            if macro_name == "typle_for" {
-                let expr = match m.mac.delimiter {
-                    MacroDelimiter::Paren(_) => {
-                        let elems = self.replace_typle_for_expr(&mut m.mac, state, false)?;
-                        let tuple = ExprTuple {
-                            attrs: std::mem::take(&mut m.attrs),
-                            paren_token: token::Paren::default(),
-                            elems: elems.collect::<Result<_>>()?,
-                        };
-                        Expr::Tuple(tuple)
-                    }
-                    MacroDelimiter::Brace(_) => {
-                        let elems = self.replace_typle_for_expr(&mut m.mac, state, true)?;
-                        let tuple = ExprTuple {
-                            attrs: std::mem::take(&mut m.attrs),
-                            paren_token: token::Paren::default(),
-                            elems: elems.collect::<Result<_>>()?,
-                        };
-                        Expr::Tuple(tuple)
-                    }
-                    MacroDelimiter::Bracket(_) => {
-                        let elems = self.replace_typle_for_expr(&mut m.mac, state, false)?;
-                        let array = ExprArray {
-                            attrs: std::mem::take(&mut m.attrs),
-                            bracket_token: token::Bracket::default(),
-                            elems: elems.collect::<Result<_>>()?,
-                        };
-                        Expr::Array(array)
-                    }
-                };
-                return Ok(Some(Stmt::Expr(expr, m.semi_token)));
-            } else if macro_name == "typle_fold" {
-                let expr = Expr::Block(ExprBlock {
-                    attrs: std::mem::take(&mut m.attrs),
-                    label: None,
-                    block: self.replace_typle_fold(&mut m.mac, state)?,
-                });
-                return Ok(Some(Stmt::Expr(expr, m.semi_token)));
             }
         }
         m.mac.tokens = self.replace_macro_token_stream(std::mem::take(&mut m.mac.tokens))?;
