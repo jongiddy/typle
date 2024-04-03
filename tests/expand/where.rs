@@ -29,11 +29,12 @@ where
 
 // typle_bound! allows the component index to be used in the trait bound
 #[typle(Tuple for 1..=2)]
-impl<T> TraitD for TupleD<T<{ .. }>>
+impl<T, F> TraitD for TupleD<T<{ .. }>>
 where
     T: Tuple,
     typle_bound!(i in ..T::LEN => T<{i}>): Mul<T<{ T::LEN - i - 1 }>>,
     T<{ T::LEN - 1 }>: AsRef<str>,
+    F: Fn(T) -> T,
 {
     fn g() {
         // T{ .. } expands to all types in a referenced enum
