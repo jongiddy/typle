@@ -4,7 +4,8 @@ version = "0.9.9"
 edition = "2021"
 description = "Generic tuple bounds and transformations"
 license = "MIT"
-keywords = ["tuple"]
+categories = ["rust-patterns"]
+keywords = ["tuple", "metaprogramming", "variadic"]
 repository = "https://github.com/jongiddy/typle"
 rust-version = "1.65"
 

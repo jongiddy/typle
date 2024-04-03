@@ -56,9 +56,7 @@ pub mod doc_typle {
         impl Extract for () {
             type State = ();
             type Output = ();
-            fn extract(&self, _state: Option<Self::State>) -> Self::Output {
-                ()
-            }
+            fn extract(&self, _state: Option<Self::State>) -> Self::Output {}
         }
         pub enum TupleSequenceState<T0, T1, T2, T3>
         where
@@ -254,6 +252,7 @@ pub mod for_loop {
     struct Looper<T> {
         t: T,
     }
+    #[allow(clippy::never_loop)]
     impl<T0, T1, T2, T3, T4, T5, T6, T7> Looper<(T0, T1, T2, T3, T4, T5, T6, T7)> {
         fn for_loop(&self) {
             loop {
@@ -381,6 +380,7 @@ pub mod for_loop {
     }
     impl<T0, T1, T2, T3> _typle_fn_do_continue_labelled for ((T0, T1, T2, T3),) {
         type Return = Vec<usize>;
+        #[allow(clippy::never_loop)]
         fn apply(self) -> Self::Return {
             let (t,) = self;
             {
@@ -482,6 +482,7 @@ pub mod for_loop {
     }
     impl<T0, T1, T2, T3> _typle_fn_do_break_labelled for ((T0, T1, T2, T3),) {
         type Return = Vec<usize>;
+        #[allow(clippy::never_loop)]
         fn apply(self) -> Self::Return {
             let (t,) = self;
             {
@@ -786,7 +787,6 @@ pub mod function {
         type Return;
         fn apply(self) -> Self::Return;
     }
-    #[rustfmt::skip]
     pub fn zip<A, B>(first: A, second: B) -> <(A, B) as _typle_fn_zip>::Return
     where
         (A, B): _typle_fn_zip,
@@ -795,6 +795,7 @@ pub mod function {
     }
     impl _typle_fn_zip for ((), ()) {
         type Return = ();
+        #[rustfmt::skip]
         fn apply(self) -> Self::Return {
             #[allow(unused_variables)]
             let (first, second) = self;
@@ -803,6 +804,7 @@ pub mod function {
     }
     impl<A0, B0> _typle_fn_zip for ((A0,), (B0,)) {
         type Return = ((A0, B0),);
+        #[rustfmt::skip]
         fn apply(self) -> Self::Return {
             let (first, second) = self;
             { ((first.0, second.0),) }
@@ -810,6 +812,7 @@ pub mod function {
     }
     impl<A0, A1, B0, B1> _typle_fn_zip for ((A0, A1), (B0, B1)) {
         type Return = ((A0, B0), (A1, B1));
+        #[rustfmt::skip]
         fn apply(self) -> Self::Return {
             let (first, second) = self;
             { ((first.0, second.0), (first.1, second.1)) }
@@ -817,6 +820,7 @@ pub mod function {
     }
     impl<A0, A1, A2, B0, B1, B2> _typle_fn_zip for ((A0, A1, A2), (B0, B1, B2)) {
         type Return = ((A0, B0), (A1, B1), (A2, B2));
+        #[rustfmt::skip]
         fn apply(self) -> Self::Return {
             let (first, second) = self;
             { ((first.0, second.0), (first.1, second.1), (first.2, second.2)) }
@@ -825,6 +829,7 @@ pub mod function {
     impl<A0, A1, A2, A3, B0, B1, B2, B3> _typle_fn_zip
     for ((A0, A1, A2, A3), (B0, B1, B2, B3)) {
         type Return = ((A0, B0), (A1, B1), (A2, B2), (A3, B3));
+        #[rustfmt::skip]
         fn apply(self) -> Self::Return {
             let (first, second) = self;
             {
@@ -840,6 +845,7 @@ pub mod function {
     impl<A0, A1, A2, A3, A4, B0, B1, B2, B3, B4> _typle_fn_zip
     for ((A0, A1, A2, A3, A4), (B0, B1, B2, B3, B4)) {
         type Return = ((A0, B0), (A1, B1), (A2, B2), (A3, B3), (A4, B4));
+        #[rustfmt::skip]
         fn apply(self) -> Self::Return {
             let (first, second) = self;
             {
@@ -856,6 +862,7 @@ pub mod function {
     impl<A0, A1, A2, A3, A4, A5, B0, B1, B2, B3, B4, B5> _typle_fn_zip
     for ((A0, A1, A2, A3, A4, A5), (B0, B1, B2, B3, B4, B5)) {
         type Return = ((A0, B0), (A1, B1), (A2, B2), (A3, B3), (A4, B4), (A5, B5));
+        #[rustfmt::skip]
         fn apply(self) -> Self::Return {
             let (first, second) = self;
             {
@@ -881,6 +888,7 @@ pub mod function {
             (A5, B5),
             (A6, B6),
         );
+        #[rustfmt::skip]
         fn apply(self) -> Self::Return {
             let (first, second) = self;
             {
@@ -908,6 +916,7 @@ pub mod function {
             (A6, B6),
             (A7, B7),
         );
+        #[rustfmt::skip]
         fn apply(self) -> Self::Return {
             let (first, second) = self;
             {
@@ -956,6 +965,7 @@ pub mod function {
             (A7, B7),
             (A8, B8),
         );
+        #[rustfmt::skip]
         fn apply(self) -> Self::Return {
             let (first, second) = self;
             {
@@ -1011,6 +1021,7 @@ pub mod function {
             (A8, B8),
             (A9, B9),
         );
+        #[rustfmt::skip]
         fn apply(self) -> Self::Return {
             let (first, second) = self;
             {
@@ -1070,6 +1081,7 @@ pub mod function {
             (A9, B9),
             (A10, B10),
         );
+        #[rustfmt::skip]
         fn apply(self) -> Self::Return {
             let (first, second) = self;
             {
@@ -1133,6 +1145,7 @@ pub mod function {
             (A10, B10),
             (A11, B11),
         );
+        #[rustfmt::skip]
         fn apply(self) -> Self::Return {
             let (first, second) = self;
             {

@@ -30,6 +30,7 @@ fn test_hash() {
 }
 
 #[test]
+#[allow(clippy::unit_cmp)]
 fn test_zip() {
     assert_eq!(
         zip(("LHR", "FCO", "ZRH"), (51.5, 41.8, 47.5)),
