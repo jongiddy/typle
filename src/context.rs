@@ -2315,8 +2315,13 @@ impl<'a> TypleContext<'a> {
                         }
                     }
                 }
-                PathArguments::Parenthesized(p) => {
-                    abort!(p, "parenthesized arguments not supported")
+                PathArguments::Parenthesized(args) => {
+                    for input in &mut args.inputs {
+                        self.replace_type(input)?;
+                    }
+                    if let ReturnType::Type(_, ty) = &mut args.output {
+                        self.replace_type(ty)?;
+                    }
                 }
             }
             path.segments.push(path_segment);
