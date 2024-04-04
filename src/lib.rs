@@ -51,9 +51,9 @@
 //! index expression*, an expression that only uses literal `usize` values or
 //! *typle index variables* created by one of several macros.
 //!
-//! The [`typle_for!`] macro creates a new tuple type or value. Inside the macro
-//! the typle index variable can provide access to each component of an existing
-//! tuple type or value.
+//! The [`typle_for!`] macro can create a new tuple type or expression. Inside
+//! the macro the typle index variable can provide access to each component of
+//! an existing tuple type or expression.
 //!
 //! The associated constant `LEN` provides the length of the tuple in each
 //! generated item. This value can be used in typle index expressions.
@@ -63,8 +63,8 @@
 //! // Split off the first component
 //! #[typle(Tuple for 1..=12)]
 //! fn split<T: Tuple>(
-//!     t: T  // t: (T0, T1, T2,...)
-//! ) -> (T<0>, typle_for!(i in 1..T::LEN => T<{i}>))   // (T0, (T1, T2,...))
+//!     t: T  // t: (T<0>, T<1>, T<2>,...)
+//! ) -> (T<0>, typle_for!(i in 1..T::LEN => T<{i}>))  // (T<0>, (T<1>, T<2>,...))
 //! {
 //!     (t[[0]], typle_for!(i in 1..T::LEN => t[[i]]))  // (t.0, (t.1, t.2,...))
 //! }
@@ -104,11 +104,11 @@
 //! // Multiply the components of two tuples
 //! #[typle(Tuple for 0..=12)]
 //! fn multiply<S: Tuple, T: Tuple>(
-//!     s: S,  // s: (S0,...)
-//!     t: T,  // t: (T0,...)
-//! ) -> typle_for!(i in ..T::LEN => <S<{i}> as Mul<T<{i}>>>::Output)  // (<S0 as Mul<T0>>::Output,...)
+//!     s: S,  // s: (S<0>,...)
+//!     t: T,  // t: (T<0>,...)
+//! ) -> typle_for!(i in ..T::LEN => <S<{i}> as Mul<T<{i}>>>::Output)  // (<S<0> as Mul<T<0>>>::Output,...)
 //! where
-//!     typle_bound!(i in ..T::LEN => S<{i}>): Mul<T<{i}>>,  // S0: Mul<T0>,...
+//!     typle_bound!(i in ..T::LEN => S<{i}>): Mul<T<{i}>>,  // S<0>: Mul<T<0>>,...
 //! {
 //!     typle_for!(i in ..T::LEN => s[[i]] * t[[i]])  // (s.0 * t.0,...)
 //! }
@@ -224,8 +224,8 @@
 //!         T: Tuple,
 //!         T<_>: Extract,
 //!     {
-//!         // The state contains the output from all previous components and the state
-//!         // of the current component.
+//!         // The state contains the output from all previous components and
+//!         // the state of the current component.
 //!         type State = TupleSequenceState<T<{ .. }>>;
 //!         type Output = typle_for!(i in ..T::LEN => <T<{i}> as Extract>::Output);
 //!
@@ -535,9 +535,18 @@ impl TryFrom<TokenStream> for TypleMacro {
 
 /// Reduce a tuple to a single value.
 ///
-/// The `typle_fold!` macro applies a closure to collect tuple components into a
-/// single value. The arguments to the macro are an initial value terminated by
-/// a semi-colon and a closure to apply to the current value.
+/// The `typle_fold!` macro repeatedly applies an expression to an accumulator
+/// to collect tuple components into a single value. The macro starts with an
+/// initial value. It then loops through a typle index variable, modifying an
+/// accumulator with an expression on each iteration.
+///
+/// The name of the accumulator is provided between vertical bars (`|acc|`)
+/// followed by the expression. This makes it look similar to a closure, which
+/// it usually acts like. But there are some differences:
+/// - the "closure parameter" naming the accumulator can only contain a single identifier;
+/// - a `break` in the expression terminates the fold early with the value of the `break`;
+/// - a `return` in the expression returns from the enclosing function (since
+/// the expression is not actually in a closure).
 ///
 /// Examples:
 /// ```
@@ -548,61 +557,65 @@ impl TryFrom<TokenStream> for TypleMacro {
 /// }
 /// // An empty tuple uses the initial value.
 /// assert_eq!(sum(()), 0);
-/// // Otherwise the value is passed to the closure to create a new value, which
-/// // is then passed to the next iteration.
+/// // Otherwise the accumulator is passed to the expression to create a new
+/// // value, which is then passed to the next iteration.
 /// assert_eq!(sum((1, 4, 9, 16)), 30);
 /// ```
-/// This example can also be implemented using a `for` loop:
+///
+/// Folds can be short-circuited using a `break`. The `break` value must match
+/// the final type of the `typle_fold!` without the `break`.
+///
 /// ```rust
 /// # use typle::typle;
+/// // Return whether all the tuple components are true.
 /// #[typle(Tuple for 0..=12)]
-/// pub fn sum<T: Tuple<u32>>(t: T) -> u32 {
-///     let mut total = 0;
-///     for typle_index!(i) in 0..T::LEN {
-///         total += t[[i]];
-///     }
-///     total
+/// pub fn all<T: Tuple<bool>>(t: T) -> bool {
+///     // If any component is `false`, return `false` immediately. This means
+///     // that the boolean accumulator is always `true` and can be ignored.
+///     typle_fold!(
+///         true;
+///         i in ..T::LEN => |_| if t[[i]] { true } else { break false; }
+///     )
 /// }
-/// # assert_eq!(sum(()), 0);
-/// # assert_eq!(sum((1, 4, 9, 16)), 30);
+/// assert_eq!(all((2 + 2 == 4, "hi".len() == 2)), true);
+/// assert_eq!(all((1 + 1 == 3, "hi".len() == 2)), false);
+/// assert_eq!(all(()), true);
 /// ```
 ///
-/// But the `typle_fold!` macro allows the accumulated value to change type on
-/// each iteration. In this example, the type of the accumulator after each
-/// iteration is an `Option` containing `i + 1` components.
+/// The examples so far could also be implemented using a `for` loop. However,
+/// unlike a `for` loop, the `typle_fold!` macro allows the accumulator to
+/// change type on each iteration. In the next example, the type of the
+/// accumulator after each iteration is an `Option` containing a tuple with one
+/// extra component from the prior iteration.
 ///
 /// ```rust
 /// # use typle::typle;
 /// trait CoalesceSome<T> {
 ///     type Output;
 ///
-///     /// Coalesce a tuple of options into an option of tuple that is `Some` only
-///     /// if all the components are `Some`.
+///     /// Coalesce a tuple of Options into an Option of tuple that is `Some`
+///     /// only if all the components are `Some`.
 ///     fn coalesce_some(self) -> Self::Output;
 /// }
 ///
 /// #[typle(Tuple for 0..=12)]
-/// impl<T> CoalesceSome<T> for typle_for!(i in ..T::LEN => Option<T<{i}>>)
-/// where
-///     T: Tuple,
-///     T<_>: Copy,
-/// {
+/// impl<T: Tuple> CoalesceSome<T> for typle_for!(i in ..T::LEN => Option<T<{i}>>) {
 ///     type Output = Option<T>;
 ///
 ///     fn coalesce_some(self) -> Self::Output
 ///     {
 ///         typle_fold!(
-///             Some(());  // Initially an empty tuple
-///             i in ..T::LEN => |opt| opt.and_then(
-///                 |_prev| if let Some(curr) = self[[i]] {
-///                     // Append the current value to the existing tuple
-///                     Some(typle_for!(
-///                         j in ..=i => if typle_const!(j < i) { _prev[[j]] } else { curr }
-///                     ))
-///                 } else {
-///                     None
-///                 }
-///             )
+///             Some(());  // Initially an empty tuple wrapped in `Some`
+///             i in ..T::LEN => |opt| if let (Some(prior), Some(curr)) = (opt, self[[i]]) {
+///                 // Append the current value to the prior tuple to make the
+///                 // accumulator `Some(T<0>,...,T<{i}>)`
+///                 Some(typle_for!(
+///                     j in ..=i => if typle_const!(j < i) { prior[[j]] } else { curr }
+///                 ))
+///             } else {
+///                 // If `None` is found at any point, short-circuit with a `None` result
+///                 break None;
+///             }
 ///         )
 ///     }
 /// }
@@ -653,7 +666,7 @@ pub fn typle_fold(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
 /// expressions are always const so `typle_const!` is not required.
 /// ```
 /// # use typle::typle;
-/// #[typle(Tuple for 0..=12)]
+/// #[typle(Tuple for 0..12)]
 /// fn append<T: Tuple, A>(
 ///     t: T,
 ///     a: A,
@@ -691,9 +704,9 @@ pub fn typle_fold(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
 /// fn split_components<T: Tuple>(
 ///     t: T
 /// ) -> (
-///     // (T0, T2,...)
+///     // (T<0>, T<2>,...)
 ///     typle_for!{i in ..T::LEN => if i % 2 == 0 { typle_ty!(T<{i}>) }},
-///     // (T1, T3,...)
+///     // (T<1>, T<3>,...)
 ///     typle_for!{i in ..T::LEN => if i % 2 == 1 { typle_ty!(T<{i}>) }},
 /// ) {
 ///     (
