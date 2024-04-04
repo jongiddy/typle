@@ -47,7 +47,7 @@ impl Typle {
 #[derive(Default)]
 pub struct BlockState {
     unlabelled_break: bool,
-    unlabelled_continue: bool,
+    unlabelled_continue: Option<Span>,
     labelled_control_flow: HashSet<Ident>,
     suspicious_ident: Option<Ident>,
 }
@@ -424,7 +424,7 @@ impl<'a> TypleContext<'a> {
                         state.labelled_control_flow.insert(lt.ident.clone());
                     }
                     None => {
-                        state.unlabelled_continue = true;
+                        state.unlabelled_continue = Some(cont.span());
                     }
                 }
             }
@@ -532,7 +532,7 @@ impl<'a> TypleContext<'a> {
                                     };
                                     stmts.push(stmt);
                                     check_for_break = true;
-                                } else if inner_state.unlabelled_continue {
+                                } else if inner_state.unlabelled_continue.is_some() {
                                     // Unlabelled `continue` needs an inner loop to continue to.
                                     if !has_typle_break {
                                         let stmt = parse_quote! {
@@ -1608,12 +1608,18 @@ impl<'a> TypleContext<'a> {
         }))
     }
 
-    fn replace_typle_fold(&self, mac: &mut Macro, state: &mut BlockState) -> Result<Block> {
+    fn replace_typle_fold(
+        &self,
+        mac: &mut Macro,
+        attrs: Vec<Attribute>,
+        state: &mut BlockState,
+        default_span: Span,
+    ) -> Result<Expr> {
+        let mut inner_state = BlockState::default();
         let token_stream = std::mem::take(&mut mac.tokens);
-        let default_span = token_stream.span();
         let mut tokens = token_stream.into_iter();
         let mut init_expr = Self::parse_init_expr(&mut tokens, default_span)?;
-        self.replace_expr(&mut init_expr, state)?;
+        self.replace_expr(&mut init_expr, &mut inner_state)?;
         let (pattern, mut range) = self.parse_pattern_range(&mut tokens, default_span)?;
         let fold_ident = Self::parse_fold_ident(&mut tokens, default_span)?;
         let fold_pat = Pat::Ident(syn::PatIdent {
@@ -1648,7 +1654,7 @@ impl<'a> TypleContext<'a> {
             }
             let context = ctx.as_ref().map_or(self, |c| &c.0);
             let mut expr = expr.clone();
-            context.replace_expr(&mut expr, state)?;
+            context.replace_expr(&mut expr, &mut inner_state)?;
             stmts.push(Stmt::Local(syn::Local {
                 attrs: Vec::new(),
                 let_token: token::Let::default(),
@@ -1667,7 +1673,7 @@ impl<'a> TypleContext<'a> {
             }
             let context = ctx.as_ref().map_or(self, |c| &c.0);
             let mut expr = expr;
-            context.replace_expr(&mut expr, state)?;
+            context.replace_expr(&mut expr, &mut inner_state)?;
             stmts.push(Stmt::Local(syn::Local {
                 attrs: Vec::new(),
                 let_token: token::Let::default(),
@@ -1680,18 +1686,35 @@ impl<'a> TypleContext<'a> {
                 semi_token: token::Semi::default(),
             }));
         }
+        if let Some(span) = inner_state.unlabelled_continue {
+            abort!(
+                span,
+                "unlabelled `continue` not supported in `typle_fold!` macro"
+            );
+        }
+        state.propagate(inner_state, None);
         stmts.push(Stmt::Expr(
-            Expr::Path(ExprPath {
+            Expr::Break(syn::ExprBreak {
                 attrs: Vec::new(),
-                qself: None,
-                path: ident_to_path(fold_ident),
+                break_token: token::Break::default(),
+                label: None,
+                expr: Some(Box::new(Expr::Path(ExprPath {
+                    attrs: Vec::new(),
+                    qself: None,
+                    path: ident_to_path(fold_ident),
+                }))),
             }),
-            None,
+            Some(token::Semi::default()),
         ));
-        Ok(Block {
-            brace_token: token::Brace::default(),
-            stmts,
-        })
+        Ok(Expr::Loop(syn::ExprLoop {
+            attrs,
+            label: None,
+            loop_token: token::Loop::default(),
+            body: Block {
+                brace_token: token::Brace::default(),
+                stmts,
+            },
+        }))
     }
 
     fn replace_macro_expr(
@@ -1739,11 +1762,8 @@ impl<'a> TypleContext<'a> {
                 };
                 return Ok(Some(expr));
             } else if macro_name == "typle_fold" {
-                let expr = Expr::Block(ExprBlock {
-                    attrs: std::mem::take(attrs),
-                    label: None,
-                    block: self.replace_typle_fold(mac, state)?,
-                });
+                let expr =
+                    self.replace_typle_fold(mac, std::mem::take(attrs), state, macro_name.span())?;
                 return Ok(Some(expr));
             }
         }
@@ -2019,19 +2039,22 @@ impl<'a> TypleContext<'a> {
 
     fn parse_fold_ident(tokens: &mut impl Iterator<Item = TokenTree>, span: Span) -> Result<Ident> {
         let Some(TokenTree::Punct(punct)) = tokens.next() else {
-            return Err(Error::new(span, "expected closure"));
+            return Err(Error::new(span, "expected `=> |accumulator| expression`"));
         };
         if punct.as_char() != '|' {
-            return Err(Error::new(span, "expected closure"));
+            return Err(Error::new(span, "expected `=> |accumulator| expression`"));
         }
-        let Some(TokenTree::Ident(ident)) = tokens.next() else {
-            return Err(Error::new(span, "expected closure"));
+        let Some(TokenTree::Ident(mut ident)) = tokens.next() else {
+            return Err(Error::new(span, "expected `=> |accumulator| expression`"));
         };
         let Some(TokenTree::Punct(punct)) = tokens.next() else {
-            return Err(Error::new(span, "expected closure"));
+            return Err(Error::new(span, "expected `=> |accumulator| expression`"));
         };
         if punct.as_char() != '|' {
-            return Err(Error::new(span, "expected closure"));
+            return Err(Error::new(span, "expected `=> |accumulator| expression`"));
+        }
+        if ident == "_" {
+            ident = Ident::new("_typle", ident.span());
         }
         Ok(ident)
     }

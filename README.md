@@ -22,7 +22,7 @@ same length.
 
 The `typle_for!` macro loops over an index returning a new tuple with the
 specified components. For the function return type it creates a type tuple:
-`((A.0, B.0), (A.1, B.1),...)`. In the function body it creates a value tuple:
+`((A<0>, B<0>), (A<1>, B<1>),...)`. In the function body it creates a value tuple:
 `((a.0, b.0), (a.1, b.1),...)`.
 
 ```rust
