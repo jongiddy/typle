@@ -533,20 +533,62 @@ impl TryFrom<TokenStream> for TypleMacro {
     }
 }
 
+/// Short-circuiting check that all values are true.
+///
+/// ```rust
+/// # use typle::typle;
+/// #[typle(Tuple for 0..=12)]
+/// fn check<T: Tuple<&str>>(t: T) -> [bool; 2] {
+///     [
+///         typle_all!(i in ..T::LEN => t[[i]].len() > 5),
+///         typle_any!(i in ..T::LEN => t[[i]].len() > 5),
+///     ]
+/// }
+/// assert_eq!(check(("the", "longest", "word")), [false, true]);
+/// assert_eq!(check(()), [true, false]);
+/// ```
+///
+#[proc_macro]
+pub fn typle_all(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    Error::new_spanned(
+        TokenStream::from(item),
+        "typle_all macro only available in item with typle attribute",
+    )
+    .into_compile_error()
+    .into()
+}
+
+/// Short-circuiting check that any values are true.
+///
+/// ```rust
+/// # use typle::typle;
+/// #[typle(Tuple for 0..=12)]
+/// fn check<T: Tuple<&str>>(t: T) -> [bool; 2] {
+///     [
+///         typle_all!(i in ..T::LEN => t[[i]].len() > 5),
+///         typle_any!(i in ..T::LEN => t[[i]].len() > 5),
+///     ]
+/// }
+/// assert_eq!(check(("the", "longest", "word")), [false, true]);
+/// assert_eq!(check(()), [true, false]);
+/// ```
+///
+#[proc_macro]
+pub fn typle_any(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    Error::new_spanned(
+        TokenStream::from(item),
+        "typle_any macro only available in item with typle attribute",
+    )
+    .into_compile_error()
+    .into()
+}
+
 /// Reduce a tuple to a single value.
 ///
 /// The `typle_fold!` macro repeatedly applies an expression to an accumulator
 /// to collect tuple components into a single value. The macro starts with an
 /// initial value. It then loops through a typle index variable, modifying an
 /// accumulator with an expression on each iteration.
-///
-/// The name of the accumulator is provided between vertical bars (`|acc|`)
-/// followed by the expression. This makes it look similar to a closure, which
-/// it usually acts like. But there are some differences:
-/// - the "closure parameter" naming the accumulator can only contain a single identifier;
-/// - a `break` in the expression terminates the fold early with the value of the `break`;
-/// - a `return` in the expression returns from the enclosing function (since
-/// the expression is not actually in a closure).
 ///
 /// Examples:
 /// ```
@@ -562,27 +604,15 @@ impl TryFrom<TokenStream> for TypleMacro {
 /// assert_eq!(sum((1, 4, 9, 16)), 30);
 /// ```
 ///
-/// Folds can be short-circuited using a `break`. The `break` value must match
-/// the final type of the `typle_fold!` without the `break`.
+/// The name of the accumulator is provided between vertical bars (`|total|`)
+/// followed by the expression. This makes it look similar to a closure, which
+/// it usually acts like. But there are some differences:
+/// - the "closure parameter" naming the accumulator can only contain a single identifier;
+/// - a `break` in the expression terminates the fold early with the value of the `break`;
+/// - a `return` in the expression returns from the enclosing function (since
+/// the expression is not actually in a closure).
 ///
-/// ```rust
-/// # use typle::typle;
-/// // Return whether all the tuple components are true.
-/// #[typle(Tuple for 0..=12)]
-/// pub fn all<T: Tuple<bool>>(t: T) -> bool {
-///     // If any component is `false`, return `false` immediately. This means
-///     // that the boolean accumulator is always `true` and can be ignored.
-///     typle_fold!(
-///         true;
-///         i in ..T::LEN => |_| if t[[i]] { true } else { break false; }
-///     )
-/// }
-/// assert_eq!(all((2 + 2 == 4, "hi".len() == 2)), true);
-/// assert_eq!(all((1 + 1 == 3, "hi".len() == 2)), false);
-/// assert_eq!(all(()), true);
-/// ```
-///
-/// The examples so far could also be implemented using a `for` loop. However,
+/// The previous example could also be implemented using a `for` loop. However,
 /// unlike a `for` loop, the `typle_fold!` macro allows the accumulator to
 /// change type on each iteration. In the next example, the type of the
 /// accumulator after each iteration is an `Option` containing a tuple with one

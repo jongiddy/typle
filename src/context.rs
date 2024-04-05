@@ -8,13 +8,13 @@ use syn::parse::Parser as _;
 use syn::punctuated::Punctuated;
 use syn::spanned::Spanned as _;
 use syn::{
-    parse2, parse_quote, token, AttrStyle, Attribute, Block, Error, Expr, ExprArray, ExprBlock,
-    ExprField, ExprLit, ExprMacro, ExprPath, ExprTuple, Fields, FieldsNamed, FieldsUnnamed,
-    GenericArgument, GenericParam, Generics, ImplItem, Index, Item, ItemImpl, Label, Lit, LitInt,
-    Macro, MacroDelimiter, Member, Meta, Pat, PatMacro, PatParen, PatReference, PatTuple, PatWild,
-    Path, PathArguments, PathSegment, PredicateType, QSelf, RangeLimits, Result, ReturnType, Stmt,
-    Token, Type, TypeInfer, TypeMacro, TypeParamBound, TypePath, TypeTuple, Variant,
-    WherePredicate,
+    parse2, parse_quote, token, AttrStyle, Attribute, BinOp, Block, Error, Expr, ExprArray,
+    ExprBinary, ExprBlock, ExprField, ExprLit, ExprMacro, ExprParen, ExprPath, ExprTuple, Fields,
+    FieldsNamed, FieldsUnnamed, GenericArgument, GenericParam, Generics, ImplItem, Index, Item,
+    ItemImpl, Label, Lit, LitBool, LitInt, Macro, MacroDelimiter, Member, Meta, Pat, PatMacro,
+    PatParen, PatReference, PatTuple, PatWild, Path, PathArguments, PathSegment, PredicateType,
+    QSelf, RangeLimits, Result, ReturnType, Stmt, Token, Type, TypeInfer, TypeMacro,
+    TypeParamBound, TypePath, TypeTuple, Variant, WherePredicate,
 };
 
 use crate::constant::{evaluate_bool, evaluate_range, evaluate_usize};
@@ -1730,6 +1730,7 @@ impl<'a> TypleContext<'a> {
         // t.to_string() -> (t.0, t.1).to_string()
         self.replace_attrs(attrs)?;
         if let Some(macro_name) = mac.path.get_ident() {
+            let default_span = macro_name.span();
             if macro_name == "typle_for" {
                 let expr = match &mac.delimiter {
                     MacroDelimiter::Paren(_) => {
@@ -1763,12 +1764,109 @@ impl<'a> TypleContext<'a> {
                 return Ok(Some(expr));
             } else if macro_name == "typle_fold" {
                 let expr =
-                    self.replace_typle_fold(mac, std::mem::take(attrs), state, macro_name.span())?;
+                    self.replace_typle_fold(mac, std::mem::take(attrs), state, default_span)?;
+                return Ok(Some(expr));
+            } else if macro_name == "typle_all" {
+                let token_stream = std::mem::take(&mut mac.tokens);
+                let expr = self.anyall(
+                    token_stream,
+                    default_span,
+                    state,
+                    syn::BinOp::And(token::AndAnd::default()),
+                    true,
+                )?;
+                return Ok(Some(expr));
+            } else if macro_name == "typle_any" {
+                let token_stream = std::mem::take(&mut mac.tokens);
+                let expr = self.anyall(
+                    token_stream,
+                    default_span,
+                    state,
+                    syn::BinOp::Or(token::OrOr::default()),
+                    false,
+                )?;
                 return Ok(Some(expr));
             }
         }
         mac.tokens = self.replace_macro_token_stream(std::mem::take(&mut mac.tokens))?;
         Ok(None)
+    }
+
+    fn anyall(
+        &self,
+        token_stream: TokenStream,
+        default_span: Span,
+        state: &mut BlockState,
+        op: BinOp,
+        default: bool,
+    ) -> Result<Expr> {
+        let mut tokens = token_stream.into_iter();
+        let (pattern, mut range) = self.parse_pattern_range(&mut tokens, default_span)?;
+        let expr = parse2::<Expr>(tokens.collect())?;
+        // Parenthesize low precedence expressions.
+        let expr = match expr {
+            expr @ Expr::Lit(ExprLit {
+                lit: Lit::Bool(_), ..
+            }) => expr,
+            expr @ Expr::Block(_) => expr,
+            expr @ Expr::Paren(_) => expr,
+            expr @ Expr::Path(_) => expr,
+            expr @ Expr::MethodCall(_) => expr,
+            expr @ Expr::Field(_) => expr,
+            expr @ Expr::Call(_) => expr,
+            expr @ Expr::Index(_) => expr,
+            expr @ Expr::Unary(_) => expr,
+            expr @ Expr::Cast(_) => expr,
+            expr => Expr::Paren(ExprParen {
+                attrs: Vec::new(),
+                paren_token: token::Paren::default(),
+                expr: Box::new(expr),
+            }),
+        };
+        let all = match range.next() {
+            Some(index) => {
+                let mut context = self.clone();
+                if let Some(ident) = &pattern {
+                    context.constants.insert(ident.clone(), index);
+                }
+                let mut all = expr.clone();
+                context.replace_expr(&mut all, state)?;
+                for index in range {
+                    if let Some(ident) = &pattern {
+                        *context.constants.get_mut(ident).unwrap() = index;
+                    }
+                    let mut expr = expr.clone();
+                    context.replace_expr(&mut expr, state)?;
+                    all = Expr::Binary(ExprBinary {
+                        attrs: Vec::new(),
+                        left: Box::new(all),
+                        op,
+                        right: Box::new(expr),
+                    });
+                }
+                if let Expr::Binary(expr) = all {
+                    // Wrap entire expression in parentheses to:
+                    // 1. ensure that it is a single expression in a larger expression.
+                    // 2. handle ambiguity: `{ true } || { true }` is not a boolean expression.
+                    // It is a block followed by a closure that returns a boolean. Adding
+                    // parentheses `({ true } || { true })` makes it a boolean expression.
+                    all = Expr::Paren(ExprParen {
+                        attrs: Vec::new(),
+                        paren_token: token::Paren::default(),
+                        expr: Box::new(Expr::Binary(expr)),
+                    });
+                }
+                all
+            }
+            None => Expr::Lit(ExprLit {
+                attrs: Vec::new(),
+                lit: Lit::Bool(LitBool {
+                    value: default,
+                    span: expr.span(),
+                }),
+            }),
+        };
+        Ok(all)
     }
 
     fn replace_macro_pat(&self, m: &mut PatMacro) -> Result<Option<Pat>> {
