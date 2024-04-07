@@ -1,6 +1,6 @@
 [package]
 name = "typle"
-version = "0.9.10"
+version = "0.9.11"
 edition = "2021"
 description = "Generic tuple bounds and transformations"
 license = "MIT"
@@ -15,7 +15,7 @@ proc-macro = true
 [dependencies]
 proc-macro2 = "1"
 quote = "1"
-syn = { version = "2.0.43", features = ["full"] }
+syn = { version = "2.0.43", features = ["full", "visit-mut", "extra-traits"] }
 
 [dev-dependencies]
 macrotest = "1"

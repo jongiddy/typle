@@ -357,6 +357,18 @@
 //!     }
 //! }
 //! ```
+//! Explicit lifetimes are also required for methods bound by a typle trait
+//! inside an impl that is not bound by a typle trait:
+//! ```rust
+//! # use typle::typle;
+//! # struct A {}
+//! #[typle(Tuple for 1..=3)]
+//! impl A {
+//!     fn identity<'a, T: Tuple>(&'a self, t: &'a T) -> &'a T {
+//!         t
+//!     }
+//! }
+//! ```
 //! - Typle index variables cannot be shadowed:
 //! ```rust
 //! # use typle::typle;
