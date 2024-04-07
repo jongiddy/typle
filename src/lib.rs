@@ -551,14 +551,15 @@ impl TryFrom<TokenStream> for TypleMacro {
 /// ```rust
 /// # use typle::typle;
 /// #[typle(Tuple for 0..=12)]
-/// fn check<T: Tuple<&str>>(t: T) -> [bool; 2] {
-///     [
-///         typle_all!(i in ..T::LEN => t[[i]].len() > 5),
-///         typle_any!(i in ..T::LEN => t[[i]].len() > 5),
-///     ]
+/// fn all_long<T: Tuple<&str>>(t: T) -> bool {
+///     typle_all!(i in ..T::LEN => t[[i]].len() > 5)
 /// }
-/// assert_eq!(check(("the", "longest", "word")), [false, true]);
-/// assert_eq!(check(()), [true, false]);
+/// // Return `true` if all words meet the criteria.
+/// assert_eq!(all_long(("longest", "phrase")), true);
+/// // Return `false` if any words fail to meet the criteria.
+/// assert_eq!(all_long(("the", "longest", "word")), false);
+/// // Return `true` for an empty tuple as no words fail to meet the criteria.
+/// assert_eq!(all_long(()), true);
 /// ```
 ///
 #[proc_macro]
@@ -576,14 +577,15 @@ pub fn typle_all(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
 /// ```rust
 /// # use typle::typle;
 /// #[typle(Tuple for 0..=12)]
-/// fn check<T: Tuple<&str>>(t: T) -> [bool; 2] {
-///     [
-///         typle_all!(i in ..T::LEN => t[[i]].len() > 5),
-///         typle_any!(i in ..T::LEN => t[[i]].len() > 5),
-///     ]
+/// fn any_long<T: Tuple<&str>>(t: T) -> bool {
+///     typle_any!(i in ..T::LEN => t[[i]].len() > 5)
 /// }
-/// assert_eq!(check(("the", "longest", "word")), [false, true]);
-/// assert_eq!(check(()), [true, false]);
+/// // Return `true` if any word meets the criteria.
+/// assert_eq!(any_long(("the", "longest", "word")), true);
+/// // Return `false` if no words meet the criteria.
+/// assert_eq!(any_long(("short", "words")), false);
+/// // Return `false` for an empty tuple as no words meet the criteria.
+/// assert_eq!(any_long(()), false);
 /// ```
 ///
 #[proc_macro]
