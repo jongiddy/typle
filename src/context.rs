@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
 use std::ops::Range;
 use std::rc::Rc;
@@ -14,7 +15,7 @@ use syn::{
     ItemImpl, Label, Lit, LitBool, LitInt, Macro, MacroDelimiter, Member, Meta, Pat, PatMacro,
     PatParen, PatReference, PatTuple, PatWild, Path, PathArguments, PathSegment, PredicateType,
     QSelf, RangeLimits, Result, ReturnType, Stmt, Token, Type, TypeInfer, TypeMacro,
-    TypeParamBound, TypePath, TypeTuple, Variant, WherePredicate,
+    TypeParamBound, TypePath, TypeReference, TypeTuple, Variant, WherePredicate,
 };
 
 use crate::constant::{evaluate_bool, evaluate_range, evaluate_usize};
@@ -84,10 +85,13 @@ impl BlockState {
 pub struct TypleContext<'a> {
     typle_macro: &'a TypleMacro,
     typle_len: Option<usize>,
+    // typle indexes that must be replaced with a number
     constants: HashMap<Ident, usize>,
+    // Idents that must be renamed
+    renames: HashMap<Ident, Cow<'static, str>>,
+    retypes: HashMap<Ident, Type>,
     typles: HashMap<Ident, Typle>,
     const_if: bool,
-    self_replaced: bool,
 }
 
 impl<'a> From<&'a TypleMacro> for TypleContext<'a> {
@@ -96,9 +100,10 @@ impl<'a> From<&'a TypleMacro> for TypleContext<'a> {
             typle_macro,
             typle_len: None,
             constants: HashMap::new(),
+            renames: HashMap::new(),
+            retypes: HashMap::new(),
             typles: HashMap::new(),
             const_if: false,
-            self_replaced: false,
         }
     }
 }
@@ -876,12 +881,19 @@ impl<'a> TypleContext<'a> {
                             lit: Lit::Int(LitInt::new(&value.to_string(), first.ident.span())),
                         });
                         return Ok(());
-                    } else if self.self_replaced && first.ident == "self" {
-                        let x = segments.peek_mut().unwrap();
-                        *x = PathSegment {
-                            ident: Ident::new("_typle_self", x.span()),
-                            arguments: PathArguments::None,
-                        };
+                    } else if let Some(rename) = self.renames.get(&first.ident) {
+                        let ident = &mut segments.peek_mut().unwrap().ident;
+                        *ident = Ident::new(rename, ident.span());
+                    } else if let Some(ty) = self.retypes.get(&first.ident) {
+                        let _ = segments.next().unwrap();
+                        path.qself = Some(QSelf {
+                            lt_token: token::Lt::default(),
+                            ty: Box::new(ty.clone()),
+                            position: 0,
+                            as_token: None,
+                            gt_token: token::Gt::default(),
+                        });
+                        path.path.leading_colon = Some(token::PathSep::default());
                     }
                     path.path.segments = segments.collect();
                     self.replace_path_arguments(&mut path.path)?;
@@ -1263,7 +1275,7 @@ impl<'a> TypleContext<'a> {
     pub fn replace_fn(
         &mut self,
         function: GeneralFunction,
-        _receiver_type: Option<&Type>,
+        receiver_type: Option<&Type>,
         items: &mut Vec<Item>,
     ) -> Result<GeneralFunction> {
         let fn_name = &function.sig.ident;
@@ -1290,7 +1302,34 @@ impl<'a> TypleContext<'a> {
         for arg in fn_input_params {
             match arg {
                 syn::FnArg::Receiver(r) => {
-                    abort!(r, "did not expect receiver here");
+                    let Some(base_type) = receiver_type.cloned() else {
+                        abort!(r, "did not expect receiver here");
+                    };
+                    let ty = if let Some((and_token, ref lifetime)) = r.reference {
+                        Type::Reference(TypeReference {
+                            and_token,
+                            lifetime: lifetime.clone(),
+                            mutability: r.mutability,
+                            elem: Box::new(base_type.clone()),
+                        })
+                    } else {
+                        base_type.clone()
+                    };
+                    type_tuple.elems.push(ty);
+                    pat_tuple.elems.push(Pat::Path(ExprPath {
+                        attrs: Vec::new(),
+                        qself: None,
+                        path: ident_to_path(Ident::new("_typle_self", r.span())),
+                    }));
+                    value_tuple.elems.push(Expr::Path(ExprPath {
+                        attrs: Vec::new(),
+                        qself: None,
+                        path: ident_to_path(Ident::new("self", r.span())),
+                    }));
+                    self.renames
+                        .insert(Ident::new("self", Span::call_site()), "_typle_self".into());
+                    self.retypes
+                        .insert(Ident::new("Self", Span::call_site()), base_type);
                 }
                 syn::FnArg::Typed(pat_type) => {
                     type_tuple.elems.push(pat_type.ty.as_ref().clone());
@@ -1301,7 +1340,7 @@ impl<'a> TypleContext<'a> {
                 }
             }
         }
-        items.reserve(self.typle_macro.max_len - self.typle_macro.min_len + 3);
+        items.reserve(self.typle_macro.max_len - self.typle_macro.min_len + 2);
         // A trait with an apply method to implement for each tuple
         let trait_name = format_ident!("_typle_fn_{}", fn_name);
         let trait_item = parse_quote!(
@@ -1313,6 +1352,7 @@ impl<'a> TypleContext<'a> {
             }
         );
         items.push(trait_item);
+
         // A function that turns the function argument list into a tuple that
         // implements the trait and calls the apply method from the trait.
         let fn_item = GeneralFunction {
@@ -1327,6 +1367,7 @@ impl<'a> TypleContext<'a> {
                 <#type_tuple as #trait_name>::apply(#value_tuple)
             }),
         };
+
         let return_type = match function.sig.output {
             syn::ReturnType::Default => Type::Tuple(TypeTuple {
                 paren_token: token::Paren::default(),
@@ -1335,6 +1376,22 @@ impl<'a> TypleContext<'a> {
             syn::ReturnType::Type(_, t) => *t,
         };
         let typle_trait_name = &self.typle_macro.ident;
+
+        // A method body is moved to a trait implementation on a dfferent type.
+        // Any instances of `Self` in the method body are converted to the
+        // actual self type. Instances of `self` are converted to `_typle_self`.
+        // To get `Self` and `self` in the right places we convert any instances
+        // of `_typle_Self` and `_typle_self` to `Self` and `self`.
+        self.retypes.insert(
+            Ident::new("_typle_Self", Span::call_site()),
+            Type::Path(TypePath {
+                qself: None,
+                path: ident_to_path(Ident::new("Self", Span::call_site())),
+            }),
+        );
+        self.renames
+            .insert(Ident::new("_typle_self", Span::call_site()), "self".into());
+
         let impl_items = vec![
             syn::ImplItem::Type(syn::ImplItemType {
                 attrs: Vec::new(),
@@ -1349,9 +1406,9 @@ impl<'a> TypleContext<'a> {
             }),
             parse_quote!(
                 #(#fn_meta)*
-                fn apply(self) -> Self::Return {
+                fn apply(self) -> _typle_Self::Return {
                     #[typle_attr_if(#typle_trait_name::LEN == 0, allow(unused_variables))]
-                    let #pat_tuple = self;
+                    let #pat_tuple = _typle_self;
                     #fn_body
                 }
             ),
@@ -2554,6 +2611,18 @@ impl<'a> TypleContext<'a> {
                                             "unexpected patenthesized args",
                                         ));
                                     }
+                                }
+                            } else if let Some(ty) = self.retypes.get(&first.ident) {
+                                path.qself = Some(QSelf {
+                                    lt_token: token::Lt::default(),
+                                    ty: Box::new(ty.clone()),
+                                    position: 0,
+                                    as_token: None,
+                                    gt_token: token::Gt::default(),
+                                });
+                                path.path.leading_colon = Some(token::PathSep::default());
+                                for segment in segments {
+                                    path.path.segments.push(segment);
                                 }
                             } else {
                                 path.path.segments.push(first);
