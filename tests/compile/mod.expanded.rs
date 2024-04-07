@@ -323,12 +323,6 @@ pub mod for_loop {
         type Return;
         fn apply(self) -> Self::Return;
     }
-    pub fn do_continue<T>(t: T) -> <(T,) as _typle_fn_do_continue>::Return
-    where
-        (T,): _typle_fn_do_continue,
-    {
-        <(T,) as _typle_fn_do_continue>::apply((t,))
-    }
     impl<T0, T1, T2, T3> _typle_fn_do_continue for ((T0, T1, T2, T3),) {
         type Return = Vec<usize>;
         fn apply(self) -> Self::Return {
@@ -365,18 +359,16 @@ pub mod for_loop {
             }
         }
     }
+    pub fn do_continue<T>(t: T) -> <(T,) as _typle_fn_do_continue>::Return
+    where
+        (T,): _typle_fn_do_continue,
+    {
+        <(T,) as _typle_fn_do_continue>::apply((t,))
+    }
     #[allow(non_camel_case_types)]
     pub trait _typle_fn_do_continue_labelled {
         type Return;
         fn apply(self) -> Self::Return;
-    }
-    pub fn do_continue_labelled<T>(
-        t: T,
-    ) -> <(T,) as _typle_fn_do_continue_labelled>::Return
-    where
-        (T,): _typle_fn_do_continue_labelled,
-    {
-        <(T,) as _typle_fn_do_continue_labelled>::apply((t,))
     }
     impl<T0, T1, T2, T3> _typle_fn_do_continue_labelled for ((T0, T1, T2, T3),) {
         type Return = Vec<usize>;
@@ -430,16 +422,18 @@ pub mod for_loop {
             }
         }
     }
+    pub fn do_continue_labelled<T>(
+        t: T,
+    ) -> <(T,) as _typle_fn_do_continue_labelled>::Return
+    where
+        (T,): _typle_fn_do_continue_labelled,
+    {
+        <(T,) as _typle_fn_do_continue_labelled>::apply((t,))
+    }
     #[allow(non_camel_case_types)]
     pub trait _typle_fn_do_break {
         type Return;
         fn apply(self) -> Self::Return;
-    }
-    pub fn do_break<T>(t: T) -> <(T,) as _typle_fn_do_break>::Return
-    where
-        (T,): _typle_fn_do_break,
-    {
-        <(T,) as _typle_fn_do_break>::apply((t,))
     }
     impl<T0, T1, T2, T3> _typle_fn_do_break for ((T0, T1, T2, T3),) {
         type Return = Vec<usize>;
@@ -469,16 +463,16 @@ pub mod for_loop {
             }
         }
     }
+    pub fn do_break<T>(t: T) -> <(T,) as _typle_fn_do_break>::Return
+    where
+        (T,): _typle_fn_do_break,
+    {
+        <(T,) as _typle_fn_do_break>::apply((t,))
+    }
     #[allow(non_camel_case_types)]
     pub trait _typle_fn_do_break_labelled {
         type Return;
         fn apply(self) -> Self::Return;
-    }
-    pub fn do_break_labelled<T>(t: T) -> <(T,) as _typle_fn_do_break_labelled>::Return
-    where
-        (T,): _typle_fn_do_break_labelled,
-    {
-        <(T,) as _typle_fn_do_break_labelled>::apply((t,))
     }
     impl<T0, T1, T2, T3> _typle_fn_do_break_labelled for ((T0, T1, T2, T3),) {
         type Return = Vec<usize>;
@@ -532,18 +526,16 @@ pub mod for_loop {
             }
         }
     }
+    pub fn do_break_labelled<T>(t: T) -> <(T,) as _typle_fn_do_break_labelled>::Return
+    where
+        (T,): _typle_fn_do_break_labelled,
+    {
+        <(T,) as _typle_fn_do_break_labelled>::apply((t,))
+    }
     #[allow(non_camel_case_types)]
     pub trait _typle_fn_check_out_of_bounds {
         type Return;
         fn apply(self) -> Self::Return;
-    }
-    pub fn check_out_of_bounds<T>(
-        t: T,
-    ) -> <(T,) as _typle_fn_check_out_of_bounds>::Return
-    where
-        (T,): _typle_fn_check_out_of_bounds,
-    {
-        <(T,) as _typle_fn_check_out_of_bounds>::apply((t,))
     }
     impl _typle_fn_check_out_of_bounds for ((),) {
         type Return = usize;
@@ -568,18 +560,18 @@ pub mod for_loop {
             }
         }
     }
+    pub fn check_out_of_bounds<T>(
+        t: T,
+    ) -> <(T,) as _typle_fn_check_out_of_bounds>::Return
+    where
+        (T,): _typle_fn_check_out_of_bounds,
+    {
+        <(T,) as _typle_fn_check_out_of_bounds>::apply((t,))
+    }
     #[allow(non_camel_case_types)]
     pub trait _typle_fn_check_negative_range {
         type Return;
         fn apply(self) -> Self::Return;
-    }
-    pub fn check_negative_range<T>(
-        t: T,
-    ) -> <(T,) as _typle_fn_check_negative_range>::Return
-    where
-        (T,): _typle_fn_check_negative_range,
-    {
-        <(T,) as _typle_fn_check_negative_range>::apply((t,))
     }
     impl _typle_fn_check_negative_range for ((),) {
         type Return = usize;
@@ -595,6 +587,14 @@ pub mod for_loop {
             }
         }
     }
+    pub fn check_negative_range<T>(
+        t: T,
+    ) -> <(T,) as _typle_fn_check_negative_range>::Return
+    where
+        (T,): _typle_fn_check_negative_range,
+    {
+        <(T,) as _typle_fn_check_negative_range>::apply((t,))
+    }
 }
 pub mod function {
     use typle::typle;
@@ -604,15 +604,6 @@ pub mod function {
     pub trait _typle_fn_hash {
         type Return;
         fn apply(self) -> Self::Return;
-    }
-    pub fn hash<'a, T, S>(
-        tuple: &'a T,
-        state: &'a mut S,
-    ) -> <(&'a T, &'a mut S) as _typle_fn_hash>::Return
-    where
-        (&'a T, &'a mut S): _typle_fn_hash,
-    {
-        <(&'a T, &'a mut S) as _typle_fn_hash>::apply((tuple, state))
     }
     impl<'a, T0, S: Hasher> _typle_fn_hash for (&'a (T0,), &'a mut S)
     where
@@ -680,16 +671,19 @@ pub mod function {
             }
         }
     }
+    pub fn hash<'a, T, S>(
+        tuple: &'a T,
+        state: &'a mut S,
+    ) -> <(&'a T, &'a mut S) as _typle_fn_hash>::Return
+    where
+        (&'a T, &'a mut S): _typle_fn_hash,
+    {
+        <(&'a T, &'a mut S) as _typle_fn_hash>::apply((tuple, state))
+    }
     #[allow(non_camel_case_types)]
     trait _typle_fn_multiply {
         type Return;
         fn apply(self) -> Self::Return;
-    }
-    fn multiply<T, M>(t: T, m: M) -> <(T, M) as _typle_fn_multiply>::Return
-    where
-        (T, M): _typle_fn_multiply,
-    {
-        <(T, M) as _typle_fn_multiply>::apply((t, m))
     }
     impl<M> _typle_fn_multiply for ((), M)
     where
@@ -742,16 +736,16 @@ pub mod function {
             { (t.0 * m, t.1 * m, t.2 * m) }
         }
     }
+    fn multiply<T, M>(t: T, m: M) -> <(T, M) as _typle_fn_multiply>::Return
+    where
+        (T, M): _typle_fn_multiply,
+    {
+        <(T, M) as _typle_fn_multiply>::apply((t, m))
+    }
     #[allow(non_camel_case_types)]
     trait _typle_fn_heapify {
         type Return;
         fn apply(self) -> Self::Return;
-    }
-    fn heapify<T>(params: T) -> <(T,) as _typle_fn_heapify>::Return
-    where
-        (T,): _typle_fn_heapify,
-    {
-        <(T,) as _typle_fn_heapify>::apply((params,))
     }
     impl _typle_fn_heapify for ((),) {
         type Return = ();
@@ -782,16 +776,16 @@ pub mod function {
             { (Box::new(params.0), Box::new(params.1), Box::new(params.2)) }
         }
     }
+    fn heapify<T>(params: T) -> <(T,) as _typle_fn_heapify>::Return
+    where
+        (T,): _typle_fn_heapify,
+    {
+        <(T,) as _typle_fn_heapify>::apply((params,))
+    }
     #[allow(non_camel_case_types)]
     pub trait _typle_fn_zip {
         type Return;
         fn apply(self) -> Self::Return;
-    }
-    pub fn zip<A, B>(first: A, second: B) -> <(A, B) as _typle_fn_zip>::Return
-    where
-        (A, B): _typle_fn_zip,
-    {
-        <(A, B) as _typle_fn_zip>::apply((first, second))
     }
     impl _typle_fn_zip for ((), ()) {
         type Return = ();
@@ -1166,16 +1160,16 @@ pub mod function {
             }
         }
     }
+    pub fn zip<A, B>(first: A, second: B) -> <(A, B) as _typle_fn_zip>::Return
+    where
+        (A, B): _typle_fn_zip,
+    {
+        <(A, B) as _typle_fn_zip>::apply((first, second))
+    }
     #[allow(non_camel_case_types)]
     pub trait _typle_fn_double {
         type Return;
         fn apply(self) -> Self::Return;
-    }
-    pub fn double<T>(t: T) -> <(T,) as _typle_fn_double>::Return
-    where
-        (T,): _typle_fn_double,
-    {
-        <(T,) as _typle_fn_double>::apply((t,))
     }
     impl _typle_fn_double for ((),) {
         type Return = ();
@@ -1205,6 +1199,12 @@ pub mod function {
             let (t,) = self;
             { (t.0 * 2, t.1 * 2, t.2 * 2) }
         }
+    }
+    pub fn double<T>(t: T) -> <(T,) as _typle_fn_double>::Return
+    where
+        (T,): _typle_fn_double,
+    {
+        <(T,) as _typle_fn_double>::apply((t,))
     }
 }
 pub mod issue1 {
@@ -1266,6 +1266,56 @@ pub mod macros {
         }
     }
 }
+pub mod method {
+    use typle::typle;
+    pub struct X {}
+    #[allow(non_camel_case_types)]
+    pub trait _typle_fn_associated {
+        type Return;
+        fn apply(self) -> Self::Return;
+    }
+    impl _typle_fn_associated for ((), u32) {
+        type Return = ();
+        fn apply(self) -> Self::Return {
+            #[allow(unused_variables)]
+            let (t, i) = self;
+            { () }
+        }
+    }
+    impl _typle_fn_associated for ((u32,), u32) {
+        type Return = (u32,);
+        fn apply(self) -> Self::Return {
+            let (t, i) = self;
+            { (t.0 + i,) }
+        }
+    }
+    impl _typle_fn_associated for ((u32, u32), u32) {
+        type Return = (u32, u32);
+        fn apply(self) -> Self::Return {
+            let (t, i) = self;
+            { (t.0 + i, t.1 + i) }
+        }
+    }
+    impl _typle_fn_associated for ((u32, u32, u32), u32) {
+        type Return = (u32, u32, u32);
+        fn apply(self) -> Self::Return {
+            let (t, i) = self;
+            { (t.0 + i, t.1 + i, t.2 + i) }
+        }
+    }
+    impl X {
+        #[allow(unused)]
+        pub fn new(i: u32) -> Self {
+            Self {}
+        }
+        pub fn associated<T>(t: T, i: u32) -> <(T, u32) as _typle_fn_associated>::Return
+        where
+            (T, u32): _typle_fn_associated,
+        {
+            <(T, u32) as _typle_fn_associated>::apply((t, i))
+        }
+    }
+}
 pub mod pattern {
     #![allow(dead_code)]
     use typle::typle;
@@ -1294,12 +1344,6 @@ pub mod pattern {
     trait _typle_fn_multiply_by {
         type Return;
         fn apply(self) -> Self::Return;
-    }
-    fn multiply_by<T>(t: T, m: u32) -> <(T, u32) as _typle_fn_multiply_by>::Return
-    where
-        (T, u32): _typle_fn_multiply_by,
-    {
-        <(T, u32) as _typle_fn_multiply_by>::apply((t, m))
     }
     impl _typle_fn_multiply_by for ((u32,), u32) {
         type Return = (u32,);
@@ -1649,6 +1693,12 @@ pub mod pattern {
                 (x0, x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, x11)
             }
         }
+    }
+    fn multiply_by<T>(t: T, m: u32) -> <(T, u32) as _typle_fn_multiply_by>::Return
+    where
+        (T, u32): _typle_fn_multiply_by,
+    {
+        <(T, u32) as _typle_fn_multiply_by>::apply((t, m))
     }
 }
 pub mod type_alias {

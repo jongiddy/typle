@@ -134,3 +134,8 @@ fn test_min_max() {
     assert_eq!(m.type_max(), 5);
     assert_eq!(m.type_len(), 3);
 }
+
+#[test]
+fn test_associated_method() {
+    assert_eq!(compile::method::X::associated((1, 2, 3), 2), (3, 4, 5));
+}

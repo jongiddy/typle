@@ -390,6 +390,7 @@
 
 mod constant;
 mod context;
+mod syn_ext;
 
 use constant::evaluate_usize;
 use context::TypleContext;
