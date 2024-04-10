@@ -169,7 +169,7 @@
 //! similarly to `typle_for!`.
 //!
 //! The `typle_ident!` macro concatenates a number to an identifier. For
-//! example `S::<typle_ident!(3)>` becomes the identifer `S3`.
+//! example `S::<typle_ident!(3)>` becomes the identifier `S3`.
 //!
 //! The `typle_attr_if` attribute allows conditional inclusion of attributes. It works similarly to
 //! [`cfg_attr`](https://doc.rust-lang.org/reference/conditional-compilation.html#the-cfg_attr-attribute)
@@ -622,16 +622,20 @@ pub fn typle_any(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
 /// The name of the accumulator is provided between vertical bars (`|total|`)
 /// followed by the expression. This makes it look similar to a closure, which
 /// it usually acts like. But there are some differences:
-/// - the "closure parameter" naming the accumulator can only contain a single identifier;
-/// - a `break` in the expression terminates the fold early with the value of the `break`;
+/// - the "closure parameter" naming the accumulator can only contain a single
+/// identifier;
+/// - a `break` in the expression terminates the fold early with the value of
+/// the `break`;
 /// - a `return` in the expression returns from the enclosing function (since
 /// the expression is not actually in a closure).
 ///
-/// The previous example could also be implemented using a `for` loop. However,
-/// unlike a `for` loop, the `typle_fold!` macro allows the accumulator to
-/// change type on each iteration. In the next example, the type of the
-/// accumulator after each iteration is an `Option` containing a tuple with one
-/// extra component from the prior iteration.
+/// The previous example could have been implemented using a `for` loop.
+/// However, unlike a `for` loop, the `typle_fold!` macro allows the accumulator
+/// to change type on each iteration.
+///
+/// In the next example, the type of the accumulator after each iteration is a
+/// tuple with one extra component from the prior iteration. The `..=` range
+/// provides an extra iteration that wraps the tuple in `Some`.
 ///
 /// ```rust
 /// # use typle::typle;
@@ -640,23 +644,24 @@ pub fn typle_any(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
 ///
 ///     /// Coalesce a tuple of Options into an Option of tuple that is `Some`
 ///     /// only if all the components are `Some`.
-///     fn coalesce_some(self) -> Self::Output;
+///     fn coalesce_some(self) -> Option<Self::Output>;
 /// }
 ///
 /// #[typle(Tuple for 0..=12)]
 /// impl<T: Tuple> CoalesceSome<T> for typle_for!(i in ..T::LEN => Option<T<{i}>>) {
-///     type Output = Option<T>;
+///     type Output = T;
 ///
-///     fn coalesce_some(self) -> Self::Output
+///     fn coalesce_some(self) -> Option<Self::Output>
 ///     {
 ///         typle_fold!(
-///             Some(());  // Initially an empty tuple wrapped in `Some`
-///             i in ..T::LEN => |opt| if let (Some(prior), Some(curr)) = (opt, self[[i]]) {
-///                 // Append the current value to the prior tuple to make the
-///                 // accumulator `Some(T<0>,...,T<{i}>)`
-///                 Some(typle_for!(
-///                     j in ..=i => if typle_const!(j < i) { prior[[j]] } else { curr }
-///                 ))
+///             ();  // Initially an empty tuple
+///             i in ..=T::LEN => |acc| if typle_const!(i == T::LEN) {
+///                 // Final iteration: wrap accumulated tuple in `Some`
+///                 Some(acc)
+///             } else if let Some(curr) = self[[i]] {
+///                 // Append the current value to the prior tuple to create a
+///                 // new accumulator with the type `Some(T<0>,...,T<{i}>)`
+///                 typle_for!{j in ..=i => if j < i { acc[[j]] } else { curr }}
 ///             } else {
 ///                 // If `None` is found at any point, short-circuit with a `None` result
 ///                 break None;
@@ -674,7 +679,7 @@ pub fn typle_any(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
 /// );
 /// assert_eq!(
 ///     (None::<i32>, Some("x")).coalesce_some(),
-///     None
+///     None::<(i32, &str)>
 /// );
 /// ```
 #[proc_macro]
@@ -803,7 +808,7 @@ pub fn typle_for(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
 ///     T<_>: Process<Output = u64>,
 /// {
 ///     S = typle_variant!(i in .. => Option<T<{i}>::State>, [u64; i]),
-///     U = typle_variant! {i in .. => u: [u32; i]},
+///     U = typle_variant!{i in .. => u: [u32; i]},
 ///     V = typle_variant![..],
 ///     Done([u64; Tuple::MAX]),
 /// }
