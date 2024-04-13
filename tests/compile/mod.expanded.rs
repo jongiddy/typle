@@ -325,7 +325,7 @@ pub mod for_loop {
     }
     impl<T0, T1, T2, T3> _typle_fn_do_continue for ((T0, T1, T2, T3),) {
         type Return = Vec<usize>;
-        fn apply(self) -> <Self>::Return {
+        fn apply(self) -> Self::Return {
             let (t,) = self;
             {
                 let mut output = Vec::new();
@@ -373,7 +373,7 @@ pub mod for_loop {
     impl<T0, T1, T2, T3> _typle_fn_do_continue_labelled for ((T0, T1, T2, T3),) {
         type Return = Vec<usize>;
         #[allow(clippy::never_loop)]
-        fn apply(self) -> <Self>::Return {
+        fn apply(self) -> Self::Return {
             let (t,) = self;
             {
                 let mut output = Vec::new();
@@ -437,7 +437,7 @@ pub mod for_loop {
     }
     impl<T0, T1, T2, T3> _typle_fn_do_break for ((T0, T1, T2, T3),) {
         type Return = Vec<usize>;
-        fn apply(self) -> <Self>::Return {
+        fn apply(self) -> Self::Return {
             let (t,) = self;
             {
                 let mut output = Vec::new();
@@ -477,7 +477,7 @@ pub mod for_loop {
     impl<T0, T1, T2, T3> _typle_fn_do_break_labelled for ((T0, T1, T2, T3),) {
         type Return = Vec<usize>;
         #[allow(clippy::never_loop)]
-        fn apply(self) -> <Self>::Return {
+        fn apply(self) -> Self::Return {
             let (t,) = self;
             {
                 let mut output = Vec::new();
@@ -539,7 +539,7 @@ pub mod for_loop {
     }
     impl _typle_fn_check_out_of_bounds for ((),) {
         type Return = usize;
-        fn apply(self) -> <Self>::Return {
+        fn apply(self) -> Self::Return {
             #[allow(unused_variables)]
             let (t,) = self;
             {
@@ -575,7 +575,7 @@ pub mod for_loop {
     }
     impl _typle_fn_check_negative_range for ((),) {
         type Return = usize;
-        fn apply(self) -> <Self>::Return {
+        fn apply(self) -> Self::Return {
             #[allow(unused_variables)]
             let (t,) = self;
             {
@@ -611,7 +611,7 @@ pub mod function {
         T0: ?Sized,
     {
         type Return = ();
-        fn apply(self) -> <Self>::Return {
+        fn apply(self) -> Self::Return {
             let (tuple, state) = self;
             {
                 loop {
@@ -630,7 +630,7 @@ pub mod function {
         T1: ?Sized,
     {
         type Return = ();
-        fn apply(self) -> <Self>::Return {
+        fn apply(self) -> Self::Return {
             let (tuple, state) = self;
             {
                 loop {
@@ -653,7 +653,7 @@ pub mod function {
         T2: ?Sized,
     {
         type Return = ();
-        fn apply(self) -> <Self>::Return {
+        fn apply(self) -> Self::Return {
             let (tuple, state) = self;
             {
                 loop {
@@ -690,7 +690,7 @@ pub mod function {
         M: Copy,
     {
         type Return = ();
-        fn apply(self) -> <Self>::Return {
+        fn apply(self) -> Self::Return {
             #[allow(unused_variables)]
             let (t, m) = self;
             { () }
@@ -702,7 +702,7 @@ pub mod function {
         M: Copy,
     {
         type Return = (<T0 as Mul<M>>::Output,);
-        fn apply(self) -> <Self>::Return {
+        fn apply(self) -> Self::Return {
             let (t, m) = self;
             { (t.0 * m,) }
         }
@@ -714,7 +714,7 @@ pub mod function {
         M: Copy,
     {
         type Return = (<T0 as Mul<M>>::Output, <T1 as Mul<M>>::Output);
-        fn apply(self) -> <Self>::Return {
+        fn apply(self) -> Self::Return {
             let (t, m) = self;
             { (t.0 * m, t.1 * m) }
         }
@@ -731,7 +731,7 @@ pub mod function {
             <T1 as Mul<M>>::Output,
             <T2 as Mul<M>>::Output,
         );
-        fn apply(self) -> <Self>::Return {
+        fn apply(self) -> Self::Return {
             let (t, m) = self;
             { (t.0 * m, t.1 * m, t.2 * m) }
         }
@@ -749,7 +749,7 @@ pub mod function {
     }
     impl _typle_fn_heapify for ((),) {
         type Return = ();
-        fn apply(self) -> <Self>::Return {
+        fn apply(self) -> Self::Return {
             #[allow(unused_variables)]
             let (params,) = self;
             { () }
@@ -757,21 +757,21 @@ pub mod function {
     }
     impl<T0> _typle_fn_heapify for ((T0,),) {
         type Return = (Box<T0>,);
-        fn apply(self) -> <Self>::Return {
+        fn apply(self) -> Self::Return {
             let (params,) = self;
             { (Box::new(params.0),) }
         }
     }
     impl<T0, T1> _typle_fn_heapify for ((T0, T1),) {
         type Return = (Box<T0>, Box<T1>);
-        fn apply(self) -> <Self>::Return {
+        fn apply(self) -> Self::Return {
             let (params,) = self;
             { (Box::new(params.0), Box::new(params.1)) }
         }
     }
     impl<T0, T1, T2> _typle_fn_heapify for ((T0, T1, T2),) {
         type Return = (Box<T0>, Box<T1>, Box<T2>);
-        fn apply(self) -> <Self>::Return {
+        fn apply(self) -> Self::Return {
             let (params,) = self;
             { (Box::new(params.0), Box::new(params.1), Box::new(params.2)) }
         }
@@ -790,7 +790,7 @@ pub mod function {
     impl _typle_fn_zip for ((), ()) {
         type Return = ();
         #[rustfmt::skip]
-        fn apply(self) -> <Self>::Return {
+        fn apply(self) -> Self::Return {
             #[allow(unused_variables)]
             let (first, second) = self;
             { () }
@@ -799,7 +799,7 @@ pub mod function {
     impl<A0, B0> _typle_fn_zip for ((A0,), (B0,)) {
         type Return = ((A0, B0),);
         #[rustfmt::skip]
-        fn apply(self) -> <Self>::Return {
+        fn apply(self) -> Self::Return {
             let (first, second) = self;
             { ((first.0, second.0),) }
         }
@@ -807,7 +807,7 @@ pub mod function {
     impl<A0, A1, B0, B1> _typle_fn_zip for ((A0, A1), (B0, B1)) {
         type Return = ((A0, B0), (A1, B1));
         #[rustfmt::skip]
-        fn apply(self) -> <Self>::Return {
+        fn apply(self) -> Self::Return {
             let (first, second) = self;
             { ((first.0, second.0), (first.1, second.1)) }
         }
@@ -815,7 +815,7 @@ pub mod function {
     impl<A0, A1, A2, B0, B1, B2> _typle_fn_zip for ((A0, A1, A2), (B0, B1, B2)) {
         type Return = ((A0, B0), (A1, B1), (A2, B2));
         #[rustfmt::skip]
-        fn apply(self) -> <Self>::Return {
+        fn apply(self) -> Self::Return {
             let (first, second) = self;
             { ((first.0, second.0), (first.1, second.1), (first.2, second.2)) }
         }
@@ -824,7 +824,7 @@ pub mod function {
     for ((A0, A1, A2, A3), (B0, B1, B2, B3)) {
         type Return = ((A0, B0), (A1, B1), (A2, B2), (A3, B3));
         #[rustfmt::skip]
-        fn apply(self) -> <Self>::Return {
+        fn apply(self) -> Self::Return {
             let (first, second) = self;
             {
                 (
@@ -840,7 +840,7 @@ pub mod function {
     for ((A0, A1, A2, A3, A4), (B0, B1, B2, B3, B4)) {
         type Return = ((A0, B0), (A1, B1), (A2, B2), (A3, B3), (A4, B4));
         #[rustfmt::skip]
-        fn apply(self) -> <Self>::Return {
+        fn apply(self) -> Self::Return {
             let (first, second) = self;
             {
                 (
@@ -857,7 +857,7 @@ pub mod function {
     for ((A0, A1, A2, A3, A4, A5), (B0, B1, B2, B3, B4, B5)) {
         type Return = ((A0, B0), (A1, B1), (A2, B2), (A3, B3), (A4, B4), (A5, B5));
         #[rustfmt::skip]
-        fn apply(self) -> <Self>::Return {
+        fn apply(self) -> Self::Return {
             let (first, second) = self;
             {
                 (
@@ -883,7 +883,7 @@ pub mod function {
             (A6, B6),
         );
         #[rustfmt::skip]
-        fn apply(self) -> <Self>::Return {
+        fn apply(self) -> Self::Return {
             let (first, second) = self;
             {
                 (
@@ -911,7 +911,7 @@ pub mod function {
             (A7, B7),
         );
         #[rustfmt::skip]
-        fn apply(self) -> <Self>::Return {
+        fn apply(self) -> Self::Return {
             let (first, second) = self;
             {
                 (
@@ -960,7 +960,7 @@ pub mod function {
             (A8, B8),
         );
         #[rustfmt::skip]
-        fn apply(self) -> <Self>::Return {
+        fn apply(self) -> Self::Return {
             let (first, second) = self;
             {
                 (
@@ -1016,7 +1016,7 @@ pub mod function {
             (A9, B9),
         );
         #[rustfmt::skip]
-        fn apply(self) -> <Self>::Return {
+        fn apply(self) -> Self::Return {
             let (first, second) = self;
             {
                 (
@@ -1076,7 +1076,7 @@ pub mod function {
             (A10, B10),
         );
         #[rustfmt::skip]
-        fn apply(self) -> <Self>::Return {
+        fn apply(self) -> Self::Return {
             let (first, second) = self;
             {
                 (
@@ -1140,7 +1140,7 @@ pub mod function {
             (A11, B11),
         );
         #[rustfmt::skip]
-        fn apply(self) -> <Self>::Return {
+        fn apply(self) -> Self::Return {
             let (first, second) = self;
             {
                 (
@@ -1173,7 +1173,7 @@ pub mod function {
     }
     impl _typle_fn_double for ((),) {
         type Return = ();
-        fn apply(self) -> <Self>::Return {
+        fn apply(self) -> Self::Return {
             #[allow(unused_variables)]
             let (t,) = self;
             { () }
@@ -1181,21 +1181,21 @@ pub mod function {
     }
     impl _typle_fn_double for ((u32,),) {
         type Return = (u32,);
-        fn apply(self) -> <Self>::Return {
+        fn apply(self) -> Self::Return {
             let (t,) = self;
             { (t.0 * 2,) }
         }
     }
     impl _typle_fn_double for ((u32, u32),) {
         type Return = (u32, u32);
-        fn apply(self) -> <Self>::Return {
+        fn apply(self) -> Self::Return {
             let (t,) = self;
             { (t.0 * 2, t.1 * 2) }
         }
     }
     impl _typle_fn_double for ((u32, u32, u32),) {
         type Return = (u32, u32, u32);
-        fn apply(self) -> <Self>::Return {
+        fn apply(self) -> Self::Return {
             let (t,) = self;
             { (t.0 * 2, t.1 * 2, t.2 * 2) }
         }
@@ -1279,7 +1279,7 @@ pub mod method {
     }
     impl _typle_fn_associated for ((), u32) {
         type Return = ();
-        fn apply(self) -> <Self>::Return {
+        fn apply(self) -> Self::Return {
             #[allow(unused_variables)]
             let (t, i) = self;
             { () }
@@ -1287,21 +1287,21 @@ pub mod method {
     }
     impl _typle_fn_associated for ((u32,), u32) {
         type Return = (u32,);
-        fn apply(self) -> <Self>::Return {
+        fn apply(self) -> Self::Return {
             let (t, i) = self;
             { (t.0 + i,) }
         }
     }
     impl _typle_fn_associated for ((u32, u32), u32) {
         type Return = (u32, u32);
-        fn apply(self) -> <Self>::Return {
+        fn apply(self) -> Self::Return {
             let (t, i) = self;
             { (t.0 + i, t.1 + i) }
         }
     }
     impl _typle_fn_associated for ((u32, u32, u32), u32) {
         type Return = (u32, u32, u32);
-        fn apply(self) -> <Self>::Return {
+        fn apply(self) -> Self::Return {
             let (t, i) = self;
             { (t.0 + i, t.1 + i, t.2 + i) }
         }
@@ -1313,7 +1313,7 @@ pub mod method {
     }
     impl<'a> _typle_fn_inherent1 for (&'a X, ()) {
         type Return = ();
-        fn apply(self) -> <Self>::Return {
+        fn apply(self) -> Self::Return {
             #[allow(unused_variables)]
             let (_typle_self, t) = self;
             { () }
@@ -1321,21 +1321,21 @@ pub mod method {
     }
     impl<'a> _typle_fn_inherent1 for (&'a X, (u32,)) {
         type Return = (u32,);
-        fn apply(self) -> <Self>::Return {
+        fn apply(self) -> Self::Return {
             let (_typle_self, t) = self;
             { (t.0 + _typle_self.i,) }
         }
     }
     impl<'a> _typle_fn_inherent1 for (&'a X, (u32, u32)) {
         type Return = (u32, u32);
-        fn apply(self) -> <Self>::Return {
+        fn apply(self) -> Self::Return {
             let (_typle_self, t) = self;
             { (t.0 + _typle_self.i, t.1 + _typle_self.i) }
         }
     }
     impl<'a> _typle_fn_inherent1 for (&'a X, (u32, u32, u32)) {
         type Return = (u32, u32, u32);
-        fn apply(self) -> <Self>::Return {
+        fn apply(self) -> Self::Return {
             let (_typle_self, t) = self;
             { (t.0 + _typle_self.i, t.1 + _typle_self.i, t.2 + _typle_self.i) }
         }
@@ -1347,31 +1347,225 @@ pub mod method {
     }
     impl<'a> _typle_fn_inherent2 for (&'a X, ()) {
         type Return = ();
-        fn apply(self) -> <Self>::Return {
+        fn apply(self) -> Self::Return {
             #[allow(unused_variables)]
             let (_typle_self, t) = self;
-            { <X>::associated(t, _typle_self.i) }
+            { X::associated(t, _typle_self.i) }
         }
     }
     impl<'a> _typle_fn_inherent2 for (&'a X, (u32,)) {
         type Return = (u32,);
-        fn apply(self) -> <Self>::Return {
+        fn apply(self) -> Self::Return {
             let (_typle_self, t) = self;
-            { <X>::associated(t, _typle_self.i) }
+            { X::associated(t, _typle_self.i) }
         }
     }
     impl<'a> _typle_fn_inherent2 for (&'a X, (u32, u32)) {
         type Return = (u32, u32);
-        fn apply(self) -> <Self>::Return {
+        fn apply(self) -> Self::Return {
             let (_typle_self, t) = self;
-            { <X>::associated(t, _typle_self.i) }
+            { X::associated(t, _typle_self.i) }
         }
     }
     impl<'a> _typle_fn_inherent2 for (&'a X, (u32, u32, u32)) {
         type Return = (u32, u32, u32);
-        fn apply(self) -> <Self>::Return {
+        fn apply(self) -> Self::Return {
             let (_typle_self, t) = self;
-            { <X>::associated(t, _typle_self.i) }
+            { X::associated(t, _typle_self.i) }
+        }
+    }
+    #[allow(non_camel_case_types)]
+    pub trait _typle_fn_inherent3 {
+        type Return;
+        fn apply(self) -> Self::Return;
+    }
+    impl<'a> _typle_fn_inherent3 for (&'a mut X, ()) {
+        type Return = ();
+        #[allow(clippy::assign_op_pattern)]
+        fn apply(self) -> Self::Return {
+            #[allow(unused_variables)]
+            let (_typle_self, t) = self;
+            {
+                _typle_self.i += 1;
+                _typle_self.i = _typle_self.i + 1;
+                t
+            }
+        }
+    }
+    impl<'a> _typle_fn_inherent3 for (&'a mut X, (u32,)) {
+        type Return = (u32,);
+        #[allow(clippy::assign_op_pattern)]
+        fn apply(self) -> Self::Return {
+            let (_typle_self, t) = self;
+            {
+                _typle_self.i += 1;
+                _typle_self.i = _typle_self.i + 1;
+                t
+            }
+        }
+    }
+    impl<'a> _typle_fn_inherent3 for (&'a mut X, (u32, u32)) {
+        type Return = (u32, u32);
+        #[allow(clippy::assign_op_pattern)]
+        fn apply(self) -> Self::Return {
+            let (_typle_self, t) = self;
+            {
+                _typle_self.i += 1;
+                _typle_self.i = _typle_self.i + 1;
+                t
+            }
+        }
+    }
+    impl<'a> _typle_fn_inherent3 for (&'a mut X, (u32, u32, u32)) {
+        type Return = (u32, u32, u32);
+        #[allow(clippy::assign_op_pattern)]
+        fn apply(self) -> Self::Return {
+            let (_typle_self, t) = self;
+            {
+                _typle_self.i += 1;
+                _typle_self.i = _typle_self.i + 1;
+                t
+            }
+        }
+    }
+    #[allow(non_camel_case_types)]
+    pub trait _typle_fn_inherent4 {
+        type Return;
+        fn apply(self) -> Self::Return;
+    }
+    impl<'a> _typle_fn_inherent4 for (&'a X, ()) {
+        type Return = ();
+        fn apply(self) -> Self::Return {
+            #[allow(unused_variables)]
+            let (_typle_self, t) = self;
+            {
+                let _v: Vec<X> = Vec::<X>::new();
+                t
+            }
+        }
+    }
+    impl<'a> _typle_fn_inherent4 for (&'a X, (u32,)) {
+        type Return = (u32,);
+        fn apply(self) -> Self::Return {
+            let (_typle_self, t) = self;
+            {
+                let _v: Vec<X> = Vec::<X>::new();
+                t
+            }
+        }
+    }
+    impl<'a> _typle_fn_inherent4 for (&'a X, (u32, u32)) {
+        type Return = (u32, u32);
+        fn apply(self) -> Self::Return {
+            let (_typle_self, t) = self;
+            {
+                let _v: Vec<X> = Vec::<X>::new();
+                t
+            }
+        }
+    }
+    impl<'a> _typle_fn_inherent4 for (&'a X, (u32, u32, u32)) {
+        type Return = (u32, u32, u32);
+        fn apply(self) -> Self::Return {
+            let (_typle_self, t) = self;
+            {
+                let _v: Vec<X> = Vec::<X>::new();
+                t
+            }
+        }
+    }
+    #[allow(non_camel_case_types)]
+    pub trait _typle_fn_inherent5 {
+        type Return;
+        fn apply(self) -> Self::Return;
+    }
+    impl<'a> _typle_fn_inherent5 for (&'a X, ()) {
+        type Return = ();
+        fn apply(self) -> Self::Return {
+            #[allow(unused_variables)]
+            let (_typle_self, t) = self;
+            {
+                #[allow(unused_variables)]
+                let X { i } = _typle_self;
+                ()
+            }
+        }
+    }
+    impl<'a> _typle_fn_inherent5 for (&'a X, (u32,)) {
+        type Return = (u32,);
+        fn apply(self) -> Self::Return {
+            let (_typle_self, t) = self;
+            {
+                let X { i } = _typle_self;
+                (t.0 + i,)
+            }
+        }
+    }
+    impl<'a> _typle_fn_inherent5 for (&'a X, (u32, u32)) {
+        type Return = (u32, u32);
+        fn apply(self) -> Self::Return {
+            let (_typle_self, t) = self;
+            {
+                let X { i } = _typle_self;
+                (t.0 + i, t.1 + i)
+            }
+        }
+    }
+    impl<'a> _typle_fn_inherent5 for (&'a X, (u32, u32, u32)) {
+        type Return = (u32, u32, u32);
+        fn apply(self) -> Self::Return {
+            let (_typle_self, t) = self;
+            {
+                let X { i } = _typle_self;
+                (t.0 + i, t.1 + i, t.2 + i)
+            }
+        }
+    }
+    #[allow(non_camel_case_types)]
+    pub trait _typle_fn_inherent6 {
+        type Return;
+        fn apply(self) -> Self::Return;
+    }
+    impl<'a> _typle_fn_inherent6 for (&'a X, ()) {
+        type Return = ();
+        fn apply(self) -> Self::Return {
+            #[allow(unused_variables)]
+            let (_typle_self, t) = self;
+            {
+                #[allow(unused_variables)]
+                let X { i } = _typle_self;
+                ()
+            }
+        }
+    }
+    impl<'a> _typle_fn_inherent6 for (&'a X, (u32,)) {
+        type Return = (u32,);
+        fn apply(self) -> Self::Return {
+            let (_typle_self, t) = self;
+            {
+                let X { i } = _typle_self;
+                (t.0 + i,)
+            }
+        }
+    }
+    impl<'a> _typle_fn_inherent6 for (&'a X, (u32, u32)) {
+        type Return = (u32, u32);
+        fn apply(self) -> Self::Return {
+            let (_typle_self, t) = self;
+            {
+                let X { i } = _typle_self;
+                (t.0 + i, t.1 + i)
+            }
+        }
+    }
+    impl<'a> _typle_fn_inherent6 for (&'a X, (u32, u32, u32)) {
+        type Return = (u32, u32, u32);
+        fn apply(self) -> Self::Return {
+            let (_typle_self, t) = self;
+            {
+                let X { i } = _typle_self;
+                (t.0 + i, t.1 + i, t.2 + i)
+            }
         }
     }
     impl X {
@@ -1402,6 +1596,42 @@ pub mod method {
             (&'a X, T): _typle_fn_inherent2,
         {
             <(&'a X, T) as _typle_fn_inherent2>::apply((self, t))
+        }
+        pub fn inherent3<'a, T>(
+            &'a mut self,
+            t: T,
+        ) -> <(&'a mut X, T) as _typle_fn_inherent3>::Return
+        where
+            (&'a mut X, T): _typle_fn_inherent3,
+        {
+            <(&'a mut X, T) as _typle_fn_inherent3>::apply((self, t))
+        }
+        pub fn inherent4<'a, T>(
+            &'a self,
+            t: T,
+        ) -> <(&'a X, T) as _typle_fn_inherent4>::Return
+        where
+            (&'a X, T): _typle_fn_inherent4,
+        {
+            <(&'a X, T) as _typle_fn_inherent4>::apply((self, t))
+        }
+        pub fn inherent5<'a, T>(
+            &'a self,
+            t: T,
+        ) -> <(&'a X, T) as _typle_fn_inherent5>::Return
+        where
+            (&'a X, T): _typle_fn_inherent5,
+        {
+            <(&'a X, T) as _typle_fn_inherent5>::apply((self, t))
+        }
+        pub fn inherent6<'a, T>(
+            &'a self,
+            t: T,
+        ) -> <(&'a X, T) as _typle_fn_inherent6>::Return
+        where
+            (&'a X, T): _typle_fn_inherent6,
+        {
+            <(&'a X, T) as _typle_fn_inherent6>::apply((self, t))
         }
     }
 }
@@ -1436,7 +1666,7 @@ pub mod pattern {
     }
     impl _typle_fn_multiply_by for ((u32,), u32) {
         type Return = (u32,);
-        fn apply(self) -> <Self>::Return {
+        fn apply(self) -> Self::Return {
             let (t, m) = self;
             {
                 let (x0,) = (t.0 * m,);
@@ -1459,7 +1689,7 @@ pub mod pattern {
     }
     impl _typle_fn_multiply_by for ((u32, u32), u32) {
         type Return = (u32, u32);
-        fn apply(self) -> <Self>::Return {
+        fn apply(self) -> Self::Return {
             let (t, m) = self;
             {
                 let (x0, x1) = (t.0 * m, t.1 * m);
@@ -1482,7 +1712,7 @@ pub mod pattern {
     }
     impl _typle_fn_multiply_by for ((u32, u32, u32), u32) {
         type Return = (u32, u32, u32);
-        fn apply(self) -> <Self>::Return {
+        fn apply(self) -> Self::Return {
             let (t, m) = self;
             {
                 let (x0, x1, x2) = (t.0 * m, t.1 * m, t.2 * m);
@@ -1505,7 +1735,7 @@ pub mod pattern {
     }
     impl _typle_fn_multiply_by for ((u32, u32, u32, u32), u32) {
         type Return = (u32, u32, u32, u32);
-        fn apply(self) -> <Self>::Return {
+        fn apply(self) -> Self::Return {
             let (t, m) = self;
             {
                 let (x0, x1, x2, x3) = (t.0 * m, t.1 * m, t.2 * m, t.3 * m);
@@ -1528,7 +1758,7 @@ pub mod pattern {
     }
     impl _typle_fn_multiply_by for ((u32, u32, u32, u32, u32), u32) {
         type Return = (u32, u32, u32, u32, u32);
-        fn apply(self) -> <Self>::Return {
+        fn apply(self) -> Self::Return {
             let (t, m) = self;
             {
                 let (x0, x1, x2, x3, x4) = (t.0 * m, t.1 * m, t.2 * m, t.3 * m, t.4 * m);
@@ -1551,7 +1781,7 @@ pub mod pattern {
     }
     impl _typle_fn_multiply_by for ((u32, u32, u32, u32, u32, u32), u32) {
         type Return = (u32, u32, u32, u32, u32, u32);
-        fn apply(self) -> <Self>::Return {
+        fn apply(self) -> Self::Return {
             let (t, m) = self;
             {
                 let (x0, x1, x2, x3, x4, x5) = (
@@ -1581,7 +1811,7 @@ pub mod pattern {
     }
     impl _typle_fn_multiply_by for ((u32, u32, u32, u32, u32, u32, u32), u32) {
         type Return = (u32, u32, u32, u32, u32, u32, u32);
-        fn apply(self) -> <Self>::Return {
+        fn apply(self) -> Self::Return {
             let (t, m) = self;
             {
                 let (x0, x1, x2, x3, x4, x5, x6) = (
@@ -1612,7 +1842,7 @@ pub mod pattern {
     }
     impl _typle_fn_multiply_by for ((u32, u32, u32, u32, u32, u32, u32, u32), u32) {
         type Return = (u32, u32, u32, u32, u32, u32, u32, u32);
-        fn apply(self) -> <Self>::Return {
+        fn apply(self) -> Self::Return {
             let (t, m) = self;
             {
                 let (x0, x1, x2, x3, x4, x5, x6, x7) = (
@@ -1644,7 +1874,7 @@ pub mod pattern {
     }
     impl _typle_fn_multiply_by for ((u32, u32, u32, u32, u32, u32, u32, u32, u32), u32) {
         type Return = (u32, u32, u32, u32, u32, u32, u32, u32, u32);
-        fn apply(self) -> <Self>::Return {
+        fn apply(self) -> Self::Return {
             let (t, m) = self;
             {
                 let (x0, x1, x2, x3, x4, x5, x6, x7, x8) = (
@@ -1678,7 +1908,7 @@ pub mod pattern {
     impl _typle_fn_multiply_by
     for ((u32, u32, u32, u32, u32, u32, u32, u32, u32, u32), u32) {
         type Return = (u32, u32, u32, u32, u32, u32, u32, u32, u32, u32);
-        fn apply(self) -> <Self>::Return {
+        fn apply(self) -> Self::Return {
             let (t, m) = self;
             {
                 let (x0, x1, x2, x3, x4, x5, x6, x7, x8, x9) = (
@@ -1713,7 +1943,7 @@ pub mod pattern {
     impl _typle_fn_multiply_by
     for ((u32, u32, u32, u32, u32, u32, u32, u32, u32, u32, u32), u32) {
         type Return = (u32, u32, u32, u32, u32, u32, u32, u32, u32, u32, u32);
-        fn apply(self) -> <Self>::Return {
+        fn apply(self) -> Self::Return {
             let (t, m) = self;
             {
                 let (x0, x1, x2, x3, x4, x5, x6, x7, x8, x9, x10) = (
@@ -1749,7 +1979,7 @@ pub mod pattern {
     impl _typle_fn_multiply_by
     for ((u32, u32, u32, u32, u32, u32, u32, u32, u32, u32, u32, u32), u32) {
         type Return = (u32, u32, u32, u32, u32, u32, u32, u32, u32, u32, u32, u32);
-        fn apply(self) -> <Self>::Return {
+        fn apply(self) -> Self::Return {
             let (t, m) = self;
             {
                 let (x0, x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, x11) = (

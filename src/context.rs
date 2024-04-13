@@ -725,194 +725,87 @@ impl<'a> TypleContext<'a> {
             }
             Expr::Path(path) => {
                 self.replace_attrs(&mut path.attrs)?;
-                if let Some(qself) = &mut path.qself {
-                    // <T as Default>::default()
-                    // <T::<0> as Default>::default()
-                    self.replace_type(&mut qself.ty)?;
-                }
-                let mut segments = std::mem::take(&mut path.path.segments)
-                    .into_iter()
-                    .peekable();
-                if let Some(first) = segments.peek() {
-                    if first.ident == self.typle_macro.ident {
-                        let _ = segments.next().unwrap();
-                        if let Some(second) = segments.peek() {
-                            if second.ident == "LEN" {
-                                // Tuple::LEN or <T as Tuple>::LEN
-                                // todo: check that any qself is a type tuple of the correct length
-                                let Some(typle_len) = self.typle_len else {
-                                    abort!(second.ident, "LEN not available outside fn or impl");
-                                };
-                                *expr = Expr::Lit(ExprLit {
-                                    attrs: std::mem::take(&mut path.attrs),
-                                    lit: Lit::Int(LitInt::new(&typle_len.to_string(), path.span())),
-                                });
-                                return Ok(());
-                            } else if second.ident == "MAX" {
-                                // Tuple::MAX or <T as Tuple>::MAX
-                                *expr = Expr::Lit(ExprLit {
-                                    attrs: std::mem::take(&mut path.attrs),
-                                    lit: Lit::Int(LitInt::new(
-                                        &self.typle_macro.max_len.to_string(),
-                                        path.span(),
-                                    )),
-                                });
-                                return Ok(());
-                            } else if second.ident == "MIN" {
-                                // Tuple::MIN or <T as Tuple>::MIN
-                                *expr = Expr::Lit(ExprLit {
-                                    attrs: std::mem::take(&mut path.attrs),
-                                    lit: Lit::Int(LitInt::new(
-                                        &self.typle_macro.min_len.to_string(),
-                                        path.span(),
-                                    )),
-                                });
-                                return Ok(());
-                            }
-                        }
-                    } else if let Some(typle) = self.typles.get(&first.ident) {
-                        let mut first = segments.next().unwrap();
-                        match &mut first.arguments {
-                            PathArguments::None => {
-                                match segments.peek() {
-                                    Some(second) => {
-                                        if second.ident == "LEN" {
-                                            // T::LEN
-                                            let Some(typle_len) = self.typle_len else {
-                                                abort!(
-                                                    second.ident,
-                                                    "LEN not available outside fn or impl"
-                                                );
-                                            };
-                                            *expr = Expr::Lit(ExprLit {
-                                                attrs: std::mem::take(&mut path.attrs),
-                                                lit: Lit::Int(LitInt::new(
-                                                    &typle_len.to_string(),
-                                                    path.span(),
-                                                )),
-                                            });
-                                            return Ok(());
-                                        } else if second.ident == "MAX" {
-                                            // T::MAX
-                                            *expr = Expr::Lit(ExprLit {
-                                                attrs: std::mem::take(&mut path.attrs),
-                                                lit: Lit::Int(LitInt::new(
-                                                    &self.typle_macro.max_len.to_string(),
-                                                    path.span(),
-                                                )),
-                                            });
-                                            return Ok(());
-                                        } else if second.ident == "MIN" {
-                                            // T::MIN
-                                            *expr = Expr::Lit(ExprLit {
-                                                attrs: std::mem::take(&mut path.attrs),
-                                                lit: Lit::Int(LitInt::new(
-                                                    &self.typle_macro.min_len.to_string(),
-                                                    path.span(),
-                                                )),
-                                            });
-                                            return Ok(());
-                                        }
-                                        // T::clone(&t) -> <(T0, T1)>::clone(&t)
-                                        let tuple_type = Box::new(Type::Tuple(TypeTuple {
-                                            paren_token: token::Paren::default(),
-                                            elems: (0..self
-                                                .typle_len
-                                                .unwrap_or(self.typle_macro.max_len))
-                                                .map(|i| self.get_type(typle, i, first.span()))
-                                                .collect::<Result<_>>()?,
-                                        }));
-                                        path.qself = Some(QSelf {
-                                            lt_token: token::Lt::default(),
-                                            ty: tuple_type,
-                                            position: 0,
-                                            as_token: None,
-                                            gt_token: token::Gt::default(),
-                                        });
-                                        path.path.leading_colon = Some(token::PathSep::default());
-                                    }
-                                    None => {
-                                        abort!(first, "type in value position");
-                                    }
-                                }
-                            }
-                            PathArguments::AngleBracketed(args) => {
-                                // T::<0>::default() -> <T0>::default()
-                                if args.args.len() != 1 {
-                                    abort!(first, "expected one type parameter");
-                                }
-                                match args.args.first_mut() {
-                                    Some(GenericArgument::Const(expr)) => {
-                                        // T<{T::LEN - 1}>
-                                        self.replace_expr(expr, state)?;
-                                        // T<{5 - 1}>
-                                        let Some(value) = evaluate_usize(expr) else {
-                                            abort!(expr, "unsupported tuple type index");
-                                        };
-                                        // T<{4}>
-                                        let qself = self.get_type(typle, value, first.span())?;
-                                        if path.qself.is_some() {
-                                            abort!(first, "not a trait");
-                                        }
-                                        path.qself = Some(QSelf {
-                                            lt_token: token::Lt::default(),
-                                            ty: Box::new(qself),
-                                            position: 0,
-                                            as_token: None,
-                                            gt_token: token::Gt::default(),
-                                        });
-                                        path.path.leading_colon = Some(token::PathSep::default());
-                                    }
-                                    _ => {
-                                        abort!(
-                                            args,
-                                            "Require const parameter (wrap {} around expression)"
-                                        );
-                                    }
-                                }
-                            }
-                            PathArguments::Parenthesized(_) => {
-                                path.path.segments.push(first);
-                            }
-                        }
-                    } else if let Some(value) = self.constants.get(&first.ident) {
-                        *expr = Expr::Lit(ExprLit {
-                            attrs: std::mem::take(&mut path.attrs),
-                            lit: Lit::Int(LitInt::new(&value.to_string(), first.ident.span())),
-                        });
-                        return Ok(());
-                    } else if let Some(rename) = self.renames.get(&first.ident) {
-                        let ident = &mut segments.peek_mut().unwrap().ident;
-                        *ident = Ident::new(rename, ident.span());
-                    } else if let Some(ty) = self.retypes.get(&first.ident) {
-                        let _ = segments.next().unwrap();
-                        path.qself = Some(QSelf {
-                            lt_token: token::Lt::default(),
-                            ty: Box::new(ty.clone()),
-                            position: 0,
-                            as_token: None,
-                            gt_token: token::Gt::default(),
-                        });
-                        path.path.leading_colon = Some(token::PathSep::default());
-                    }
-                    path.path.segments = segments.collect();
-                    self.replace_path_arguments(&mut path.path)?;
-                    // If a path looks like a typle associated constant, but has not been evaluated,
-                    // the caller may have omitted the typle constraint.
-                    if path.path.segments.len() == 2 {
-                        let mut iter = path.path.segments.iter();
-                        if let Some(last) = iter.next_back() {
-                            if let PathArguments::None = last.arguments {
-                                if last.ident == "LEN" || last.ident == "MAX" || last.ident == "MIN"
+                if path.qself.is_none() {
+                    let mut segments = path.path.segments.iter();
+                    if let Some(PathSegment {
+                        ident: ident1,
+                        arguments: PathArguments::None,
+                    }) = segments.next()
+                    {
+                        if let (
+                            Some(PathSegment {
+                                ident: ident2,
+                                arguments: PathArguments::None,
+                            }),
+                            None,
+                        ) = (segments.next(), segments.next())
+                        {
+                            if ident2 == "LEN" {
+                                if ident1 == &self.typle_macro.ident
+                                    || self.typles.contains_key(ident1)
                                 {
-                                    if let Some(segment) = iter.next_back() {
-                                        state.suspicious_ident = Some(segment.ident.clone());
-                                    }
+                                    // Tuple::LEN or <T as Tuple>::LEN
+                                    // todo: check that any qself is a type tuple of the correct length
+                                    let Some(typle_len) = self.typle_len else {
+                                        abort!(ident2, "LEN not available outside fn or impl");
+                                    };
+                                    *expr = Expr::Lit(ExprLit {
+                                        attrs: std::mem::take(&mut path.attrs),
+                                        lit: Lit::Int(LitInt::new(
+                                            &typle_len.to_string(),
+                                            path.span(),
+                                        )),
+                                    });
+                                    return Ok(());
+                                } else {
+                                    // Path looks like a typle associated constant: the caller
+                                    // may have omitted the typle constraint.
+                                    state.suspicious_ident = Some(ident1.clone());
+                                }
+                            } else if ident2 == "MAX" {
+                                if ident1 == &self.typle_macro.ident
+                                    || self.typles.contains_key(ident1)
+                                {
+                                    // Tuple::MAX or <T as Tuple>::MAX
+                                    *expr = Expr::Lit(ExprLit {
+                                        attrs: std::mem::take(&mut path.attrs),
+                                        lit: Lit::Int(LitInt::new(
+                                            &self.typle_macro.max_len.to_string(),
+                                            path.span(),
+                                        )),
+                                    });
+                                    return Ok(());
+                                } else {
+                                    state.suspicious_ident = Some(ident1.clone());
+                                }
+                            } else if ident2 == "MIN" {
+                                if ident1 == &self.typle_macro.ident
+                                    || self.typles.contains_key(ident1)
+                                {
+                                    // Tuple::MIN or <T as Tuple>::MIN
+                                    *expr = Expr::Lit(ExprLit {
+                                        attrs: std::mem::take(&mut path.attrs),
+                                        lit: Lit::Int(LitInt::new(
+                                            &self.typle_macro.min_len.to_string(),
+                                            path.span(),
+                                        )),
+                                    });
+                                    return Ok(());
+                                } else {
+                                    state.suspicious_ident = Some(ident1.clone());
                                 }
                             }
+                        } else if let Some(value) = self.constants.get(ident1) {
+                            *expr = Expr::Lit(ExprLit {
+                                attrs: std::mem::take(&mut path.attrs),
+                                lit: Lit::Int(LitInt::new(&value.to_string(), ident1.span())),
+                            });
+                            return Ok(());
                         }
                     }
                 }
+                self.replace_qself_path(&mut path.qself, &mut path.path)?;
+                self.replace_path_arguments(&mut path.path)?;
             }
             Expr::Range(range) => {
                 self.replace_attrs(&mut range.attrs)?;
@@ -2374,33 +2267,8 @@ impl<'a> TypleContext<'a> {
             }
             Pat::Path(path) => {
                 // State::S::<typle_ident!(i)> -> State::S2
-                if let Some(qself) = &mut path.qself {
-                    self.replace_type(&mut qself.ty)?;
-                }
-                for mut path_segment in std::mem::take(&mut path.path.segments) {
-                    match &mut path_segment.arguments {
-                        PathArguments::None => {}
-                        PathArguments::AngleBracketed(args) => {
-                            if let Some(index) = self.typle_ident(args)? {
-                                // X::<typle_ident!(3)> -> X3
-                                path_segment.ident =
-                                    format_ident!("{}{}", path_segment.ident, index);
-                                path_segment.arguments = PathArguments::None;
-                            } else {
-                                // std::option::Option<T> -> std::option::Option<(T0, T1,...)>
-                                // std::option::Option<T<3>> -> std::option::Option<T3>
-                                self.replace_generic_arguments(&mut args.args)?;
-                                if args.args.is_empty() {
-                                    path_segment.arguments = PathArguments::None;
-                                }
-                            }
-                        }
-                        PathArguments::Parenthesized(p) => {
-                            abort!(p, "parenthesized arguments not supported")
-                        }
-                    }
-                    path.path.segments.push(path_segment);
-                }
+                self.replace_qself_path(&mut path.qself, &mut path.path)?;
+                self.replace_path_arguments(&mut path.path)?;
             }
             Pat::Reference(reference) => {
                 self.replace_pat(&mut reference.pat)?;
@@ -2409,6 +2277,18 @@ impl<'a> TypleContext<'a> {
                 for pat in &mut slice.elems {
                     self.replace_pat(pat)?;
                 }
+            }
+            Pat::Struct(pat) => {
+                self.replace_qself_path(&mut pat.qself, &mut pat.path)?;
+                if pat.path.segments.is_empty() {
+                    if let Some(qself) = &mut pat.qself {
+                        if let Type::Path(TypePath { qself, path }) = &mut *qself.ty {
+                            pat.path = path.clone();
+                            pat.qself = qself.take();
+                        }
+                    }
+                }
+                self.replace_path_arguments(&mut pat.path)?;
             }
             Pat::Tuple(tuple) => {
                 for pat in &mut tuple.elems {
@@ -2450,6 +2330,107 @@ impl<'a> TypleContext<'a> {
                 self.replace_type(&mut pat_type.ty)?;
             }
             _ => {}
+        }
+        Ok(())
+    }
+
+    // This can return <QSelf>:: or <QSelf> which needs to be cleaned up by the caller.
+    fn replace_qself_path(&self, qself: &mut Option<QSelf>, path: &mut Path) -> Result<()> {
+        if let Some(qself) = qself {
+            self.replace_type(&mut qself.ty)?;
+        } else if let Some(ident) = path.segments.first().map(|segment| &segment.ident) {
+            if let Some(typle) = self.typles.get(ident) {
+                let mut segments = std::mem::take(&mut path.segments).into_iter();
+                let mut first = segments.next().unwrap();
+                match &mut first.arguments {
+                    PathArguments::None => {
+                        // T::clone(&t) -> <(T0, T1)>::clone(&t)
+                        // T -> <(T0, T1)> (needs to be undone at call site)
+                        let tuple_type = Box::new(Type::Tuple(TypeTuple {
+                            paren_token: token::Paren::default(),
+                            elems: (0..self.typle_len.unwrap_or(self.typle_macro.max_len))
+                                .map(|i| self.get_type(typle, i, first.span()))
+                                .collect::<Result<_>>()?,
+                        }));
+                        *qself = Some(QSelf {
+                            lt_token: token::Lt::default(),
+                            ty: tuple_type,
+                            position: 0,
+                            as_token: None,
+                            gt_token: token::Gt::default(),
+                        });
+                        path.leading_colon = Some(token::PathSep::default());
+                        path.segments = segments.collect();
+                    }
+                    PathArguments::AngleBracketed(args) => {
+                        // T::<0>::default() -> <T0>::default()
+                        // T::<0> -> <T0>
+                        if args.args.len() != 1 {
+                            abort!(first, "expected one type parameter");
+                        }
+                        match args.args.first_mut() {
+                            Some(GenericArgument::Const(expr)) => {
+                                // T<{T::LEN - 1}>
+                                let mut state = BlockState::default();
+                                self.replace_expr(expr, &mut state)?;
+                                // T<{5 - 1}>
+                                let Some(value) = evaluate_usize(expr) else {
+                                    abort!(expr, "unsupported tuple type index");
+                                };
+                                // T<{4}>::State -> <T4>::State
+                                // T<{4}> -> <T4>::
+                                *qself = Some(QSelf {
+                                    lt_token: token::Lt::default(),
+                                    ty: Box::new(self.get_type(typle, value, first.span())?),
+                                    position: 0,
+                                    as_token: None,
+                                    gt_token: token::Gt::default(),
+                                });
+                                path.leading_colon = Some(token::PathSep::default());
+                                path.segments = segments.collect();
+                            }
+                            _ => {
+                                abort!(args, "Require const parameter (wrap {} around expression)");
+                            }
+                        }
+                    }
+                    PathArguments::Parenthesized(_) => {
+                        // T(u32) -> u32
+                        abort!(
+                            first,
+                            "typled types do not support parenthesized parameters"
+                        )
+                    }
+                }
+            } else if let Some(rename) = self.renames.get(ident) {
+                let ident = &mut path.segments.first_mut().unwrap().ident;
+                *ident = Ident::new(rename, ident.span());
+            } else if let Some(ty) = self.retypes.get(ident) {
+                match ty {
+                    Type::Path(TypePath {
+                        qself: ty_qself,
+                        path: ty_path,
+                    }) if ty_path.segments.len() == 1 => {
+                        let ty_segment = ty_path.segments.first().unwrap();
+                        let segment = path.segments.first_mut().unwrap();
+                        *segment = ty_segment.clone();
+                        *qself = ty_qself.clone();
+                    }
+                    _ => {
+                        let mut segments = std::mem::take(&mut path.segments).into_iter();
+                        let _ = segments.next().unwrap();
+                        *qself = Some(QSelf {
+                            lt_token: token::Lt::default(),
+                            ty: Box::new(ty.clone()),
+                            position: 0,
+                            as_token: None,
+                            gt_token: token::Gt::default(),
+                        });
+                        path.leading_colon = Some(token::PathSep::default());
+                        path.segments = segments.collect();
+                    }
+                }
+            }
         }
         Ok(())
     }
@@ -2531,106 +2512,11 @@ impl<'a> TypleContext<'a> {
                 self.replace_type(&mut paren.elem)?;
             }
             Type::Path(path) => {
-                match &mut path.qself {
-                    Some(qself) => {
-                        // <T<0> as Mul<M>>::Output
-                        self.replace_type(&mut qself.ty)?;
-                    }
-                    None => {
-                        let mut segments = std::mem::take(&mut path.path.segments)
-                            .into_iter()
-                            .peekable();
-                        if let Some(mut first) = segments.next() {
-                            if let Some(typle) = self.typles.get(&first.ident) {
-                                match &mut first.arguments {
-                                    PathArguments::None => {
-                                        // T -> (T0, T1,...)
-                                        let span = first.ident.span();
-                                        *ty = Type::Tuple(TypeTuple {
-                                            paren_token: token::Paren::default(),
-                                            elems: (0..self
-                                                .typle_len
-                                                .unwrap_or(self.typle_macro.max_len))
-                                                .map(|i| self.get_type(typle, i, span))
-                                                .collect::<Result<_>>()?,
-                                        });
-                                        return Ok(());
-                                    }
-                                    PathArguments::AngleBracketed(args) => {
-                                        // T<3> or T<{i}>
-                                        if args.args.len() != 1 {
-                                            return Err(Error::new(
-                                                first.span(),
-                                                "expected one type parameter",
-                                            ));
-                                        }
-                                        match args.args.first_mut() {
-                                            Some(GenericArgument::Const(expr)) => {
-                                                // T<{T::LEN - 1}>
-                                                let mut state = BlockState::default();
-                                                self.replace_expr(expr, &mut state)?;
-                                                // T<{5 - 1}>
-                                                let Some(value) = evaluate_usize(expr) else {
-                                                    return Err(Error::new(
-                                                        expr.span(),
-                                                        "unsupported tuple type index"
-                                                    ));
-                                                };
-                                                let component_type =
-                                                    self.get_type(typle, value, first.span())?;
-                                                if segments.peek().is_some() {
-                                                    // T<3>::Output -> <T3>::Output
-                                                    path.qself = Some(QSelf {
-                                                        lt_token: token::Lt::default(),
-                                                        ty: Box::new(component_type),
-                                                        position: 0,
-                                                        as_token: None,
-                                                        gt_token: token::Gt::default(),
-                                                    });
-                                                    path.path.leading_colon =
-                                                        Some(token::PathSep::default());
-                                                    path.path.segments = segments.collect();
-                                                } else {
-                                                    // T<3> -> T3
-                                                    *ty = component_type;
-                                                    return Ok(());
-                                                }
-                                            }
-                                            _ => {
-                                                return Err(Error::new(
-                                                    args.span(),
-                                                    "Require const parameter (wrap {} around expression)"
-                                                ))
-                                            }
-                                        }
-                                    }
-                                    PathArguments::Parenthesized(_) => {
-                                        // Parenthesized arguments are not supported for tuple types
-                                        return Err(Error::new(
-                                            first.arguments.span(),
-                                            "unexpected patenthesized args",
-                                        ));
-                                    }
-                                }
-                            } else if let Some(ty) = self.retypes.get(&first.ident) {
-                                path.qself = Some(QSelf {
-                                    lt_token: token::Lt::default(),
-                                    ty: Box::new(ty.clone()),
-                                    position: 0,
-                                    as_token: None,
-                                    gt_token: token::Gt::default(),
-                                });
-                                path.path.leading_colon = Some(token::PathSep::default());
-                                for segment in segments {
-                                    path.path.segments.push(segment);
-                                }
-                            } else {
-                                path.path.segments.push(first);
-                                for segment in segments {
-                                    path.path.segments.push(segment);
-                                }
-                            }
-                        }
+                self.replace_qself_path(&mut path.qself, &mut path.path)?;
+                if path.path.segments.is_empty() {
+                    if let Some(qself) = path.qself.take() {
+                        *ty = *qself.ty;
+                        return Ok(());
                     }
                 }
                 self.replace_path_arguments(&mut path.path)?;
