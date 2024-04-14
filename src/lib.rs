@@ -682,6 +682,11 @@ pub fn typle_any(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
 ///     None::<(i32, &str)>
 /// );
 /// ```
+///
+/// The `typle_fold!` macro can also be used for recursive types. See the
+/// [example in the tests].
+///
+/// [example in the tests]: https://github.com/jongiddy/typle/blob/main/tests/compile/typle_fold.rs
 #[proc_macro]
 pub fn typle_fold(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
     Error::new_spanned(
