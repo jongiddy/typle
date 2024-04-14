@@ -1585,7 +1585,7 @@ impl<'a> TypleContext<'a> {
         }))
     }
 
-    fn replace_typle_fold(
+    fn replace_typle_fold_expr(
         &self,
         mac: &mut Macro,
         attrs: Vec<Attribute>,
@@ -1595,7 +1595,7 @@ impl<'a> TypleContext<'a> {
         let mut inner_state = BlockState::default();
         let token_stream = std::mem::take(&mut mac.tokens);
         let mut tokens = token_stream.into_iter();
-        let mut init_expr = Self::parse_init_expr(&mut tokens, default_span)?;
+        let mut init_expr = parse2::<Expr>(Self::extract_to_semicolon(&mut tokens, default_span)?)?;
         self.replace_expr(&mut init_expr, &mut inner_state)?;
         let (pattern, mut range) = self.parse_pattern_range(&mut tokens, default_span)?;
         let fold_ident = Self::parse_fold_ident(&mut tokens, default_span)?;
@@ -1619,34 +1619,33 @@ impl<'a> TypleContext<'a> {
             }),
             semi_token: token::Semi::default(),
         }));
-        let mut ctx = pattern.as_ref().map(|ident| {
-            let mut context = self.clone();
-            context.constants.insert(ident.clone(), 0);
-            (context, ident)
-        });
-        let last = range.next_back();
-        for index in range {
-            if let Some((ref mut context, ident)) = ctx {
-                *context.constants.get_mut(ident).unwrap() = index;
+        if let Some(last_index) = range.next_back() {
+            let mut ctx = pattern.as_ref().map(|ident| {
+                let mut context = self.clone();
+                context.constants.insert(ident.clone(), 0);
+                (context, ident)
+            });
+            for index in range {
+                if let Some((ref mut context, ident)) = ctx {
+                    *context.constants.get_mut(ident).unwrap() = index;
+                }
+                let context = ctx.as_ref().map_or(self, |c| &c.0);
+                let mut expr = expr.clone();
+                context.replace_expr(&mut expr, &mut inner_state)?;
+                stmts.push(Stmt::Local(syn::Local {
+                    attrs: Vec::new(),
+                    let_token: token::Let::default(),
+                    pat: fold_pat.clone(),
+                    init: Some(syn::LocalInit {
+                        eq_token: token::Eq::default(),
+                        expr: Box::new(expr),
+                        diverge: None,
+                    }),
+                    semi_token: token::Semi::default(),
+                }));
             }
-            let context = ctx.as_ref().map_or(self, |c| &c.0);
-            let mut expr = expr.clone();
-            context.replace_expr(&mut expr, &mut inner_state)?;
-            stmts.push(Stmt::Local(syn::Local {
-                attrs: Vec::new(),
-                let_token: token::Let::default(),
-                pat: fold_pat.clone(),
-                init: Some(syn::LocalInit {
-                    eq_token: token::Eq::default(),
-                    expr: Box::new(expr),
-                    diverge: None,
-                }),
-                semi_token: token::Semi::default(),
-            }));
-        }
-        if let Some(index) = last {
             if let Some((context, ident)) = &mut ctx {
-                *context.constants.get_mut(ident).unwrap() = index;
+                *context.constants.get_mut(ident).unwrap() = last_index;
             }
             let context = ctx.as_ref().map_or(self, |c| &c.0);
             let mut expr = expr;
@@ -1741,7 +1740,7 @@ impl<'a> TypleContext<'a> {
                 return Ok(Some(expr));
             } else if macro_name == "typle_fold" {
                 let expr =
-                    self.replace_typle_fold(mac, std::mem::take(attrs), state, default_span)?;
+                    self.replace_typle_fold_expr(mac, std::mem::take(attrs), state, default_span)?;
                 return Ok(Some(expr));
             } else if macro_name == "typle_all" {
                 let token_stream = std::mem::take(&mut mac.tokens);
@@ -1916,6 +1915,40 @@ impl<'a> TypleContext<'a> {
         Ok(None)
     }
 
+    fn replace_typle_fold_type(&self, mac: &mut Macro, default_span: Span) -> Result<Type> {
+        let token_stream = std::mem::take(&mut mac.tokens);
+        let mut tokens = token_stream.into_iter();
+        let mut init_type = parse2::<Type>(Self::extract_to_semicolon(&mut tokens, default_span)?)?;
+        self.replace_type(&mut init_type)?;
+        let (pattern, mut range) = self.parse_pattern_range(&mut tokens, default_span)?;
+        let folded_type = if let Some(last_index) = range.next_back() {
+            let fold_ident = Self::parse_fold_ident(&mut tokens, default_span)?;
+            let wrapping_type = parse2::<Type>(tokens.collect())?;
+            let mut context = self.clone();
+            if let Some(ident) = &pattern {
+                context.constants.insert(ident.clone(), 0);
+            }
+            context.retypes.insert(fold_ident.clone(), init_type);
+            for index in range {
+                if let Some(ident) = &pattern {
+                    *context.constants.get_mut(ident).unwrap() = index;
+                }
+                let mut folded_type = wrapping_type.clone();
+                context.replace_type(&mut folded_type)?;
+                *context.retypes.get_mut(&fold_ident).unwrap() = folded_type;
+            }
+            if let Some(ident) = &pattern {
+                *context.constants.get_mut(ident).unwrap() = last_index;
+            }
+            let mut folded_type = wrapping_type;
+            context.replace_type(&mut folded_type)?;
+            folded_type
+        } else {
+            init_type
+        };
+        Ok(folded_type)
+    }
+
     fn replace_macro_type(&self, m: &mut TypeMacro) -> Result<Option<Type>> {
         // typle_for!(i in .. => Option<T<{i}>) -> (Option<T0>, Option<T1>)
         // typle_for!(i in .. => T::<{i}>::default()) -> (T0::default(), T1::default())
@@ -1983,6 +2016,10 @@ impl<'a> TypleContext<'a> {
                     }
                 }
                 return Ok(Some(Type::Tuple(tuple)));
+            } else if macro_name == "typle_fold" {
+                let default_span = macro_name.span();
+                let ty = self.replace_typle_fold_type(&mut m.mac, default_span)?;
+                return Ok(Some(ty));
             }
         }
         m.mac.tokens = self.replace_macro_token_stream(std::mem::take(&mut m.mac.tokens))?;
@@ -2094,39 +2131,39 @@ impl<'a> TypleContext<'a> {
         Ok(output)
     }
 
-    fn parse_init_expr(tokens: &mut impl Iterator<Item = TokenTree>, span: Span) -> Result<Expr> {
+    fn extract_to_semicolon(
+        tokens: &mut impl Iterator<Item = TokenTree>,
+        span: Span,
+    ) -> Result<TokenStream> {
         let mut collect = TokenStream::new();
         for token in tokens.by_ref() {
             match token {
                 TokenTree::Punct(punct) if punct.as_char() == ';' => {
-                    return parse2::<Expr>(collect);
+                    return Ok(collect);
                 }
                 tt => {
                     collect.extend([tt]);
                 }
             }
         }
-        Err(Error::new(
-            span,
-            "typle expected init expression terminated by ;",
-        ))
+        Err(Error::new(span, "typle expected tokens terminated by ;"))
     }
 
     fn parse_fold_ident(tokens: &mut impl Iterator<Item = TokenTree>, span: Span) -> Result<Ident> {
         let Some(TokenTree::Punct(punct)) = tokens.next() else {
-            return Err(Error::new(span, "expected `=> |accumulator| expression`"));
+            return Err(Error::new(span, "expected `=> |accumulator|`"));
         };
         if punct.as_char() != '|' {
-            return Err(Error::new(span, "expected `=> |accumulator| expression`"));
+            return Err(Error::new(span, "expected `=> |accumulator|`"));
         }
         let Some(TokenTree::Ident(mut ident)) = tokens.next() else {
-            return Err(Error::new(span, "expected `=> |accumulator| expression`"));
+            return Err(Error::new(span, "expected `=> |accumulator|`"));
         };
         let Some(TokenTree::Punct(punct)) = tokens.next() else {
-            return Err(Error::new(span, "expected `=> |accumulator| expression`"));
+            return Err(Error::new(span, "expected `=> |accumulator|`"));
         };
         if punct.as_char() != '|' {
-            return Err(Error::new(span, "expected `=> |accumulator| expression`"));
+            return Err(Error::new(span, "expected `=> |accumulator|`"));
         }
         if ident == "_" {
             ident = Ident::new("_typle", ident.span());

@@ -2037,3 +2037,41 @@ pub mod type_alias {
         T2: Process,
     = (Option<<T0>::Output>, Option<<T1>::Output>, Option<<T2>::Output>);
 }
+pub mod typle_fold {
+    use typle::typle;
+    pub struct Something {}
+    pub trait IsUseful<Other> {
+        type State: IsUseful<Something>;
+    }
+    pub trait UsefulTrait {
+        type UsefulType: IsUseful<Something>;
+    }
+    impl<T0> UsefulTrait for (T0,)
+    where
+        T0: UsefulTrait,
+    {
+        type UsefulType = T0::UsefulType;
+    }
+    impl<T0, T1> UsefulTrait for (T0, T1)
+    where
+        T0: UsefulTrait,
+        T1: UsefulTrait,
+        <T1>::UsefulType: IsUseful<T0::UsefulType>,
+    {
+        type UsefulType = <<T1>::UsefulType as IsUseful<T0::UsefulType>>::State;
+    }
+    impl<T0, T1, T2> UsefulTrait for (T0, T1, T2)
+    where
+        T0: UsefulTrait,
+        T1: UsefulTrait,
+        T2: UsefulTrait,
+        <T1>::UsefulType: IsUseful<T0::UsefulType>,
+        <T2>::UsefulType: IsUseful<
+            <<T1>::UsefulType as IsUseful<T0::UsefulType>>::State,
+        >,
+    {
+        type UsefulType = <<T2>::UsefulType as IsUseful<
+            <<T1>::UsefulType as IsUseful<T0::UsefulType>>::State,
+        >>::State;
+    }
+}
