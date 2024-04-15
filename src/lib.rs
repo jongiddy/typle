@@ -788,7 +788,7 @@ pub fn typle_for(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
 ///
 /// In an enum, the `typle_variant` macro allows the creation of variants for each component.
 ///
-/// A variant is created for each index in the range provided. The default range is `0..Tuple::MAX`.
+/// A variant is created for each index in the range provided.
 ///
 /// The variants will start with the variant name given before the `=` character, followed by the
 /// index.
