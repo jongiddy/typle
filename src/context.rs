@@ -962,17 +962,21 @@ impl<'a> TypleContext<'a> {
                                                 })
                                                 .transpose()?
                                                 .unwrap_or(0);
-                                            let end = range
-                                                .end
-                                                .as_deref()
-                                                .map(|end| {
-                                                    evaluate_usize(end).ok_or_else(|| {
-                                                        Error::new(start.span(), "expected integer")
-                                                    })
-                                                })
-                                                .transpose()?
-                                                .unwrap_or(self.typle_macro.max_len);
-                                            let end = match range.limits {
+                                            let end = match &range.end {
+                                                Some(expr) => match evaluate_usize(expr) {
+                                                    Some(end) => end,
+                                                    None => {
+                                                        abort!(start, "expected integer");
+                                                    }
+                                                },
+                                                None => match self.typle_len {
+                                                    Some(end) => end,
+                                                    None => {
+                                                        abort!(range, "need an explicit end");
+                                                    }
+                                                },
+                                            };
+                                                let end = match range.limits {
                                                 RangeLimits::HalfOpen(_) => end,
                                                 RangeLimits::Closed(_) => end.saturating_add(1),
                                             };
@@ -1128,16 +1132,20 @@ impl<'a> TypleContext<'a> {
                                         })
                                         .transpose()?
                                         .unwrap_or(0);
-                                    let end = range
-                                        .end
-                                        .as_deref()
-                                        .map(|end| {
-                                            evaluate_usize(end).ok_or_else(|| {
-                                                Error::new(end.span(), "expected integer")
-                                            })
-                                        })
-                                        .transpose()?
-                                        .unwrap_or(self.typle_macro.max_len);
+                                    let end = match &range.end {
+                                        Some(expr) => match evaluate_usize(expr) {
+                                            Some(end) => end,
+                                            None => {
+                                                abort!(range.end, "expected integer");
+                                            }
+                                        },
+                                        None => match self.typle_len {
+                                            Some(end) => end,
+                                            None => {
+                                                abort!(range.end, "need an explicit range end");
+                                            }
+                                        },
+                                    };
                                     let end = match range.limits {
                                         RangeLimits::HalfOpen(_) => end,
                                         RangeLimits::Closed(_) => end.saturating_add(1),
@@ -2273,26 +2281,31 @@ impl<'a> TypleContext<'a> {
                 })
                 .transpose()?
                 .unwrap_or(0);
-            let end = range
-                .end
-                .as_ref()
-                .map(|expr| {
-                    evaluate_usize(expr).ok_or_else(|| {
+            let end = match &range.end {
+                Some(expr) => match evaluate_usize(expr) {
+                    Some(end) => end,
+                    None => {
                         if let Some(suspicious_ident) = &state.suspicious_ident {
-                            Error::new(
-                                suspicious_ident.span(),
+                            abort!(
+                                suspicious_ident,
                                 format!(
                                     "range end invalid, possibly missing `{}: {}` bound",
                                     suspicious_ident, self.typle_macro.ident
-                                ),
-                            )
+                                )
+                            );
                         } else {
-                            Error::new(range.end.span(), "range end invalid")
+                            abort!(range.end, "range end invalid");
                         }
-                    })
-                })
-                .transpose()?
-                .unwrap_or(self.typle_macro.max_len)
+                    }
+                },
+                None => match self.typle_len {
+                    Some(end) => end,
+                    None => {
+                        abort!(range, "need an explicit end in range");
+                    }
+                },
+            };
+            let end = end
                 .checked_add(match range.limits {
                     RangeLimits::HalfOpen(_) => 0,
                     RangeLimits::Closed(_) => 1,

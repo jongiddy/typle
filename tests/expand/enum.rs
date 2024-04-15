@@ -15,11 +15,11 @@ where
 {
     // `typle_variant!` creates a variant for each component. The variant will have a number
     // added to the variant name here. `S2(Option<T2::State>, [u64; 2])`
-    S = typle_variant!(i in .. => Option<T<{i}>::State>, [u64; i]),
+    S = typle_variant!(i in ..T::MAX => Option<T<{i}>::State>, [u64; i]),
     // U2 {u: [u32; 2]}
-    U = typle_variant! {i in .. => u: [u32; i]},
+    U = typle_variant! {i in ..Tuple::MAX => u: [u32; i]},
     // V2
-    V = typle_variant![..],
+    V = typle_variant![..Tuple::MAX],
     Done([u64; Tuple::MAX]),
 }
 

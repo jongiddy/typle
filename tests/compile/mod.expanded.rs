@@ -2045,12 +2045,18 @@ pub mod typle_fold {
     }
     pub trait UsefulTrait {
         type UsefulType: IsUseful<Something>;
+        const SIZE: usize;
     }
     impl<T0> UsefulTrait for (T0,)
     where
         T0: UsefulTrait,
     {
         type UsefulType = T0::UsefulType;
+        const SIZE: usize = loop {
+            let total = 0;
+            let total = total + <T0>::SIZE;
+            break total;
+        };
     }
     impl<T0, T1> UsefulTrait for (T0, T1)
     where
@@ -2059,6 +2065,12 @@ pub mod typle_fold {
         <T1>::UsefulType: IsUseful<T0::UsefulType>,
     {
         type UsefulType = <<T1>::UsefulType as IsUseful<T0::UsefulType>>::State;
+        const SIZE: usize = loop {
+            let total = 0;
+            let total = total + <T0>::SIZE;
+            let total = total + <T1>::SIZE;
+            break total;
+        };
     }
     impl<T0, T1, T2> UsefulTrait for (T0, T1, T2)
     where
@@ -2073,5 +2085,12 @@ pub mod typle_fold {
         type UsefulType = <<T2>::UsefulType as IsUseful<
             <<T1>::UsefulType as IsUseful<T0::UsefulType>>::State,
         >>::State;
+        const SIZE: usize = loop {
+            let total = 0;
+            let total = total + <T0>::SIZE;
+            let total = total + <T1>::SIZE;
+            let total = total + <T2>::SIZE;
+            break total;
+        };
     }
 }

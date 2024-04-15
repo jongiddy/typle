@@ -55,18 +55,15 @@
 //! the macro the typle index variable can provide access to each component of
 //! an existing tuple type or expression.
 //!
-//! The associated constant `LEN` provides the length of the tuple in each
-//! generated item. This value can be used in typle index expressions.
-//!
 //! ```rust
 //! # use typle::typle;
 //! // Split off the first component
 //! #[typle(Tuple for 1..=12)]
 //! fn split<T: Tuple>(
 //!     t: T  // t: (T<0>, T<1>, T<2>,...)
-//! ) -> (T<0>, typle_for!(i in 1..T::LEN => T<{i}>))  // (T<0>, (T<1>, T<2>,...))
+//! ) -> (T<0>, typle_for!(i in 1.. => T<{i}>))  // (T<0>, (T<1>, T<2>,...))
 //! {
-//!     (t[[0]], typle_for!(i in 1..T::LEN => t[[i]]))  // (t.0, (t.1, t.2,...))
+//!     (t[[0]], typle_for!(i in 1.. => t[[i]]))  // (t.0, (t.1, t.2,...))
 //! }
 //!
 //! assert_eq!(split(('1', 2, 3.0)), ('1', (2, 3.0)));
@@ -80,7 +77,7 @@
 //! # use typle::typle;
 //! #[typle(Tuple for 0..=12)]
 //! pub fn sum<T: Tuple<u32>>(t: T) -> u32 {
-//!     typle_fold!(0; i in ..T::LEN => |total| total + t[[i]])
+//!     typle_fold!(0; i in .. => |total| total + t[[i]])
 //! }
 //! assert_eq!(sum(()), 0);
 //! assert_eq!(sum((1, 4, 9, 16)), 30);
@@ -106,11 +103,11 @@
 //! fn multiply<S: Tuple, T: Tuple>(
 //!     s: S,  // s: (S<0>,...)
 //!     t: T,  // t: (T<0>,...)
-//! ) -> typle_for!(i in ..T::LEN => <S<{i}> as Mul<T<{i}>>>::Output)  // (<S<0> as Mul<T<0>>>::Output,...)
+//! ) -> typle_for!(i in .. => <S<{i}> as Mul<T<{i}>>>::Output)  // (<S<0> as Mul<T<0>>>::Output,...)
 //! where
-//!     typle_bound!(i in ..T::LEN => S<{i}>): Mul<T<{i}>>,  // S<0>: Mul<T<0>>,...
+//!     typle_bound!(i in .. => S<{i}>): Mul<T<{i}>>,  // S<0>: Mul<T<0>>,...
 //! {
-//!     typle_for!(i in ..T::LEN => s[[i]] * t[[i]])  // (s.0 * t.0,...)
+//!     typle_for!(i in .. => s[[i]] * t[[i]])  // (s.0 * t.0,...)
 //! }
 //!
 //! assert_eq!(
@@ -121,6 +118,9 @@
 //!
 //! Use the `typle_index!` macro in a `for` loop to iterate over a range bounded
 //! by typle index expressions.
+//!
+//! The associated constant `LEN` provides the length of the tuple in each
+//! generated item. This value can be used in typle index expressions.
 //!
 //! ```rust
 //! # use typle::typle;
@@ -157,13 +157,11 @@
 //! demonstrates the use of `typle` with `enum`s.
 //!
 //! Typled `enum`s are implemented for the maximum length. When referring to
-//! these types from other typled items, use `TupleSequenceState<T<{ .. }>>`.
-//! For typle range expressions the default lower bound is 0 and the default
-//! upper bound is `T::MAX`, the maximum length for the tuple. This will fill in
-//! unused type parameters with the `never` type provided for the `typle` macro.
-//! The default type is [`!`] but this is not available in stable Rust.
-//! [`std::convert::Infallible`] is an uninhabited type that is available in
-//! stable Rust but any type is permissible.
+//! these types from other typled items, use `TupleSequenceState<T<{ ..T::MAX }>>`.
+//! This will fill in unused type parameters with the `never` type provided for
+//! the `typle` macro. The default type is [`!`] but this is not available in
+//! stable Rust. [`std::convert::Infallible`] is an uninhabited type that is
+//! available in stable Rust but any type is permissible.
 //!
 //! The [`typle_variant!`] macro creates multiple enum variants by looping
 //! similarly to `typle_for!`.
@@ -210,7 +208,7 @@
 //!         T: Tuple,
 //!         T<_>: Extract,
 //!     {
-//!         S = typle_variant!(i in .. =>
+//!         S = typle_variant!(i in ..T::MAX =>
 //!             typle_for!(j in ..i => T::<{j}>::Output), Option<T<{i}>::State>
 //!         ),
 //!     }
@@ -226,8 +224,8 @@
 //!     {
 //!         // The state contains the output from all previous components and
 //!         // the state of the current component.
-//!         type State = TupleSequenceState<T<{ .. }>>;
-//!         type Output = typle_for!(i in ..T::LEN => <T<{i}> as Extract>::Output);
+//!         type State = TupleSequenceState<T<{ ..T::MAX }>>;
+//!         type Output = typle_for!(i in .. => <T<{i}> as Extract>::Output);
 //!
 //!         fn extract(&self, state: Option<Self::State>) -> Self::Output {
 //!             // When LEN == 1 the code never changes `state`
@@ -552,7 +550,7 @@ impl TryFrom<TokenStream> for TypleMacro {
 /// # use typle::typle;
 /// #[typle(Tuple for 0..=12)]
 /// fn all_long<T: Tuple<&str>>(t: T) -> bool {
-///     typle_all!(i in ..T::LEN => t[[i]].len() > 5)
+///     typle_all!(i in .. => t[[i]].len() > 5)
 /// }
 /// // Return `true` if all words meet the criteria.
 /// assert_eq!(all_long(("longest", "phrase")), true);
@@ -578,7 +576,7 @@ pub fn typle_all(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
 /// # use typle::typle;
 /// #[typle(Tuple for 0..=12)]
 /// fn any_long<T: Tuple<&str>>(t: T) -> bool {
-///     typle_any!(i in ..T::LEN => t[[i]].len() > 5)
+///     typle_any!(i in .. => t[[i]].len() > 5)
 /// }
 /// // Return `true` if any word meets the criteria.
 /// assert_eq!(any_long(("the", "longest", "word")), true);
@@ -610,7 +608,7 @@ pub fn typle_any(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
 /// # use typle::typle;
 /// #[typle(Tuple for 0..=12)]
 /// pub fn sum<T: Tuple<u32>>(t: T) -> u32 {
-///     typle_fold!(0; i in ..T::LEN => |total| total + t[[i]])
+///     typle_fold!(0; i in .. => |total| total + t[[i]])
 /// }
 /// // An empty tuple uses the initial value.
 /// assert_eq!(sum(()), 0);
@@ -648,7 +646,7 @@ pub fn typle_any(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
 /// }
 ///
 /// #[typle(Tuple for 0..=12)]
-/// impl<T: Tuple> CoalesceSome<T> for typle_for!(i in ..T::LEN => Option<T<{i}>>) {
+/// impl<T: Tuple> CoalesceSome<T> for typle_for!(i in .. => Option<T<{i}>>) {
 ///     type Output = T;
 ///
 ///     fn coalesce_some(self) -> Option<Self::Output>
@@ -725,8 +723,8 @@ pub fn typle_fold(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
 /// fn append<T: Tuple, A>(
 ///     t: T,
 ///     a: A,
-/// ) -> typle_for!{i in 0..=T::LEN => if i < T::LEN { typle_ty!(T<{i}>) } else { A }} {
-///     typle_for!{i in 0..=T::LEN => if i < T::LEN { t[[i]] } else { a }}
+/// ) -> typle_for!{i in ..=T::LEN => if i < T::LEN { typle_ty!(T<{i}>) } else { A }} {
+///     typle_for!{i in ..=T::LEN => if i < T::LEN { t[[i]] } else { a }}
 /// }
 ///
 /// assert_eq!(append((1, 2, 3), 4), (1, 2, 3, 4));
@@ -742,7 +740,7 @@ pub fn typle_fold(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
 ///     T: Tuple,
 ///     T<_>: ToString,
 /// {
-///     typle_for![i in ..T::LEN => t[[i]].to_string()]
+///     typle_for![i in .. => t[[i]].to_string()]
 /// }
 ///
 /// assert_eq!(
@@ -760,13 +758,13 @@ pub fn typle_fold(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
 ///     t: T
 /// ) -> (
 ///     // (T<0>, T<2>,...)
-///     typle_for!{i in ..T::LEN => if i % 2 == 0 { typle_ty!(T<{i}>) }},
+///     typle_for!{i in .. => if i % 2 == 0 { typle_ty!(T<{i}>) }},
 ///     // (T<1>, T<3>,...)
-///     typle_for!{i in ..T::LEN => if i % 2 == 1 { typle_ty!(T<{i}>) }},
+///     typle_for!{i in .. => if i % 2 == 1 { typle_ty!(T<{i}>) }},
 /// ) {
 ///     (
-///         typle_for!{i in ..T::LEN => if i % 2 == 0 { t[[i]] }},
-///         typle_for!{i in ..T::LEN => if i % 2 == 1 { t[[i]] }},
+///         typle_for!{i in .. => if i % 2 == 0 { t[[i]] }},
+///         typle_for!{i in .. => if i % 2 == 1 { t[[i]] }},
 ///     )
 /// }
 ///
@@ -812,9 +810,9 @@ pub fn typle_for(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
 ///     T: Tuple,
 ///     T<_>: Process<Output = u64>,
 /// {
-///     S = typle_variant!(i in .. => Option<T<{i}>::State>, [u64; i]),
-///     U = typle_variant!{i in .. => u: [u32; i]},
-///     V = typle_variant![..],
+///     S = typle_variant!(i in ..T::MAX => Option<T<{i}>::State>, [u64; i]),
+///     U = typle_variant!{i in ..Tuple::MAX => u: [u32; i]},
+///     V = typle_variant![..Tuple::MAX],
 ///     Done([u64; Tuple::MAX]),
 /// }
 /// ```

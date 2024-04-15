@@ -21,7 +21,7 @@ where
 impl<S, T> Extract for TupleC<T>
 where
     S: Debug + Tuple,
-    S<{ 1..S::LEN }>: Extract,
+    S<{ 1.. }>: Extract,
     T: Tuple,
     T<0>: Extract<Output = Option<S>>,
     T: Debug,
@@ -30,16 +30,16 @@ where
 
 // typle_bound! allows the component index to be used in the trait bound
 #[typle(Tuple for 1..=2)]
-impl<T, F> TraitD for TupleD<T<{ .. }>>
+impl<T, F> TraitD for TupleD<T<{ ..T::MAX }>>
 where
     T: Tuple,
-    typle_bound!(i in ..T::LEN => T<{i}>): Mul<T<{ T::LEN - i - 1 }>>,
+    typle_bound!(i in .. => T<{i}>): Mul<T<{ T::LEN - i - 1 }>>,
     T<{ T::LEN - 1 }>: AsRef<str>,
     F: Fn(T) -> T,
 {
     fn g() {
-        // T{ .. } expands to all types in a referenced enum
-        let f: TupleD<T<{ .. }>> = TupleD::<T<{ .. }>>::new();
+        // T{ ..T::MAX } expands to all types in a referenced enum
+        let f: TupleD<T<{ ..T::MAX }>> = TupleD::<T<{ ..T::MAX }>>::new();
         T::<0>::output_to_bytestream();
     }
 }

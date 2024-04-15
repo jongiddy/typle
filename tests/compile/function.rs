@@ -17,20 +17,20 @@ where
 }
 
 #[typle(Tuple for 0..=3)]
-fn multiply<T, M>(t: T, m: M) -> typle_for!(i in ..T::LEN => <T<{i}> as Mul<M>>::Output)
+fn multiply<T, M>(t: T, m: M) -> typle_for!(i in .. => <T<{i}> as Mul<M>>::Output)
 where
     T: Tuple,
     T<_>: Mul<M>,
     M: Copy,
 {
-    typle_for!(i in ..T::LEN => t[[i]] * m)
+    typle_for!(i in .. => t[[i]] * m)
 }
 
 // `heapify` and `zip` as described at
 // https://gist.github.com/soqb/9ce3d4502cc16957b80c388c390baafc#syntax-for-type-transformations
 #[typle(Tuple for 0..=3)]
-fn heapify<T: Tuple>(params: T) -> typle_for!(i in ..T::LEN => Box<T<{i}>>) {
-    typle_for!(i in ..T::LEN => Box::new(params[[i]]))
+fn heapify<T: Tuple>(params: T) -> typle_for!(i in .. => Box<T<{i}>>) {
+    typle_for!(i in .. => Box::new(params[[i]]))
 }
 
 #[rustfmt::skip]
