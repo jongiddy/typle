@@ -338,8 +338,8 @@
 //!
 //! # Limitations
 //!
-//! - The typle trait (`Tuple` in the examples) cannot be combined with other constraints. To
-//! support `?Sized` tuples constrain the last component using `T<{T::LEN - 1}>: ?Sized`.
+//! - The typle trait (`Tuple` in the examples) can only be applied to an
+//! unqualified type identifier, not to non-path types or associated types.
 //! - Standalone `async` and `unsafe` functions are not supported.
 //! - Standalone functions require explicit lifetimes on references:
 //! ```rust

@@ -9,7 +9,7 @@ impl<T: Tuple<u32>> TupleA<T> {}
 #[typle(Tuple for 0..=2)]
 impl<T> TraitB for TupleB<T>
 where
-    T: Tuple,
+    T: Tuple + Debug,
     T<_>: Extract,
     T<_>::Output: AsRef<str>,
 {
@@ -20,10 +20,11 @@ where
 #[typle(Tuple for 1..=2)]
 impl<S, T> Extract for TupleC<T>
 where
-    S: Tuple,
+    S: Debug + Tuple,
     S<{ 1..S::LEN }>: Extract,
     T: Tuple,
     T<0>: Extract<Output = Option<S>>,
+    T: Debug,
 {
 }
 
