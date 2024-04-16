@@ -976,7 +976,7 @@ impl<'a> TypleContext<'a> {
                                                     }
                                                 },
                                             };
-                                                let end = match range.limits {
+                                            let end = match range.limits {
                                                 RangeLimits::HalfOpen(_) => end,
                                                 RangeLimits::Closed(_) => end.saturating_add(1),
                                             };
@@ -2490,6 +2490,7 @@ impl<'a> TypleContext<'a> {
                         let segment = path.segments.first_mut().unwrap();
                         *segment = ty_segment.clone();
                         *qself = ty_qself.clone();
+                        path.leading_colon = ty_path.leading_colon;
                     }
                     _ => {
                         let mut segments = std::mem::take(&mut path.segments).into_iter();
