@@ -2051,7 +2051,7 @@ pub mod typle_fold {
     where
         T0: UsefulTrait,
     {
-        type UsefulType = T0::UsefulType;
+        type UsefulType = <T0>::UsefulType;
         const SIZE: usize = loop {
             let total = 0;
             let total = total + <T0>::SIZE;
@@ -2062,9 +2062,9 @@ pub mod typle_fold {
     where
         T0: UsefulTrait,
         T1: UsefulTrait,
-        <T1>::UsefulType: IsUseful<T0::UsefulType>,
+        <T1>::UsefulType: IsUseful<<T0>::UsefulType>,
     {
-        type UsefulType = <<T1>::UsefulType as IsUseful<T0::UsefulType>>::State;
+        type UsefulType = <<T1>::UsefulType as IsUseful<<T0>::UsefulType>>::State;
         const SIZE: usize = loop {
             let total = 0;
             let total = total + <T0>::SIZE;
@@ -2077,13 +2077,13 @@ pub mod typle_fold {
         T0: UsefulTrait,
         T1: UsefulTrait,
         T2: UsefulTrait,
-        <T1>::UsefulType: IsUseful<T0::UsefulType>,
+        <T1>::UsefulType: IsUseful<<T0>::UsefulType>,
         <T2>::UsefulType: IsUseful<
-            <<T1>::UsefulType as IsUseful<T0::UsefulType>>::State,
+            <<T1>::UsefulType as IsUseful<<T0>::UsefulType>>::State,
         >,
     {
         type UsefulType = <<T2>::UsefulType as IsUseful<
-            <<T1>::UsefulType as IsUseful<T0::UsefulType>>::State,
+            <<T1>::UsefulType as IsUseful<<T0>::UsefulType>>::State,
         >>::State;
         const SIZE: usize = loop {
             let total = 0;
