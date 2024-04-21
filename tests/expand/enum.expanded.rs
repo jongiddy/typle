@@ -53,9 +53,6 @@ impl Process for () {
     type State = ProcessState<!, !, !>;
     type Output = [u64; 0];
     fn process(state: Self::State) -> Result<Self::Output, Error> {
-        loop {
-            break;
-        }
         if let Self::State::Done(output) = state {
             return output;
         }

@@ -6,17 +6,14 @@ use std::rc::Rc;
 use proc_macro2::{Delimiter, Group, Ident, Span, TokenStream, TokenTree};
 use quote::{format_ident, ToTokens};
 use syn::parse::Parser as _;
-use syn::punctuated::Punctuated;
 use syn::spanned::Spanned as _;
 use syn::{
-    parse2, parse_quote, token, AttrStyle, Attribute, BinOp, Block, Error, Expr, ExprArray,
-    ExprBinary, ExprBlock, ExprField, ExprLit, ExprMacro, ExprParen, ExprPath, ExprTuple, Fields,
-    FieldsNamed, FieldsUnnamed, GenericArgument, GenericParam, Generics, ImplItem, Index, Item,
-    ItemImpl, Label, Lit, LitBool, LitInt, Macro, MacroDelimiter, Member, Meta, Pat, PatMacro,
-    PatParen, PatReference, PatTuple, PatWild, Path, PathArguments, PathSegment, PredicateType,
-    QSelf, RangeLimits, Result, ReturnType, Stmt, Token, Type, TypeInfer, TypeMacro,
-    TypeParamBound, TypePath, TypeReference, TypeTuple, Variant, WherePredicate,
+    punctuated, token, AttrStyle, Attribute, BinOp, Block, Error, Expr, Fields, FnArg,
+    GenericArgument, GenericParam, Generics, ImplItem, Item, Label, Lit, Macro, MacroDelimiter,
+    Member, Meta, Pat, Path, PathArguments, QSelf, RangeLimits, Result, ReturnType, Signature,
+    Stmt, Type, TypeParamBound, Visibility, WherePredicate,
 };
+use zip_clone::ZipClone as _;
 
 use crate::constant::{evaluate_bool, evaluate_range, evaluate_usize};
 use crate::syn_ext::GeneralFunction;
@@ -38,7 +35,7 @@ impl Typle {
     pub fn get(&self, i: usize, span: Span) -> Type {
         match self {
             Typle::Specific(r#type) => r#type.clone(),
-            Typle::Generic(v) => Type::Path(TypePath {
+            Typle::Generic(v) => Type::Path(syn::TypePath {
                 qself: None,
                 path: ident_to_path(Ident::new(&v[i], span)),
             }),
@@ -176,7 +173,7 @@ impl<'a> TypleContext<'a> {
 
     fn typle_bounds(
         &self,
-        bounds: &mut Punctuated<TypeParamBound, token::Plus>,
+        bounds: &mut punctuated::Punctuated<TypeParamBound, token::Plus>,
         type_ident: &Ident,
     ) -> Result<Option<Typle>> {
         let mut result = None;
@@ -257,13 +254,13 @@ impl<'a> TypleContext<'a> {
                                     |tt| !matches!(tt, TokenTree::Punct(p) if p.as_char() == ','),
                                 )
                                 .collect();
-                            let mut expr = parse2::<Expr>(expr_tokens)?;
+                            let mut expr = syn::parse2::<Expr>(expr_tokens)?;
                             let mut state = BlockState::default();
                             self.replace_expr(&mut expr, &mut state)?;
                             if evaluate_bool(&expr)? {
                                 meta_list.tokens = tokens.collect();
                                 let nested = attr.parse_args_with(
-                                    Punctuated::<Meta, Token![,]>::parse_terminated,
+                                    punctuated::Punctuated::<Meta, token::Comma>::parse_terminated,
                                 )?;
                                 for meta in nested {
                                     attrs.push(Attribute {
@@ -312,7 +309,7 @@ impl<'a> TypleContext<'a> {
                     // Remove empty blocks in blocks to allow control statements in const-for loop
                     // to be eliminated.
                     match &expr {
-                        Expr::Block(ExprBlock {
+                        Expr::Block(syn::ExprBlock {
                             attrs,
                             label,
                             block: inner_block,
@@ -362,7 +359,7 @@ impl<'a> TypleContext<'a> {
             if let Some(macro_ident) = expr_macro.mac.path.get_ident() {
                 if macro_ident == "typle_const" {
                     let tokens = std::mem::take(&mut expr_macro.mac.tokens);
-                    let mut cond = parse2::<Expr>(tokens)?;
+                    let mut cond = syn::parse2::<Expr>(tokens)?;
                     self.replace_expr(&mut cond, state)?;
                     let b = evaluate_bool(&cond)?;
                     return Ok(Some(b));
@@ -501,26 +498,32 @@ impl<'a> TypleContext<'a> {
                             if let RangeLimits::Closed(_) = expr_range.limits {
                                 end += 1;
                             }
+                            if end <= start {
+                                *expr = Expr::Block(syn::ExprBlock {
+                                    attrs: std::mem::take(&mut for_loop.attrs),
+                                    label: None,
+                                    block: Block {
+                                        brace_token,
+                                        stmts: Vec::new(),
+                                    },
+                                });
+                                return Ok(());
+                            }
                             let mut context = self.clone();
                             let mut stmts = Vec::with_capacity(end.saturating_sub(start) + 1);
                             let mut has_typle_break = false;
                             let mut check_for_break = false;
                             context.constants.insert(pat_ident.clone(), 0);
-                            for index in start..end {
+                            for (index, mut block) in (start..end).zip_clone(std::mem::replace(
+                                &mut for_loop.body,
+                                Block {
+                                    brace_token,
+                                    stmts: Vec::new(),
+                                },
+                            )) {
                                 if let Some(v) = context.constants.get_mut(&pat_ident) {
                                     *v = index;
                                 }
-                                let mut block = if index == end - 1 {
-                                    std::mem::replace(
-                                        &mut for_loop.body,
-                                        Block {
-                                            brace_token,
-                                            stmts: Vec::new(),
-                                        },
-                                    )
-                                } else {
-                                    for_loop.body.clone()
-                                };
                                 let mut inner_state = BlockState::default();
                                 // Evaluate the body for this iteration
                                 context.replace_block(&mut block, &mut inner_state)?;
@@ -530,7 +533,7 @@ impl<'a> TypleContext<'a> {
                                 }
                                 // If the previous iteration body called `break` exit the loop early.
                                 if check_for_break {
-                                    let stmt = parse_quote! {
+                                    let stmt = syn::parse_quote! {
                                         if _typle_break {
                                             break;
                                         }
@@ -544,13 +547,13 @@ impl<'a> TypleContext<'a> {
                                 {
                                     // Labelled control flow requires a labelled inner loop.
                                     if !has_typle_break {
-                                        let stmt = parse_quote! {
+                                        let stmt = syn::parse_quote! {
                                             let mut _typle_break = false;
                                         };
                                         stmts.push(stmt);
                                         has_typle_break = true;
                                     }
-                                    let stmt = parse_quote! {
+                                    let stmt = syn::parse_quote! {
                                          #label loop {
                                             if _typle_break {
                                                 _typle_break = false;
@@ -565,13 +568,13 @@ impl<'a> TypleContext<'a> {
                                 } else if inner_state.unlabelled_continue.is_some() {
                                     // Unlabelled `continue` needs an inner loop to continue to.
                                     if !has_typle_break {
-                                        let stmt = parse_quote! {
+                                        let stmt = syn::parse_quote! {
                                             let mut _typle_break = false;
                                         };
                                         stmts.push(stmt);
                                         has_typle_break = true;
                                     }
-                                    let stmt = parse_quote! {
+                                    let stmt = syn::parse_quote! {
                                         loop {
                                             if _typle_break {
                                                 _typle_break = false;
@@ -587,7 +590,7 @@ impl<'a> TypleContext<'a> {
                                     // Bodies with no `break` or `continue`, or with only an
                                     // unlabelled `break`, can run without an inner loop.
                                     stmts.push(Stmt::Expr(
-                                        Expr::Block(ExprBlock {
+                                        Expr::Block(syn::ExprBlock {
                                             attrs: Vec::new(),
                                             label: None,
                                             block,
@@ -634,7 +637,7 @@ impl<'a> TypleContext<'a> {
                 if let Some(b) = self.evaluate_as_const_if(&mut r#if.cond, state)? {
                     if b {
                         let brace_token = r#if.then_branch.brace_token;
-                        *expr = Expr::Block(ExprBlock {
+                        *expr = Expr::Block(syn::ExprBlock {
                             attrs: std::mem::take(&mut r#if.attrs),
                             label: None,
                             block: std::mem::replace(
@@ -685,11 +688,11 @@ impl<'a> TypleContext<'a> {
                     let Some(i) = evaluate_usize(field) else {
                         abort!(index.index, "unsupported tuple index");
                     };
-                    *expr = Expr::Field(ExprField {
+                    *expr = Expr::Field(syn::ExprField {
                         attrs: std::mem::take(&mut index.attrs),
                         base: index.expr.clone(),
                         dot_token: token::Dot::default(),
-                        member: Member::Unnamed(Index {
+                        member: Member::Unnamed(syn::Index {
                             index: i as u32,
                             span: index.index.span(),
                         }),
@@ -749,13 +752,13 @@ impl<'a> TypleContext<'a> {
                 self.replace_attrs(&mut path.attrs)?;
                 if path.qself.is_none() {
                     let mut segments = path.path.segments.iter();
-                    if let Some(PathSegment {
+                    if let Some(syn::PathSegment {
                         ident: ident1,
                         arguments: PathArguments::None,
                     }) = segments.next()
                     {
                         if let (
-                            Some(PathSegment {
+                            Some(syn::PathSegment {
                                 ident: ident2,
                                 arguments: PathArguments::None,
                             }),
@@ -771,9 +774,9 @@ impl<'a> TypleContext<'a> {
                                     let Some(typle_len) = self.typle_len else {
                                         abort!(ident2, "LEN not available outside fn or impl");
                                     };
-                                    *expr = Expr::Lit(ExprLit {
+                                    *expr = Expr::Lit(syn::PatLit {
                                         attrs: std::mem::take(&mut path.attrs),
-                                        lit: Lit::Int(LitInt::new(
+                                        lit: Lit::Int(syn::LitInt::new(
                                             &typle_len.to_string(),
                                             path.span(),
                                         )),
@@ -789,9 +792,9 @@ impl<'a> TypleContext<'a> {
                                     || self.typles.contains_key(ident1)
                                 {
                                     // Tuple::MAX or <T as Tuple>::MAX
-                                    *expr = Expr::Lit(ExprLit {
+                                    *expr = Expr::Lit(syn::PatLit {
                                         attrs: std::mem::take(&mut path.attrs),
-                                        lit: Lit::Int(LitInt::new(
+                                        lit: Lit::Int(syn::LitInt::new(
                                             &self.typle_macro.max_len.to_string(),
                                             path.span(),
                                         )),
@@ -805,9 +808,9 @@ impl<'a> TypleContext<'a> {
                                     || self.typles.contains_key(ident1)
                                 {
                                     // Tuple::MIN or <T as Tuple>::MIN
-                                    *expr = Expr::Lit(ExprLit {
+                                    *expr = Expr::Lit(syn::PatLit {
                                         attrs: std::mem::take(&mut path.attrs),
-                                        lit: Lit::Int(LitInt::new(
+                                        lit: Lit::Int(syn::LitInt::new(
                                             &self.typle_macro.min_len.to_string(),
                                             path.span(),
                                         )),
@@ -818,9 +821,9 @@ impl<'a> TypleContext<'a> {
                                 }
                             }
                         } else if let Some(value) = self.constants.get(ident1) {
-                            *expr = Expr::Lit(ExprLit {
+                            *expr = Expr::Lit(syn::PatLit {
                                 attrs: std::mem::take(&mut path.attrs),
-                                lit: Lit::Int(LitInt::new(&value.to_string(), ident1.span())),
+                                lit: Lit::Int(syn::LitInt::new(&value.to_string(), ident1.span())),
                             });
                             return Ok(());
                         }
@@ -905,8 +908,8 @@ impl<'a> TypleContext<'a> {
 
     fn replace_fields(&self, fields: &mut Fields) -> Result<()> {
         match fields {
-            Fields::Named(FieldsNamed { named: fields, .. })
-            | Fields::Unnamed(FieldsUnnamed {
+            Fields::Named(syn::FieldsNamed { named: fields, .. })
+            | Fields::Unnamed(syn::FieldsUnnamed {
                 unnamed: fields, ..
             }) => {
                 for field in fields {
@@ -942,7 +945,7 @@ impl<'a> TypleContext<'a> {
                                                 let typle_len = self
                                                     .typle_len
                                                     .unwrap_or(self.typle_macro.max_len);
-                                                parse_quote!(.. #typle_len)
+                                                syn::parse_quote!(.. #typle_len)
                                             }
                                             GenericArgument::Const(expr) => expr.clone(),
                                             _ => {
@@ -996,7 +999,7 @@ impl<'a> TypleContext<'a> {
                                                 first.ident = component_ident;
                                                 first.arguments = PathArguments::None;
                                                 where_clause.predicates.push(WherePredicate::Type(
-                                                    PredicateType {
+                                                    syn::PredicateType {
                                                         lifetimes: None,
                                                         bounded_ty: Type::Path(type_path),
                                                         colon_token: token::Colon::default(),
@@ -1010,7 +1013,7 @@ impl<'a> TypleContext<'a> {
                                 }
                             }
                         }
-                        Type::Macro(TypeMacro { mac }) => {
+                        Type::Macro(syn::TypeMacro { mac }) => {
                             if let Some(ident) = mac.path.get_ident() {
                                 if ident == "typle_bound" {
                                     let token_stream = std::mem::take(&mut mac.tokens);
@@ -1018,17 +1021,19 @@ impl<'a> TypleContext<'a> {
                                     let mut tokens = token_stream.into_iter();
                                     let (pattern, range) =
                                         self.parse_pattern_range(&mut tokens, default_span)?;
+                                    if range.is_empty() {
+                                        continue;
+                                    }
                                     let token_stream = tokens.collect::<TokenStream>();
-                                    let body_span = token_stream.span();
-                                    let Ok(r#type) = parse2::<Type>(token_stream) else {
-                                        return Err(Error::new(body_span, "expected type"));
-                                    };
-                                    for index in range {
-                                        let mut context = self.clone();
-                                        if let Some(ident) = pattern.clone() {
-                                            context.constants.insert(ident, index);
+                                    let r#type = syn::parse2::<Type>(token_stream)?;
+                                    let mut context = self.clone();
+                                    if let Some(ident) = pattern.clone() {
+                                        context.constants.insert(ident, 0);
+                                    }
+                                    for (index, mut bounded_ty) in range.zip_clone(r#type) {
+                                        if let Some(ident) = &pattern {
+                                            *context.constants.get_mut(ident).unwrap() = index;
                                         }
-                                        let mut bounded_ty = r#type.clone();
                                         context.replace_type(&mut bounded_ty)?;
                                         let bounds = predicate_type
                                             .bounds
@@ -1046,7 +1051,7 @@ impl<'a> TypleContext<'a> {
                                             })
                                             .collect::<Result<_>>()?;
                                         where_clause.predicates.push(WherePredicate::Type(
-                                            PredicateType {
+                                            syn::PredicateType {
                                                 lifetimes: None,
                                                 bounded_ty,
                                                 colon_token: token::Colon::default(),
@@ -1100,11 +1105,11 @@ impl<'a> TypleContext<'a> {
 
     fn replace_generic_arguments(
         &self,
-        args: &mut Punctuated<GenericArgument, token::Comma>,
+        args: &mut punctuated::Punctuated<GenericArgument, token::Comma>,
     ) -> Result<()> {
         for arg in std::mem::take(args) {
             match arg {
-                GenericArgument::Type(Type::Path(TypePath { qself, mut path }))
+                GenericArgument::Type(Type::Path(syn::TypePath { qself, mut path }))
                     if qself.is_none() && path.leading_colon.is_none() =>
                 {
                     let mut segments = path.segments.iter_mut();
@@ -1162,7 +1167,7 @@ impl<'a> TypleContext<'a> {
                             }
                         }
                     }
-                    let mut generic_type = Type::Path(TypePath { qself, path });
+                    let mut generic_type = Type::Path(syn::TypePath { qself, path });
                     self.replace_type(&mut generic_type)?;
                     args.push(GenericArgument::Type(generic_type));
                 }
@@ -1212,27 +1217,27 @@ impl<'a> TypleContext<'a> {
         let fn_input_params = &function.sig.inputs;
         let mut type_tuple = syn::TypeTuple {
             paren_token: token::Paren::default(),
-            elems: Punctuated::new(),
+            elems: punctuated::Punctuated::new(),
         };
         let mut pat_tuple = syn::PatTuple {
             attrs: Vec::new(),
             paren_token: token::Paren::default(),
-            elems: Punctuated::new(),
+            elems: punctuated::Punctuated::new(),
         };
         let mut value_tuple = syn::ExprTuple {
             attrs: Vec::new(),
             paren_token: token::Paren::default(),
-            elems: Punctuated::new(),
+            elems: punctuated::Punctuated::new(),
         };
         let fn_body = function.block;
         for arg in fn_input_params {
             match arg {
-                syn::FnArg::Receiver(r) => {
+                FnArg::Receiver(r) => {
                     let Some(base_type) = receiver_type.cloned() else {
                         abort!(r, "did not expect receiver here");
                     };
                     let ty = if let Some((and_token, ref lifetime)) = r.reference {
-                        Type::Reference(TypeReference {
+                        Type::Reference(syn::TypeReference {
                             and_token,
                             lifetime: lifetime.clone(),
                             mutability: r.mutability,
@@ -1242,12 +1247,12 @@ impl<'a> TypleContext<'a> {
                         base_type.clone()
                     };
                     type_tuple.elems.push(ty);
-                    pat_tuple.elems.push(Pat::Path(ExprPath {
+                    pat_tuple.elems.push(Pat::Path(syn::PatPath {
                         attrs: Vec::new(),
                         qself: None,
                         path: ident_to_path(Ident::new("_typle_self", r.span())),
                     }));
-                    value_tuple.elems.push(Expr::Path(ExprPath {
+                    value_tuple.elems.push(Expr::Path(syn::PatPath {
                         attrs: Vec::new(),
                         qself: None,
                         path: ident_to_path(Ident::new("self", r.span())),
@@ -1257,7 +1262,7 @@ impl<'a> TypleContext<'a> {
                     self.retypes
                         .insert(Ident::new("Self", Span::call_site()), base_type);
                 }
-                syn::FnArg::Typed(pat_type) => {
+                FnArg::Typed(pat_type) => {
                     type_tuple.elems.push(pat_type.ty.as_ref().clone());
                     pat_tuple.elems.push(pat_type.pat.as_ref().clone());
                     value_tuple
@@ -1269,7 +1274,7 @@ impl<'a> TypleContext<'a> {
         items.reserve(self.typle_macro.max_len - self.typle_macro.min_len + 2);
         // A trait with an apply method to implement for each tuple
         let trait_name = format_ident!("_typle_fn_{}", fn_name);
-        let trait_item = parse_quote!(
+        let trait_item = syn::parse_quote!(
             #[allow(non_camel_case_types)]
             #fn_vis trait #trait_name {
                 type Return;
@@ -1284,22 +1289,22 @@ impl<'a> TypleContext<'a> {
         let fn_item = GeneralFunction {
             attrs: Vec::new(),
             vis: fn_vis.clone(),
-            sig: parse_quote!(
+            sig: syn::parse_quote!(
             fn #fn_name <#fn_type_params_no_constraints>(#fn_input_params) -> <#type_tuple as #trait_name>::Return
             where
                 #type_tuple: #trait_name
             ),
-            block: parse_quote!({
+            block: syn::parse_quote!({
                 <#type_tuple as #trait_name>::apply(#value_tuple)
             }),
         };
 
         let return_type = match function.sig.output {
-            syn::ReturnType::Default => Type::Tuple(TypeTuple {
+            ReturnType::Default => Type::Tuple(syn::TypeTuple {
                 paren_token: token::Paren::default(),
-                elems: Punctuated::new(),
+                elems: punctuated::Punctuated::new(),
             }),
-            syn::ReturnType::Type(_, t) => *t,
+            ReturnType::Type(_, t) => *t,
         };
         let typle_trait_name = &self.typle_macro.ident;
 
@@ -1310,7 +1315,7 @@ impl<'a> TypleContext<'a> {
         // of `_typle_Self` and `_typle_self` to `Self` and `self`.
         self.retypes.insert(
             Ident::new("_typle_Self", Span::call_site()),
-            Type::Path(TypePath {
+            Type::Path(syn::TypePath {
                 qself: None,
                 path: ident_to_path(Ident::new("Self", Span::call_site())),
             }),
@@ -1319,9 +1324,9 @@ impl<'a> TypleContext<'a> {
             .insert(Ident::new("_typle_self", Span::call_site()), "self".into());
 
         let impl_items = vec![
-            syn::ImplItem::Type(syn::ImplItemType {
+            ImplItem::Type(syn::ImplItemType {
                 attrs: Vec::new(),
-                vis: syn::Visibility::Inherited,
+                vis: Visibility::Inherited,
                 defaultness: None,
                 type_token: token::Type::default(),
                 ident: Ident::new("Return", Span::call_site()),
@@ -1330,7 +1335,7 @@ impl<'a> TypleContext<'a> {
                 ty: return_type,
                 semi_token: token::Semi::default(),
             }),
-            parse_quote!(
+            syn::parse_quote!(
                 #(#fn_meta)*
                 fn apply(self) -> _typle_Self::Return {
                     #[typle_attr_if(#typle_trait_name::LEN == 0, allow(unused_variables))]
@@ -1340,24 +1345,24 @@ impl<'a> TypleContext<'a> {
             ),
         ];
 
-        let item = ItemImpl {
+        let item = syn::ItemImpl {
             attrs: Vec::new(),
             defaultness: None,
             unsafety: None,
             impl_token: token::Impl::default(),
             generics: function.sig.generics,
             trait_: Some((None, ident_to_path(trait_name), token::For::default())),
-            self_ty: Box::new(syn::Type::Tuple(type_tuple)),
+            self_ty: Box::new(Type::Tuple(type_tuple)),
             brace_token: token::Brace::default(),
             items: impl_items,
         };
 
-        for typle_len in self.typle_macro.min_len..self.typle_macro.max_len {
+        for (typle_len, item) in
+            (self.typle_macro.min_len..=self.typle_macro.max_len).zip_clone(item)
+        {
             self.typle_len = Some(typle_len);
-            self.replace_item_impl(item.clone(), items)?;
+            self.replace_item_impl(item, items)?;
         }
-        self.typle_len = Some(self.typle_macro.max_len);
-        self.replace_item_impl(item, items)?;
         Ok(fn_item)
     }
 
@@ -1387,6 +1392,9 @@ impl<'a> TypleContext<'a> {
                                     let mut tokens = token_stream.into_iter();
                                     let (pattern, range) =
                                         context.parse_pattern_range(&mut tokens, default_span)?;
+                                    if range.is_empty() {
+                                        continue;
+                                    }
                                     let token_stream = tokens.collect();
                                     let fields = match r#macro.mac.delimiter {
                                         MacroDelimiter::Paren(_) => {
@@ -1394,7 +1402,7 @@ impl<'a> TypleContext<'a> {
                                                 proc_macro2::Delimiter::Parenthesis,
                                                 token_stream,
                                             ));
-                                            Fields::Unnamed(parse2::<FieldsUnnamed>(
+                                            Fields::Unnamed(syn::parse2::<syn::FieldsUnnamed>(
                                                 TokenStream::from(group),
                                             )?)
                                         }
@@ -1403,7 +1411,7 @@ impl<'a> TypleContext<'a> {
                                                 proc_macro2::Delimiter::Brace,
                                                 token_stream,
                                             ));
-                                            Fields::Named(parse2::<FieldsNamed>(
+                                            Fields::Named(syn::parse2::<syn::FieldsNamed>(
                                                 TokenStream::from(group),
                                             )?)
                                         }
@@ -1418,16 +1426,16 @@ impl<'a> TypleContext<'a> {
                                     if let Some(ident) = &pattern {
                                         context.constants.insert(ident.clone(), 0);
                                     }
-                                    for index in range {
+                                    for (index, mut fields) in range.zip_clone(fields) {
                                         if let Some(ident) = &pattern {
                                             *context.constants.get_mut(ident).unwrap() = index;
                                         }
-                                        let mut fields = fields.clone();
                                         match &mut fields {
-                                            Fields::Named(FieldsNamed {
-                                                named: fields, ..
+                                            Fields::Named(syn::FieldsNamed {
+                                                named: fields,
+                                                ..
                                             })
-                                            | Fields::Unnamed(FieldsUnnamed {
+                                            | Fields::Unnamed(syn::FieldsUnnamed {
                                                 unnamed: fields,
                                                 ..
                                             }) => {
@@ -1437,7 +1445,7 @@ impl<'a> TypleContext<'a> {
                                             }
                                             Fields::Unit => {}
                                         }
-                                        let variant = Variant {
+                                        let variant = syn::Variant {
                                             attrs: variant.attrs.clone(),
                                             ident: format_ident!("{}{}", &variant.ident, index),
                                             fields,
@@ -1481,12 +1489,12 @@ impl<'a> TypleContext<'a> {
                 if self.typle_len.is_none() {
                     if let Some(mut context) = self.extract_typle_constraints(&mut item.generics)? {
                         items.reserve(self.typle_macro.max_len - self.typle_macro.min_len + 1);
-                        for typle_len in self.typle_macro.min_len..self.typle_macro.max_len {
+                        for (typle_len, item) in
+                            (self.typle_macro.min_len..=self.typle_macro.max_len).zip_clone(item)
+                        {
                             context.typle_len = Some(typle_len);
-                            context.replace_item_impl(item.clone(), items)?;
+                            context.replace_item_impl(item, items)?;
                         }
-                        context.typle_len = Some(self.typle_macro.max_len);
-                        context.replace_item_impl(item, items)?;
                         return Ok(());
                     }
                 }
@@ -1533,7 +1541,7 @@ impl<'a> TypleContext<'a> {
         Ok(())
     }
 
-    fn replace_item_impl(&self, mut item: ItemImpl, items: &mut Vec<Item>) -> Result<()> {
+    fn replace_item_impl(&self, mut item: syn::ItemImpl, items: &mut Vec<Item>) -> Result<()> {
         self.replace_attrs(&mut item.attrs)?;
         self.replace_generics(&mut item.generics)?;
         if let Some((_, path, _)) = &mut item.trait_ {
@@ -1593,17 +1601,16 @@ impl<'a> TypleContext<'a> {
         let default_span = token_stream.span();
         let mut tokens = token_stream.into_iter();
         let (pattern, range) = self.parse_pattern_range(&mut tokens, default_span)?;
-        let expr = parse2::<Expr>(tokens.collect())?;
+        let expr = syn::parse2::<Expr>(tokens.collect())?;
         let mut context = self.clone();
         context.const_if = const_if;
         if let Some(ident) = &pattern {
             context.constants.insert(ident.clone(), 0);
         }
-        Ok(range.flat_map(move |index| {
+        Ok(range.zip_clone(expr).flat_map(move |(index, mut expr)| {
             if let Some(ident) = &pattern {
                 *context.constants.get_mut(ident).unwrap() = index;
             }
-            let mut expr = expr.clone();
             match context.replace_expr(&mut expr, state) {
                 Ok(()) => {
                     if let Expr::Verbatim(_token_stream) = expr {
@@ -1628,9 +1635,13 @@ impl<'a> TypleContext<'a> {
         let mut inner_state = BlockState::default();
         let token_stream = std::mem::take(&mut mac.tokens);
         let mut tokens = token_stream.into_iter();
-        let mut init_expr = parse2::<Expr>(Self::extract_to_semicolon(&mut tokens, default_span)?)?;
+        let mut init_expr =
+            syn::parse2::<Expr>(Self::extract_to_semicolon(&mut tokens, default_span)?)?;
         self.replace_expr(&mut init_expr, &mut inner_state)?;
-        let (pattern, mut range) = self.parse_pattern_range(&mut tokens, default_span)?;
+        let (pattern, range) = self.parse_pattern_range(&mut tokens, default_span)?;
+        if range.is_empty() {
+            return Ok(init_expr);
+        }
         let fold_ident = Self::parse_fold_ident(&mut tokens, default_span)?;
         let fold_pat = Pat::Ident(syn::PatIdent {
             attrs: Vec::new(),
@@ -1639,7 +1650,7 @@ impl<'a> TypleContext<'a> {
             ident: fold_ident.clone(),
             subpat: None,
         });
-        let expr = parse2::<Expr>(tokens.collect())?;
+        let expr = syn::parse2::<Expr>(tokens.collect())?;
         let mut stmts = Vec::with_capacity(range.len() + 2);
         stmts.push(Stmt::Local(syn::Local {
             attrs: Vec::new(),
@@ -1652,18 +1663,17 @@ impl<'a> TypleContext<'a> {
             }),
             semi_token: token::Semi::default(),
         }));
-        if let Some(last_index) = range.next_back() {
+        if !range.is_empty() {
             let mut ctx = pattern.as_ref().map(|ident| {
                 let mut context = self.clone();
                 context.constants.insert(ident.clone(), 0);
                 (context, ident)
             });
-            for index in range {
+            for (index, mut expr) in range.zip_clone(expr) {
                 if let Some((ref mut context, ident)) = ctx {
                     *context.constants.get_mut(ident).unwrap() = index;
                 }
                 let context = ctx.as_ref().map_or(self, |c| &c.0);
-                let mut expr = expr.clone();
                 context.replace_expr(&mut expr, &mut inner_state)?;
                 stmts.push(Stmt::Local(syn::Local {
                     attrs: Vec::new(),
@@ -1677,23 +1687,6 @@ impl<'a> TypleContext<'a> {
                     semi_token: token::Semi::default(),
                 }));
             }
-            if let Some((context, ident)) = &mut ctx {
-                *context.constants.get_mut(ident).unwrap() = last_index;
-            }
-            let context = ctx.as_ref().map_or(self, |c| &c.0);
-            let mut expr = expr;
-            context.replace_expr(&mut expr, &mut inner_state)?;
-            stmts.push(Stmt::Local(syn::Local {
-                attrs: Vec::new(),
-                let_token: token::Let::default(),
-                pat: fold_pat,
-                init: Some(syn::LocalInit {
-                    eq_token: token::Eq::default(),
-                    expr: Box::new(expr),
-                    diverge: None,
-                }),
-                semi_token: token::Semi::default(),
-            }));
         }
         if let Some(span) = inner_state.unlabelled_continue {
             abort!(
@@ -1707,7 +1700,7 @@ impl<'a> TypleContext<'a> {
                 attrs: Vec::new(),
                 break_token: token::Break::default(),
                 label: None,
-                expr: Some(Box::new(Expr::Path(ExprPath {
+                expr: Some(Box::new(Expr::Path(syn::PatPath {
                     attrs: Vec::new(),
                     qself: None,
                     path: ident_to_path(fold_ident),
@@ -1744,7 +1737,7 @@ impl<'a> TypleContext<'a> {
                 let expr = match &mac.delimiter {
                     MacroDelimiter::Paren(_) => {
                         let elems = self.replace_typle_for_expr(mac, state, false)?;
-                        let tuple = ExprTuple {
+                        let tuple = syn::ExprTuple {
                             attrs: std::mem::take(attrs),
                             paren_token: token::Paren::default(),
                             elems: elems.collect::<Result<_>>()?,
@@ -1753,7 +1746,7 @@ impl<'a> TypleContext<'a> {
                     }
                     MacroDelimiter::Brace(_) => {
                         let elems = self.replace_typle_for_expr(mac, state, true)?;
-                        let tuple = ExprTuple {
+                        let tuple = syn::ExprTuple {
                             attrs: std::mem::take(attrs),
                             paren_token: token::Paren::default(),
                             elems: elems.collect::<Result<_>>()?,
@@ -1762,7 +1755,7 @@ impl<'a> TypleContext<'a> {
                     }
                     MacroDelimiter::Bracket(_) => {
                         let elems = self.replace_typle_for_expr(mac, state, false)?;
-                        let array = ExprArray {
+                        let array = syn::ExprArray {
                             attrs: std::mem::take(attrs),
                             bracket_token: token::Bracket::default(),
                             elems: elems.collect::<Result<_>>()?,
@@ -1781,7 +1774,7 @@ impl<'a> TypleContext<'a> {
                     token_stream,
                     default_span,
                     state,
-                    syn::BinOp::And(token::AndAnd::default()),
+                    BinOp::And(token::AndAnd::default()),
                     true,
                 )?;
                 return Ok(Some(expr));
@@ -1791,7 +1784,7 @@ impl<'a> TypleContext<'a> {
                     token_stream,
                     default_span,
                     state,
-                    syn::BinOp::Or(token::OrOr::default()),
+                    BinOp::Or(token::OrOr::default()),
                     false,
                 )?;
                 return Ok(Some(expr));
@@ -1811,29 +1804,30 @@ impl<'a> TypleContext<'a> {
     ) -> Result<Expr> {
         let mut tokens = token_stream.into_iter();
         let (pattern, mut range) = self.parse_pattern_range(&mut tokens, default_span)?;
-        let expr = parse2::<Expr>(tokens.collect())?;
-        // Parenthesize low precedence expressions.
-        let expr = match expr {
-            expr @ Expr::Lit(ExprLit {
-                lit: Lit::Bool(_), ..
-            }) => expr,
-            expr @ Expr::Block(_) => expr,
-            expr @ Expr::Paren(_) => expr,
-            expr @ Expr::Path(_) => expr,
-            expr @ Expr::MethodCall(_) => expr,
-            expr @ Expr::Field(_) => expr,
-            expr @ Expr::Call(_) => expr,
-            expr @ Expr::Index(_) => expr,
-            expr @ Expr::Unary(_) => expr,
-            expr @ Expr::Cast(_) => expr,
-            expr => Expr::Paren(ExprParen {
-                attrs: Vec::new(),
-                paren_token: token::Paren::default(),
-                expr: Box::new(expr),
-            }),
-        };
+        let expr = syn::parse2::<Expr>(tokens.collect())?;
         let all = match range.next() {
             Some(index) => {
+                // Parenthesize low precedence expressions.
+                let expr = match expr {
+                    expr @ Expr::Lit(syn::PatLit {
+                        lit: Lit::Bool(_), ..
+                    }) => expr,
+                    expr @ Expr::Block(_) => expr,
+                    expr @ Expr::Paren(_) => expr,
+                    expr @ Expr::Path(_) => expr,
+                    expr @ Expr::MethodCall(_) => expr,
+                    expr @ Expr::Field(_) => expr,
+                    expr @ Expr::Call(_) => expr,
+                    expr @ Expr::Index(_) => expr,
+                    expr @ Expr::Unary(_) => expr,
+                    expr @ Expr::Cast(_) => expr,
+                    expr => Expr::Paren(syn::ExprParen {
+                        attrs: Vec::new(),
+                        paren_token: token::Paren::default(),
+                        expr: Box::new(expr),
+                    }),
+                };
+
                 let mut context = self.clone();
                 if let Some(ident) = &pattern {
                     context.constants.insert(ident.clone(), index);
@@ -1846,7 +1840,7 @@ impl<'a> TypleContext<'a> {
                     }
                     let mut expr = expr.clone();
                     context.replace_expr(&mut expr, state)?;
-                    all = Expr::Binary(ExprBinary {
+                    all = Expr::Binary(syn::ExprBinary {
                         attrs: Vec::new(),
                         left: Box::new(all),
                         op,
@@ -1859,7 +1853,7 @@ impl<'a> TypleContext<'a> {
                     // 2. handle ambiguity: `{ true } || { true }` is not a boolean expression.
                     // It is a block followed by a closure that returns a boolean. Adding
                     // parentheses `({ true } || { true })` makes it a boolean expression.
-                    all = Expr::Paren(ExprParen {
+                    all = Expr::Paren(syn::ExprParen {
                         attrs: Vec::new(),
                         paren_token: token::Paren::default(),
                         expr: Box::new(Expr::Binary(expr)),
@@ -1867,9 +1861,9 @@ impl<'a> TypleContext<'a> {
                 }
                 all
             }
-            None => Expr::Lit(ExprLit {
+            None => Expr::Lit(syn::PatLit {
                 attrs: Vec::new(),
-                lit: Lit::Bool(LitBool {
+                lit: Lit::Bool(syn::LitBool {
                     value: default,
                     span: expr.span(),
                 }),
@@ -1878,21 +1872,24 @@ impl<'a> TypleContext<'a> {
         Ok(all)
     }
 
-    fn replace_macro_pat(&self, m: &mut PatMacro) -> Result<Option<Pat>> {
+    fn replace_macro_pat(&self, m: &mut syn::PatMacro) -> Result<Option<Pat>> {
         self.replace_attrs(&mut m.attrs)?;
         if let Some(macro_name) = m.mac.path.get_ident() {
             if macro_name == "typle_for" {
+                let mut tuple = syn::PatTuple {
+                    attrs: std::mem::take(&mut m.attrs),
+                    paren_token: token::Paren::default(),
+                    elems: punctuated::Punctuated::new(),
+                };
                 let token_stream = std::mem::take(&mut m.mac.tokens);
                 let default_span = token_stream.span();
                 let mut tokens = token_stream.into_iter();
                 let (pattern, range) = self.parse_pattern_range(&mut tokens, default_span)?;
+                if range.is_empty() {
+                    return Ok(Some(Pat::Tuple(tuple)));
+                }
                 let token_stream = tokens.collect::<TokenStream>();
                 let body_span = token_stream.span();
-                let mut tuple = PatTuple {
-                    attrs: std::mem::take(&mut m.attrs),
-                    paren_token: token::Paren::default(),
-                    elems: Punctuated::new(),
-                };
                 match m.mac.delimiter {
                     MacroDelimiter::Paren(_) => {
                         let pat = Pat::parse_single.parse2(token_stream)?;
@@ -1900,17 +1897,16 @@ impl<'a> TypleContext<'a> {
                         if let Some(ident) = &pattern {
                             context.constants.insert(ident.clone(), 0);
                         }
-                        for index in range {
+                        for (index, mut component) in range.zip_clone(pat) {
                             if let Some(ident) = &pattern {
                                 *context.constants.get_mut(ident).unwrap() = index;
                             }
-                            let mut component = pat.clone();
                             context.replace_pat(&mut component)?;
                             tuple.elems.push(component);
                         }
                     }
                     MacroDelimiter::Brace(_) => {
-                        let Ok(expr) = parse2::<Expr>(token_stream) else {
+                        let Ok(expr) = syn::parse2::<Expr>(token_stream) else {
                             return Err(Error::new(
                                 body_span,
                                 "cannot parse, wrap types in `typle_pat!()`",
@@ -1921,11 +1917,10 @@ impl<'a> TypleContext<'a> {
                         if let Some(ident) = &pattern {
                             context.constants.insert(ident.clone(), 0);
                         }
-                        for index in range {
+                        for (index, mut expr) in range.zip_clone(expr) {
                             if let Some(ident) = &pattern {
                                 *context.constants.get_mut(ident).unwrap() = index;
                             }
-                            let mut expr = expr.clone();
                             let mut state = BlockState::default();
                             context.replace_expr(&mut expr, &mut state)?;
                             if let Expr::Verbatim(_) = expr {
@@ -1951,24 +1946,36 @@ impl<'a> TypleContext<'a> {
     fn replace_typle_fold_type(&self, mac: &mut Macro, default_span: Span) -> Result<Type> {
         let token_stream = std::mem::take(&mut mac.tokens);
         let mut tokens = token_stream.into_iter();
-        let mut init_type = parse2::<Type>(Self::extract_to_semicolon(&mut tokens, default_span)?)?;
+        let mut init_type =
+            syn::parse2::<Type>(Self::extract_to_semicolon(&mut tokens, default_span)?)?;
         self.replace_type(&mut init_type)?;
         let (pattern, mut range) = self.parse_pattern_range(&mut tokens, default_span)?;
+        if range.is_empty() {
+            return Ok(init_type);
+        }
         let folded_type = if let Some(last_index) = range.next_back() {
             let fold_ident = Self::parse_fold_ident(&mut tokens, default_span)?;
-            let wrapping_type = parse2::<Type>(tokens.collect())?;
+            let wrapping_type = syn::parse2::<Type>(tokens.collect())?;
             let mut context = self.clone();
             if let Some(ident) = &pattern {
                 context.constants.insert(ident.clone(), 0);
             }
-            context.retypes.insert(fold_ident.clone(), init_type);
+            context.retypes.insert(
+                fold_ident.clone(),
+                Type::Verbatim(init_type.into_token_stream()),
+            );
             for index in range {
                 if let Some(ident) = &pattern {
                     *context.constants.get_mut(ident).unwrap() = index;
                 }
                 let mut folded_type = wrapping_type.clone();
                 context.replace_type(&mut folded_type)?;
-                *context.retypes.get_mut(&fold_ident).unwrap() = folded_type;
+                // retypes get cloned when they are inserted. This type can grow into
+                // a large nested type that is expensive to clone. Encoding the type
+                // as a verbatim TokenStream allows faster cloning. The type has had
+                // replacements done at this point so we do not need the structure.
+                *context.retypes.get_mut(&fold_ident).unwrap() =
+                    Type::Verbatim(folded_type.into_token_stream());
             }
             if let Some(ident) = &pattern {
                 *context.constants.get_mut(ident).unwrap() = last_index;
@@ -1982,7 +1989,7 @@ impl<'a> TypleContext<'a> {
         Ok(folded_type)
     }
 
-    fn replace_macro_type(&self, m: &mut TypeMacro) -> Result<Option<Type>> {
+    fn replace_macro_type(&self, m: &mut syn::TypeMacro) -> Result<Option<Type>> {
         // typle_for!(i in .. => Option<T<{i}>) -> (Option<T0>, Option<T1>)
         // typle_for!(i in .. => T::<{i}>::default()) -> (T0::default(), T1::default())
         // as opposed to
@@ -1990,34 +1997,36 @@ impl<'a> TypleContext<'a> {
         // T::default() -> <(T0, T1)>::default()
         if let Some(macro_name) = m.mac.path.get_ident() {
             if macro_name == "typle_for" {
+                let mut tuple = syn::TypeTuple {
+                    paren_token: token::Paren::default(),
+                    elems: punctuated::Punctuated::new(),
+                };
                 let token_stream = std::mem::take(&mut m.mac.tokens);
                 let default_span = token_stream.span();
                 let mut tokens = token_stream.into_iter();
                 let (pattern, range) = self.parse_pattern_range(&mut tokens, default_span)?;
+                if range.is_empty() {
+                    return Ok(Some(Type::Tuple(tuple)));
+                }
                 let token_stream = tokens.collect::<TokenStream>();
                 let body_span = token_stream.span();
-                let mut tuple = TypeTuple {
-                    paren_token: token::Paren::default(),
-                    elems: Punctuated::new(),
-                };
                 match m.mac.delimiter {
                     MacroDelimiter::Paren(_) => {
-                        let ty = parse2::<Type>(token_stream)?;
+                        let ty = syn::parse2::<Type>(token_stream)?;
                         let mut context = self.clone();
                         if let Some(ident) = &pattern {
                             context.constants.insert(ident.clone(), 0);
                         }
-                        for index in range {
+                        for (index, mut component) in range.zip_clone(ty) {
                             if let Some(ident) = &pattern {
                                 *context.constants.get_mut(ident).unwrap() = index;
                             }
-                            let mut component = ty.clone();
                             context.replace_type(&mut component)?;
                             tuple.elems.push(component);
                         }
                     }
                     MacroDelimiter::Brace(_) => {
-                        let Ok(expr) = parse2::<Expr>(token_stream) else {
+                        let Ok(expr) = syn::parse2::<Expr>(token_stream) else {
                             return Err(Error::new(
                                 body_span,
                                 "cannot parse, wrap types in `typle_ty!()`",
@@ -2028,11 +2037,10 @@ impl<'a> TypleContext<'a> {
                         if let Some(ident) = &pattern {
                             context.constants.insert(ident.clone(), 0);
                         }
-                        for index in range {
+                        for (index, mut expr) in range.zip_clone(expr) {
                             if let Some(ident) = &pattern {
                                 *context.constants.get_mut(ident).unwrap() = index;
                             }
-                            let mut expr = expr.clone();
                             let mut state = BlockState::default();
                             context.replace_expr(&mut expr, &mut state)?;
                             if let Expr::Verbatim(_) = expr {
@@ -2257,7 +2265,7 @@ impl<'a> TypleContext<'a> {
         if collect.is_empty() {
             return Err(Error::new(span, "expected range"));
         }
-        let mut expr = parse2::<Expr>(collect)?;
+        let mut expr = syn::parse2::<Expr>(collect)?;
         let mut state = BlockState::default();
         self.replace_expr(&mut expr, &mut state)?;
         if let Expr::Range(range) = expr {
@@ -2357,7 +2365,7 @@ impl<'a> TypleContext<'a> {
                 self.replace_qself_path(&mut pat.qself, &mut pat.path)?;
                 if pat.path.segments.is_empty() {
                     if let Some(qself) = &mut pat.qself {
-                        if let Type::Path(TypePath { qself, path }) = &mut *qself.ty {
+                        if let Type::Path(syn::TypePath { qself, path }) = &mut *qself.ty {
                             pat.path = path.clone();
                             pat.qself = qself.take();
                         }
@@ -2421,7 +2429,7 @@ impl<'a> TypleContext<'a> {
                     PathArguments::None => {
                         // T::clone(&t) -> <(T0, T1)>::clone(&t)
                         // T -> <(T0, T1)> (needs to be undone at call site)
-                        let tuple_type = Box::new(Type::Tuple(TypeTuple {
+                        let tuple_type = Box::new(Type::Tuple(syn::TypeTuple {
                             paren_token: token::Paren::default(),
                             elems: (0..self.typle_len.unwrap_or(self.typle_macro.max_len))
                                 .map(|i| self.get_type(typle, i, first.span()))
@@ -2482,7 +2490,7 @@ impl<'a> TypleContext<'a> {
                 *ident = Ident::new(rename, ident.span());
             } else if let Some(ty) = self.retypes.get(ident) {
                 match ty {
-                    Type::Path(TypePath {
+                    Type::Path(syn::TypePath {
                         qself: ty_qself,
                         path: ty_path,
                     }) if ty_path.segments.len() == 1 => {
@@ -2544,16 +2552,16 @@ impl<'a> TypleContext<'a> {
         Ok(())
     }
 
-    fn replace_signature(&self, sig: &mut syn::Signature) -> Result<()> {
+    fn replace_signature(&self, sig: &mut Signature) -> Result<()> {
         self.replace_generics(&mut sig.generics)?;
         for input in &mut sig.inputs {
-            if let syn::FnArg::Typed(pat_type) = input {
+            if let FnArg::Typed(pat_type) = input {
                 self.replace_type(&mut pat_type.ty)?;
             }
         }
         match &mut sig.output {
-            syn::ReturnType::Default => {}
-            syn::ReturnType::Type(_, ty) => {
+            ReturnType::Default => {}
+            ReturnType::Type(_, ty) => {
                 self.replace_type(ty)?;
             }
         }
@@ -2619,12 +2627,12 @@ impl<'a> TypleContext<'a> {
     // Return Some(usize) if the angled bracketed generic arguments is a `typle_ident!` macro.
     fn typle_ident(&self, args: &mut syn::AngleBracketedGenericArguments) -> Result<Option<usize>> {
         if args.args.len() == 1 {
-            if let Some(GenericArgument::Type(Type::Macro(TypeMacro { mac }))) =
+            if let Some(GenericArgument::Type(Type::Macro(syn::TypeMacro { mac }))) =
                 args.args.first_mut()
             {
                 if let Some(macro_ident) = mac.path.get_ident() {
                     if macro_ident == "typle_ident" {
-                        let mut expr = parse2::<Expr>(std::mem::take(&mut mac.tokens))?;
+                        let mut expr = syn::parse2::<Expr>(std::mem::take(&mut mac.tokens))?;
                         let mut state = BlockState::default();
                         self.replace_expr(&mut expr, &mut state)?;
                         let Some(index) = evaluate_usize(&expr) else {
@@ -2639,10 +2647,11 @@ impl<'a> TypleContext<'a> {
     }
 }
 
+#[inline]
 pub fn ident_to_path(ident: Ident) -> Path {
-    syn::Path {
+    Path {
         leading_colon: None,
-        segments: std::iter::once(PathSegment {
+        segments: std::iter::once(syn::PathSegment {
             ident,
             arguments: PathArguments::None,
         })
@@ -2651,12 +2660,17 @@ pub fn ident_to_path(ident: Ident) -> Path {
 }
 
 fn remove_constraints(
-    fn_type_params: &Punctuated<GenericParam, token::Comma>,
-) -> Punctuated<GenericParam, token::Comma> {
-    let mut output = fn_type_params.clone();
-    for param in &mut output {
+    fn_type_params: &punctuated::Punctuated<GenericParam, token::Comma>,
+) -> punctuated::Punctuated<GenericParam, token::Comma> {
+    let mut output = punctuated::Punctuated::new();
+    for param in fn_type_params.iter() {
         if let GenericParam::Type(type_param) = param {
-            type_param.bounds = Punctuated::new();
+            output.push(GenericParam::Type(syn::TypeParam {
+                bounds: punctuated::Punctuated::new(),
+                ..type_param.clone()
+            }));
+        } else {
+            output.push(param.clone());
         }
     }
     output
@@ -2686,7 +2700,7 @@ fn expr_to_pat(expr: Expr) -> Result<Pat> {
                 Stmt::Expr(_, Some(semi)) => Err(Error::new(semi.span(), "unexpected semicolon")),
                 Stmt::Macro(m) => match m.mac.path.get_ident() {
                     Some(ident) if ident == "typle_pat" => Pat::parse_single.parse2(m.mac.tokens),
-                    _ => Ok(Pat::Macro(ExprMacro {
+                    _ => Ok(Pat::Macro(syn::PatMacro {
                         attrs: m.attrs,
                         mac: m.mac,
                     })),
@@ -2694,7 +2708,7 @@ fn expr_to_pat(expr: Expr) -> Result<Pat> {
             }
         }
         Expr::Const(expr) => Ok(Pat::Const(expr)),
-        Expr::Infer(expr) => Ok(Pat::Wild(PatWild {
+        Expr::Infer(expr) => Ok(Pat::Wild(syn::PatWild {
             attrs: expr.attrs,
             underscore_token: expr.underscore_token,
         })),
@@ -2703,19 +2717,19 @@ fn expr_to_pat(expr: Expr) -> Result<Pat> {
             Some(ident) if ident == "typle_pat" => Pat::parse_single.parse2(expr.mac.tokens),
             _ => Ok(Pat::Macro(expr)),
         },
-        Expr::Paren(expr) => Ok(Pat::Paren(PatParen {
+        Expr::Paren(expr) => Ok(Pat::Paren(syn::PatParen {
             attrs: expr.attrs,
             paren_token: expr.paren_token,
             pat: Box::new(expr_to_pat(*expr.expr)?),
         })),
         Expr::Path(expr) => Ok(Pat::Path(expr)),
-        Expr::Reference(expr) => Ok(Pat::Reference(PatReference {
+        Expr::Reference(expr) => Ok(Pat::Reference(syn::PatReference {
             attrs: expr.attrs,
             and_token: expr.and_token,
             mutability: expr.mutability,
             pat: Box::new(expr_to_pat(*expr.expr)?),
         })),
-        Expr::Tuple(expr) => Ok(Pat::Tuple(PatTuple {
+        Expr::Tuple(expr) => Ok(Pat::Tuple(syn::PatTuple {
             attrs: expr.attrs,
             paren_token: expr.paren_token,
             elems: expr
@@ -2735,14 +2749,14 @@ fn expr_to_pat(expr: Expr) -> Result<Pat> {
 fn pat_to_expr(pat: Pat) -> Result<Expr> {
     match pat {
         Pat::Const(p) => Ok(Expr::Const(p)),
-        Pat::Ident(p) => Ok(Expr::Path(ExprPath {
+        Pat::Ident(p) => Ok(Expr::Path(syn::PatPath {
             attrs: p.attrs,
             qself: None,
             path: ident_to_path(p.ident),
         })),
         Pat::Lit(p) => Ok(Expr::Lit(p)),
         Pat::Macro(p) => Ok(Expr::Macro(p)),
-        Pat::Tuple(p) => Ok(Expr::Tuple(ExprTuple {
+        Pat::Tuple(p) => Ok(Expr::Tuple(syn::ExprTuple {
             attrs: p.attrs,
             paren_token: p.paren_token,
             elems: p
@@ -2778,23 +2792,23 @@ fn expr_to_type(expr: Expr) -> Result<Type> {
                 Stmt::Expr(expr, None) => expr_to_type(expr),
                 Stmt::Expr(_, Some(semi)) => Err(Error::new(semi.span(), "unexpected semicolon")),
                 Stmt::Macro(m) => match m.mac.path.get_ident() {
-                    Some(ident) if ident == "typle_ty" => parse2(m.mac.tokens),
-                    _ => Ok(Type::Macro(TypeMacro { mac: m.mac })),
+                    Some(ident) if ident == "typle_ty" => syn::parse2(m.mac.tokens),
+                    _ => Ok(Type::Macro(syn::TypeMacro { mac: m.mac })),
                 },
             }
         }
-        Expr::Infer(expr) => Ok(Type::Infer(TypeInfer {
+        Expr::Infer(expr) => Ok(Type::Infer(syn::TypeInfer {
             underscore_token: expr.underscore_token,
         })),
         Expr::Macro(expr) => match expr.mac.path.get_ident() {
-            Some(ident) if ident == "typle_ty" => parse2(expr.mac.tokens),
-            _ => Ok(Type::Macro(TypeMacro { mac: expr.mac })),
+            Some(ident) if ident == "typle_ty" => syn::parse2(expr.mac.tokens),
+            _ => Ok(Type::Macro(syn::TypeMacro { mac: expr.mac })),
         },
         Expr::Paren(expr) => Ok(Type::Paren(syn::TypeParen {
             paren_token: expr.paren_token,
             elem: Box::new(expr_to_type(*expr.expr)?),
         })),
-        Expr::Path(expr) => Ok(Type::Path(TypePath {
+        Expr::Path(expr) => Ok(Type::Path(syn::TypePath {
             qself: None,
             path: expr.path,
         })),
@@ -2804,7 +2818,7 @@ fn expr_to_type(expr: Expr) -> Result<Type> {
             mutability: expr.mutability,
             elem: Box::new(expr_to_type(*expr.expr)?),
         })),
-        Expr::Tuple(expr) => Ok(Type::Tuple(TypeTuple {
+        Expr::Tuple(expr) => Ok(Type::Tuple(syn::TypeTuple {
             paren_token: expr.paren_token,
             elems: expr
                 .elems
@@ -2820,7 +2834,7 @@ fn expr_to_type(expr: Expr) -> Result<Type> {
     }
 }
 
-pub fn first_path_segment_mut(mut type_path: &mut TypePath) -> Option<&mut PathSegment> {
+pub fn first_path_segment_mut(mut type_path: &mut syn::TypePath) -> Option<&mut syn::PathSegment> {
     while let Some(qself) = &mut type_path.qself {
         // <<T<_> as Trait>::Value as std::ops::Mul>::Output: Copy
         if let Type::Path(inner_type_path) = &mut *qself.ty {

@@ -117,6 +117,7 @@ pub fn check_out_of_bounds<T: Tuple>(t: T) -> usize {
 // Check negative ranges
 #[typle(Tuple for 0..=0)]
 pub fn check_negative_range<T: Tuple>(t: T) -> usize {
+    #[allow(clippy::let_and_return)]
     let mut count = 0;
     for typle_index!(i) in 4..2 {
         count += 1;

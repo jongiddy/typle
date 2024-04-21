@@ -8,9 +8,6 @@ pub mod doc_typle {
         fn max(&self) -> Option<u32> {
             #[allow(unused_mut)]
             let mut max = self.t.0;
-            loop {
-                break;
-            }
             Some(max)
         }
     }
@@ -579,10 +576,8 @@ pub mod for_loop {
             #[allow(unused_variables)]
             let (t,) = self;
             {
+                #[allow(clippy::let_and_return)]
                 let mut count = 0;
-                loop {
-                    break;
-                }
                 count
             }
         }
