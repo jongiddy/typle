@@ -1834,11 +1834,10 @@ impl<'a> TypleContext<'a> {
                 }
                 let mut all = expr.clone();
                 context.replace_expr(&mut all, state)?;
-                for index in range {
+                for (index, mut expr) in range.zip_clone(expr) {
                     if let Some(ident) = &pattern {
                         *context.constants.get_mut(ident).unwrap() = index;
                     }
-                    let mut expr = expr.clone();
                     context.replace_expr(&mut expr, state)?;
                     all = Expr::Binary(syn::ExprBinary {
                         attrs: Vec::new(),

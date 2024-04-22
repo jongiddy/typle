@@ -336,8 +336,23 @@
 //!
 //! # Limitations
 //!
-//! - The typle trait (`Tuple` in the examples) can only be applied to an
+//! - The typle trait bound (`Tuple` in the examples) can only be applied to an
 //! unqualified type identifier, not to non-path types or associated types.
+//! - `typle` does not work when the tuple types are only associated types
+//! because [associated types cannot distinguish implementations](https://github.com/rust-lang/rust/issues/20400).
+//! See [this file](https://github.com/jongiddy/typle/blob/main/tests/compile/unzip.rs)
+//! for workarounds.
+//! ```rust ignore
+//! // ERROR: conflicting implementations of trait `TryUnzip`
+//! # use typle::typle;
+//! # trait TryUnzip {}
+//! #[typle(Tuple for 2..=3)]
+//! impl<I, T, E> TryUnzip for I
+//! where
+//!     I: Iterator<Item = Result<T, E>>, // T only appears as associated type of Self
+//!     T: Tuple,
+//! {}
+//! ```
 //! - Standalone `async` and `unsafe` functions are not supported.
 //! - Standalone functions require explicit lifetimes on references:
 //! ```rust

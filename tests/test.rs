@@ -139,3 +139,27 @@ fn test_min_max() {
 fn test_associated_method() {
     assert_eq!(compile::method::X::associated((1, 2, 3), 2), (3, 4, 5));
 }
+
+#[test]
+fn test_try_unzip_modified() {
+    use compile::unzip::TryUnzipModified;
+    let vec: Vec<Result<_, &str>> = vec![Ok(('a', 3, 1)), Ok(('b', 6, 2))];
+    assert_eq!(
+        vec.into_iter().try_unzip(),
+        Ok((vec!['a', 'b'], vec![3, 6], vec![1, 2]))
+    );
+    let vec = vec![Ok(('a', 3)), Ok(('b', 6)), Ok(('i', 1)), Err("bad")];
+    assert_eq!(vec.into_iter().try_unzip(), Err("bad"));
+}
+
+#[test]
+fn test_try_unzip_tuple() {
+    use compile::unzip::TryUnzip;
+    let vec: Vec<Result<_, &str>> = vec![Ok(('a', 3, 1)), Ok(('b', 6, 2))];
+    assert_eq!(
+        vec.into_iter().try_unzip(),
+        Ok((vec!['a', 'b'], vec![3, 6], vec![1, 2]))
+    );
+    let vec = vec![Ok(('a', 3)), Ok(('b', 6)), Ok(('i', 1)), Err("bad")];
+    assert_eq!(vec.into_iter().try_unzip(), Err("bad"));
+}

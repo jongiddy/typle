@@ -2089,3 +2089,126 @@ pub mod typle_fold {
         };
     }
 }
+pub mod unzip {
+    use typle::typle;
+    pub trait TryUnzip {
+        type Output;
+        type Error;
+        fn try_unzip(self) -> Result<Self::Output, Self::Error>;
+    }
+    pub trait TryUnzipModified<Output> {
+        type Error;
+        fn try_unzip(self) -> Result<Output, Self::Error>;
+    }
+    impl<I, T0, T1, E> TryUnzipModified<(Vec<T0>, Vec<T1>)> for I
+    where
+        I: Iterator<Item = Result<(T0, T1), E>>,
+    {
+        type Error = E;
+        fn try_unzip(self) -> Result<(Vec<T0>, Vec<T1>), Self::Error> {
+            let mut vecs = (Vec::new(), Vec::new());
+            for result in self {
+                let t = result?;
+                loop {
+                    {
+                        vecs.0.push(t.0);
+                    }
+                    {
+                        vecs.1.push(t.1);
+                    }
+                    break;
+                }
+            }
+            Ok(vecs)
+        }
+    }
+    impl<I, T0, T1, T2, E> TryUnzipModified<(Vec<T0>, Vec<T1>, Vec<T2>)> for I
+    where
+        I: Iterator<Item = Result<(T0, T1, T2), E>>,
+    {
+        type Error = E;
+        fn try_unzip(self) -> Result<(Vec<T0>, Vec<T1>, Vec<T2>), Self::Error> {
+            let mut vecs = (Vec::new(), Vec::new(), Vec::new());
+            for result in self {
+                let t = result?;
+                loop {
+                    {
+                        vecs.0.push(t.0);
+                    }
+                    {
+                        vecs.1.push(t.1);
+                    }
+                    {
+                        vecs.2.push(t.2);
+                    }
+                    break;
+                }
+            }
+            Ok(vecs)
+        }
+    }
+    pub trait TryUnzipTuple<T, E> {
+        type Output;
+        fn try_unzip<I>(iter: I) -> Result<Self::Output, E>
+        where
+            I: Iterator<Item = Result<T, E>>;
+    }
+    impl<T0, T1, E> TryUnzipTuple<(T0, T1), E> for (T0, T1) {
+        type Output = (Vec<T0>, Vec<T1>);
+        fn try_unzip<I>(iter: I) -> Result<Self::Output, E>
+        where
+            I: Iterator<Item = Result<(T0, T1), E>>,
+        {
+            let mut vecs = (Vec::new(), Vec::new());
+            for result in iter {
+                let t = result?;
+                loop {
+                    {
+                        vecs.0.push(t.0);
+                    }
+                    {
+                        vecs.1.push(t.1);
+                    }
+                    break;
+                }
+            }
+            Ok(vecs)
+        }
+    }
+    impl<T0, T1, T2, E> TryUnzipTuple<(T0, T1, T2), E> for (T0, T1, T2) {
+        type Output = (Vec<T0>, Vec<T1>, Vec<T2>);
+        fn try_unzip<I>(iter: I) -> Result<Self::Output, E>
+        where
+            I: Iterator<Item = Result<(T0, T1, T2), E>>,
+        {
+            let mut vecs = (Vec::new(), Vec::new(), Vec::new());
+            for result in iter {
+                let t = result?;
+                loop {
+                    {
+                        vecs.0.push(t.0);
+                    }
+                    {
+                        vecs.1.push(t.1);
+                    }
+                    {
+                        vecs.2.push(t.2);
+                    }
+                    break;
+                }
+            }
+            Ok(vecs)
+        }
+    }
+    impl<I, T, E> TryUnzip for I
+    where
+        I: Iterator<Item = Result<T, E>>,
+        T: TryUnzipTuple<T, E>,
+    {
+        type Output = <T as TryUnzipTuple<T, E>>::Output;
+        type Error = E;
+        fn try_unzip(self) -> Result<Self::Output, Self::Error> {
+            <T as TryUnzipTuple<T, E>>::try_unzip(self)
+        }
+    }
+}
