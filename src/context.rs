@@ -680,7 +680,7 @@ impl<'a> TypleContext<'a> {
                 self.replace_expr(&mut index.expr, state)?;
                 if let Expr::Array(array) = &mut *index.index {
                     // t[[0]]
-                    let mut iter = array.elems.iter_mut();
+                    let mut iter = array.elems.iter_mut().fuse();
                     let (Some(field), None) = (iter.next(), iter.next()) else {
                         abort!(index.index, "unsupported tuple index");
                     };
@@ -751,7 +751,7 @@ impl<'a> TypleContext<'a> {
             Expr::Path(path) => {
                 self.replace_attrs(&mut path.attrs)?;
                 if path.qself.is_none() {
-                    let mut segments = path.path.segments.iter();
+                    let mut segments = path.path.segments.iter().fuse();
                     if let Some(syn::PathSegment {
                         ident: ident1,
                         arguments: PathArguments::None,
@@ -936,7 +936,7 @@ impl<'a> TypleContext<'a> {
                                     if let PathArguments::AngleBracketed(arguments) =
                                         &first.arguments
                                     {
-                                        let mut iter = arguments.args.iter();
+                                        let mut iter = arguments.args.iter().fuse();
                                         let (Some(arg), None) = (iter.next(), iter.next()) else {
                                             abort!(arguments, "expected constant expression");
                                         };
@@ -1119,7 +1119,7 @@ impl<'a> TypleContext<'a> {
                             &mut first.arguments,
                             segments.next(),
                         ) {
-                            let mut iter = arguments.args.iter_mut();
+                            let mut iter = arguments.args.iter_mut().fuse();
                             if let (Some(GenericArgument::Const(ref mut expr)), None) =
                                 (iter.next(), iter.next())
                             {

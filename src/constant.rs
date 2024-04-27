@@ -57,10 +57,9 @@ pub fn evaluate_bool(expr: &Expr) -> Result<bool> {
 pub fn evaluate_range(expr: &Expr) -> Option<&syn::ExprRange> {
     match expr {
         Expr::Block(block) => {
-            if block.block.stmts.len() == 1 {
-                if let Stmt::Expr(expr, _) = &block.block.stmts[0] {
-                    return evaluate_range(expr);
-                }
+            let mut stmts = block.block.stmts.iter().fuse();
+            if let (Some(Stmt::Expr(expr, None)), None) = (stmts.next(), stmts.next()) {
+                return evaluate_range(expr);
             }
         }
         Expr::Range(range) => {

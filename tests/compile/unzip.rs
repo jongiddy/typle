@@ -70,7 +70,9 @@ where
 
 // A solution that does not modify the original trait is to add a new trait with
 // an associated method, implement it on the tuple type, and call it from an
-// impl for the original trait:
+// impl for the original trait. Note that the typle impl uses the input
+// types as generic parameters to select the implementation and uses associated
+// types for any interface types constructed using typle macros.
 
 pub trait TryUnzipTuple<T, E> {
     type Output;
