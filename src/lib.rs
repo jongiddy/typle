@@ -415,6 +415,7 @@
 
 mod constant;
 mod context;
+mod iterator;
 mod syn_ext;
 
 use constant::evaluate_usize;

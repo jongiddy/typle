@@ -2032,6 +2032,133 @@ pub mod type_alias {
         T2: Process,
     = (Option<<T0>::Output>, Option<<T1>::Output>, Option<<T2>::Output>);
 }
+pub mod typle_args {
+    #![allow(unused)]
+    use typle::typle;
+    struct World {}
+    trait ExclusiveSystemParam {}
+    struct ExclusiveSystemParamItem<F> {
+        f: F,
+    }
+    trait ExclusiveSystemParamFunction<F> {
+        type In;
+        type Out;
+        type Param;
+        fn run(
+            &mut self,
+            world: &mut World,
+            _in: Self::In,
+            param_value: ExclusiveSystemParamItem<Self::Param>,
+        ) -> Self::Out;
+    }
+    struct Func {}
+    impl<Out, Func: Send + Sync + 'static> ExclusiveSystemParamFunction<fn() -> Out>
+    for Func
+    where
+        for<'a> &'a mut Func: FnMut(&mut World) -> Out + FnMut(&mut World) -> Out,
+        Out: 'static,
+    {
+        type In = ();
+        type Out = Out;
+        type Param = ();
+        #[inline]
+        fn run(
+            &mut self,
+            world: &mut World,
+            _in: (),
+            param_value: ExclusiveSystemParamItem<()>,
+        ) -> Self::Out {
+            ::core::panicking::panic("not yet implemented")
+        }
+    }
+    impl<
+        Out,
+        Func: Send + Sync + 'static,
+        F0,
+    > ExclusiveSystemParamFunction<fn(F0) -> Out> for Func
+    where
+        for<'a> &'a mut Func: FnMut(&mut World, F0) -> Out
+            + FnMut(&mut World, ExclusiveSystemParamItem<F0>) -> Out,
+        Out: 'static,
+        F0: ExclusiveSystemParam,
+    {
+        type In = ();
+        type Out = Out;
+        type Param = (F0,);
+        #[inline]
+        fn run(
+            &mut self,
+            world: &mut World,
+            _in: (),
+            param_value: ExclusiveSystemParamItem<(F0,)>,
+        ) -> Self::Out {
+            ::core::panicking::panic("not yet implemented")
+        }
+    }
+    impl<
+        Out,
+        Func: Send + Sync + 'static,
+        F0,
+        F1,
+    > ExclusiveSystemParamFunction<fn(F0, F1) -> Out> for Func
+    where
+        for<'a> &'a mut Func: FnMut(&mut World, F0, F1) -> Out
+            + FnMut(
+                &mut World,
+                ExclusiveSystemParamItem<F0>,
+                ExclusiveSystemParamItem<F1>,
+            ) -> Out,
+        Out: 'static,
+        F0: ExclusiveSystemParam,
+        F1: ExclusiveSystemParam,
+    {
+        type In = ();
+        type Out = Out;
+        type Param = (F0, F1);
+        #[inline]
+        fn run(
+            &mut self,
+            world: &mut World,
+            _in: (),
+            param_value: ExclusiveSystemParamItem<(F0, F1)>,
+        ) -> Self::Out {
+            ::core::panicking::panic("not yet implemented")
+        }
+    }
+    impl<
+        Out,
+        Func: Send + Sync + 'static,
+        F0,
+        F1,
+        F2,
+    > ExclusiveSystemParamFunction<fn(F0, F1, F2) -> Out> for Func
+    where
+        for<'a> &'a mut Func: FnMut(&mut World, F0, F1, F2) -> Out
+            + FnMut(
+                &mut World,
+                ExclusiveSystemParamItem<F0>,
+                ExclusiveSystemParamItem<F1>,
+                ExclusiveSystemParamItem<F2>,
+            ) -> Out,
+        Out: 'static,
+        F0: ExclusiveSystemParam,
+        F1: ExclusiveSystemParam,
+        F2: ExclusiveSystemParam,
+    {
+        type In = ();
+        type Out = Out;
+        type Param = (F0, F1, F2);
+        #[inline]
+        fn run(
+            &mut self,
+            world: &mut World,
+            _in: (),
+            param_value: ExclusiveSystemParamItem<(F0, F1, F2)>,
+        ) -> Self::Out {
+            ::core::panicking::panic("not yet implemented")
+        }
+    }
+}
 pub mod typle_fold {
     use typle::typle;
     pub struct Something {}

@@ -16,6 +16,7 @@ use syn::{
 use zip_clone::ZipClone as _;
 
 use crate::constant::{evaluate_bool, evaluate_range, evaluate_usize};
+use crate::iterator::ListIterator4;
 use crate::syn_ext::GeneralFunction;
 use crate::TypleMacro;
 
@@ -2538,9 +2539,10 @@ impl<'a> TypleContext<'a> {
                     }
                 }
                 PathArguments::Parenthesized(args) => {
-                    for input in &mut args.inputs {
-                        self.replace_type(input)?;
-                    }
+                    args.inputs = std::mem::take(&mut args.inputs)
+                        .into_iter()
+                        .flat_map(|ty| self.replace_type_in_list(ty))
+                        .collect::<Result<_>>()?;
                     if let ReturnType::Type(_, ty) = &mut args.output {
                         self.replace_type(ty)?;
                     }
@@ -2576,9 +2578,18 @@ impl<'a> TypleContext<'a> {
                 self.replace_expr(&mut array.len, &mut state)?;
             }
             Type::BareFn(bare_fn) => {
-                for arg in &mut bare_fn.inputs {
-                    self.replace_type(&mut arg.ty)?;
-                }
+                bare_fn.inputs = std::mem::take(&mut bare_fn.inputs)
+                    .into_iter()
+                    .flat_map(|arg| {
+                        self.replace_type_in_list(arg.ty).map(move |res| {
+                            res.map(|ty| syn::BareFnArg {
+                                attrs: arg.attrs.clone(),
+                                name: arg.name.clone(),
+                                ty,
+                            })
+                        })
+                    })
+                    .collect::<Result<_>>()?;
                 if let ReturnType::Type(_, ty) = &mut bare_fn.output {
                     self.replace_type(ty)?;
                 }
@@ -2621,6 +2632,123 @@ impl<'a> TypleContext<'a> {
             _ => {}
         }
         Ok(())
+    }
+
+    fn replace_type_in_list(&'a self, mut ty: Type) -> impl Iterator<Item = Result<Type>> + 'a {
+        match &mut ty {
+            Type::Macro(syn::TypeMacro { mac }) => {
+                if let Some(ident) = mac.path.get_ident() {
+                    if ident == "typle_args" {
+                        let token_stream = std::mem::take(&mut mac.tokens);
+                        let default_span = token_stream.span();
+                        let mut tokens = token_stream.into_iter();
+                        let (pattern, range) =
+                            match self.parse_pattern_range(&mut tokens, default_span) {
+                                Ok(t) => t,
+                                Err(e) => return ListIterator4::Variant0(std::iter::once(Err(e))),
+                            };
+                        if range.is_empty() {
+                            return ListIterator4::Variant3(std::iter::empty());
+                        }
+                        let token_stream = tokens.collect::<TokenStream>();
+                        let ty = match syn::parse2::<Type>(token_stream) {
+                            Ok(ty) => ty,
+                            Err(e) => return ListIterator4::Variant0(std::iter::once(Err(e))),
+                        };
+                        let mut context = self.clone();
+                        if let Some(ident) = pattern.clone() {
+                            context.constants.insert(ident, 0);
+                        }
+                        return ListIterator4::Variant2(range.zip_clone(ty).map({
+                            move |(index, mut ty)| {
+                                if let Some(ident) = &pattern {
+                                    *context.constants.get_mut(ident).unwrap() = index;
+                                }
+                                match context.replace_type(&mut ty) {
+                                    Ok(()) => Ok(ty),
+                                    Err(e) => Err(e),
+                                }
+                            }
+                        }));
+                    }
+                }
+            }
+            Type::Path(syn::TypePath { qself, path })
+                if qself.is_none() && path.leading_colon.is_none() =>
+            {
+                let mut segments = path.segments.iter_mut();
+                if let Some(first) = segments.next() {
+                    if let (Some(typle), PathArguments::AngleBracketed(arguments), None) = (
+                        self.typles.get(&first.ident),
+                        &mut first.arguments,
+                        segments.next(),
+                    ) {
+                        let mut iter = arguments.args.iter_mut().fuse();
+                        if let (Some(GenericArgument::Const(ref mut expr)), None) =
+                            (iter.next(), iter.next())
+                        {
+                            let mut state = BlockState::default();
+                            match self.replace_expr(expr, &mut state) {
+                                Ok(_) => {}
+                                Err(e) => return ListIterator4::Variant0(std::iter::once(Err(e))),
+                            }
+                            if let Some(range) = evaluate_range(expr) {
+                                // T<{..}>
+                                let start = match range
+                                    .start
+                                    .as_deref()
+                                    .map(|start| {
+                                        evaluate_usize(start).ok_or_else(|| {
+                                            Error::new(start.span(), "expected integer")
+                                        })
+                                    })
+                                    .transpose()
+                                {
+                                    Ok(start) => start.unwrap_or(0),
+                                    Err(e) => {
+                                        return ListIterator4::Variant0(std::iter::once(Err(e)))
+                                    }
+                                };
+                                let end = match &range.end {
+                                    Some(expr) => match evaluate_usize(expr) {
+                                        Some(end) => end,
+                                        None => {
+                                            return ListIterator4::Variant0(std::iter::once(Err(
+                                                Error::new(range.end.span(), "expected integer"),
+                                            )));
+                                        }
+                                    },
+                                    None => match self.typle_len {
+                                        Some(end) => end,
+                                        None => {
+                                            return ListIterator4::Variant0(std::iter::once(Err(
+                                                Error::new(
+                                                    range.end.span(),
+                                                    "need an explicit range end",
+                                                ),
+                                            )));
+                                        }
+                                    },
+                                };
+                                let end = match range.limits {
+                                    RangeLimits::HalfOpen(_) => end,
+                                    RangeLimits::Closed(_) => end.saturating_add(1),
+                                };
+                                return ListIterator4::Variant1((start..end).map({
+                                    let span = path.span();
+                                    move |i| self.get_type(typle, i, span)
+                                }));
+                            }
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
+        match self.replace_type(&mut ty) {
+            Ok(()) => ListIterator4::Variant0(std::iter::once(Ok(ty))),
+            Err(e) => ListIterator4::Variant0(std::iter::once(Err(e))),
+        }
     }
 
     // Return Some(usize) if the angled bracketed generic arguments is a `typle_ident!` macro.
