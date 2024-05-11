@@ -1,6 +1,6 @@
 use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
-use std::ops::Range;
+use std::ops::{Bound, Range};
 use std::rc::Rc;
 
 use proc_macro2::{Delimiter, Group, Ident, Span, TokenStream, TokenTree};
@@ -10,8 +10,8 @@ use syn::spanned::Spanned as _;
 use syn::{
     punctuated, token, AttrStyle, Attribute, BinOp, Block, Error, Expr, Fields, FnArg,
     GenericArgument, GenericParam, Generics, ImplItem, Item, Label, Lit, Macro, MacroDelimiter,
-    Member, Meta, Pat, Path, PathArguments, QSelf, RangeLimits, Result, ReturnType, Signature,
-    Stmt, Type, TypeParamBound, Visibility, WherePredicate,
+    Member, Meta, Pat, Path, PathArguments, QSelf, Result, ReturnType, Signature, Stmt, Type,
+    TypeParamBound, Visibility, WherePredicate,
 };
 use zip_clone::ZipClone as _;
 
@@ -479,26 +479,29 @@ impl<'a> TypleContext<'a> {
                             if let Some(tt) = tokens.next() {
                                 abort!(tt, "unexpected token in typle_index");
                             };
-                            let Expr::Range(expr_range) = &*for_loop.expr else {
+                            let Some((start, end)) = evaluate_range(&for_loop.expr) else {
                                 abort!(for_loop.expr, "expected range");
                             };
-                            let (Some(start_expr), Some(end_expr)) =
-                                (&expr_range.start, &expr_range.end)
-                            else {
-                                abort!(expr_range, "expected bounded range");
+                            let start = match start {
+                                Bound::Included(Err(span)) | Bound::Excluded(Err(span)) => {
+                                    abort!(span, "expected integer for start of range");
+                                }
+                                Bound::Included(Ok(start)) => start,
+                                Bound::Excluded(Ok(start)) => start.saturating_add(1),
+                                Bound::Unbounded => {
+                                    abort!(for_loop.expr, "need an explicit range start")
+                                }
                             };
-                            let Some(start) = evaluate_usize(start_expr) else {
-                                abort!(
-                                    start_expr,
-                                    "cannot evaluate lower bound in constant context"
-                                );
+                            let end = match end {
+                                Bound::Included(Err(span)) | Bound::Excluded(Err(span)) => {
+                                    abort!(span, "expected integer for end of range");
+                                }
+                                Bound::Included(Ok(end)) => end.saturating_add(1),
+                                Bound::Excluded(Ok(end)) => end,
+                                Bound::Unbounded => {
+                                    abort!(for_loop.expr, "need an explicit range end")
+                                }
                             };
-                            let Some(mut end) = evaluate_usize(end_expr) else {
-                                abort!(end_expr, "cannot evaluate upper bound in constant context");
-                            };
-                            if let RangeLimits::Closed(_) = expr_range.limits {
-                                end += 1;
-                            }
                             if end <= start {
                                 *expr = Expr::Block(syn::ExprBlock {
                                     attrs: std::mem::take(&mut for_loop.attrs),
@@ -955,34 +958,37 @@ impl<'a> TypleContext<'a> {
                                         };
                                         let mut state = BlockState::default();
                                         self.replace_expr(&mut expr, &mut state)?;
-                                        if let Some(range) = evaluate_range(&expr) {
-                                            let start = range
-                                                .start
-                                                .as_deref()
-                                                .map(|start| {
-                                                    evaluate_usize(start).ok_or_else(|| {
-                                                        Error::new(start.span(), "expected integer")
-                                                    })
-                                                })
-                                                .transpose()?
-                                                .unwrap_or(0);
-                                            let end = match &range.end {
-                                                Some(expr) => match evaluate_usize(expr) {
-                                                    Some(end) => end,
-                                                    None => {
-                                                        abort!(start, "expected integer");
-                                                    }
-                                                },
-                                                None => match self.typle_len {
-                                                    Some(end) => end,
-                                                    None => {
-                                                        abort!(range, "need an explicit end");
-                                                    }
-                                                },
+                                        if let Some((start, end)) = evaluate_range(&expr) {
+                                            let start = match start {
+                                                Bound::Included(Err(span))
+                                                | Bound::Excluded(Err(span)) => {
+                                                    abort!(
+                                                        span,
+                                                        "expected integer for start of range"
+                                                    );
+                                                }
+                                                Bound::Included(Ok(start)) => start,
+                                                Bound::Excluded(Ok(start)) => {
+                                                    start.saturating_add(1)
+                                                }
+                                                Bound::Unbounded => 0,
                                             };
-                                            let end = match range.limits {
-                                                RangeLimits::HalfOpen(_) => end,
-                                                RangeLimits::Closed(_) => end.saturating_add(1),
+                                            let end = match end {
+                                                Bound::Included(Err(span))
+                                                | Bound::Excluded(Err(span)) => {
+                                                    abort!(
+                                                        span,
+                                                        "expected integer for end of range"
+                                                    );
+                                                }
+                                                Bound::Included(Ok(end)) => end.saturating_add(1),
+                                                Bound::Excluded(Ok(end)) => end,
+                                                Bound::Unbounded => match self.typle_len {
+                                                    Some(end) => end,
+                                                    None => {
+                                                        abort!(expr, "need an explicit range end");
+                                                    }
+                                                },
                                             };
                                             for bound in &mut predicate_type.bounds {
                                                 if let TypeParamBound::Trait(trait_bound) = bound {
@@ -1126,35 +1132,28 @@ impl<'a> TypleContext<'a> {
                             {
                                 let mut state = BlockState::default();
                                 self.replace_expr(expr, &mut state)?;
-                                if let Some(range) = evaluate_range(expr) {
+                                if let Some((start, end)) = evaluate_range(expr) {
                                     // T<{..}>
-                                    let start = range
-                                        .start
-                                        .as_deref()
-                                        .map(|start| {
-                                            evaluate_usize(start).ok_or_else(|| {
-                                                Error::new(start.span(), "expected integer")
-                                            })
-                                        })
-                                        .transpose()?
-                                        .unwrap_or(0);
-                                    let end = match &range.end {
-                                        Some(expr) => match evaluate_usize(expr) {
-                                            Some(end) => end,
-                                            None => {
-                                                abort!(range.end, "expected integer");
-                                            }
-                                        },
-                                        None => match self.typle_len {
-                                            Some(end) => end,
-                                            None => {
-                                                abort!(range.end, "need an explicit range end");
-                                            }
-                                        },
+                                    let start = match start {
+                                        Bound::Included(Err(span)) | Bound::Excluded(Err(span)) => {
+                                            abort!(span, "expected integer for start of range");
+                                        }
+                                        Bound::Included(Ok(start)) => start,
+                                        Bound::Excluded(Ok(start)) => start.saturating_add(1),
+                                        Bound::Unbounded => 0,
                                     };
-                                    let end = match range.limits {
-                                        RangeLimits::HalfOpen(_) => end,
-                                        RangeLimits::Closed(_) => end.saturating_add(1),
+                                    let end = match end {
+                                        Bound::Included(Err(span)) | Bound::Excluded(Err(span)) => {
+                                            abort!(span, "expected integer for end of range");
+                                        }
+                                        Bound::Included(Ok(end)) => end.saturating_add(1),
+                                        Bound::Excluded(Ok(end)) => end,
+                                        Bound::Unbounded => match self.typle_len {
+                                            Some(end) => end,
+                                            None => {
+                                                abort!(expr, "need an explicit range end");
+                                            }
+                                        },
                                     };
                                     for i in start..end {
                                         args.push(GenericArgument::Type(self.get_type(
@@ -2268,69 +2267,51 @@ impl<'a> TypleContext<'a> {
         let mut expr = syn::parse2::<Expr>(collect)?;
         let mut state = BlockState::default();
         self.replace_expr(&mut expr, &mut state)?;
-        if let Expr::Range(range) = expr {
-            let start = range
-                .start
-                .as_ref()
-                .map(|expr| {
-                    evaluate_usize(expr).ok_or_else(|| {
-                        if let Some(suspicious_ident) = &state.suspicious_ident {
-                            Error::new(
-                                suspicious_ident.span(),
-                                format!(
-                                    "range start invalid, possibly missing `{}: {}` bound",
-                                    suspicious_ident, self.typle_macro.ident
-                                ),
-                            )
-                        } else {
-                            Error::new(expr.span(), "range start invalid")
-                        }
-                    })
-                })
-                .transpose()?
-                .unwrap_or(0);
-            let end = match &range.end {
-                Some(expr) => match evaluate_usize(expr) {
-                    Some(end) => end,
-                    None => {
-                        if let Some(suspicious_ident) = &state.suspicious_ident {
-                            abort!(
-                                suspicious_ident,
-                                format!(
-                                    "range end invalid, possibly missing `{}: {}` bound",
-                                    suspicious_ident, self.typle_macro.ident
-                                )
-                            );
-                        } else {
-                            abort!(range.end, "range end invalid");
-                        }
-                    }
-                },
-                None => match self.typle_len {
-                    Some(end) => end,
-                    None => {
-                        abort!(range, "need an explicit end in range");
-                    }
-                },
-            };
-            let end = end
-                .checked_add(match range.limits {
-                    RangeLimits::HalfOpen(_) => 0,
-                    RangeLimits::Closed(_) => 1,
-                })
-                .ok_or_else(|| {
-                    Error::new(
-                        range.span(),
+        let Some((start, end)) = evaluate_range(&expr) else {
+            return Err(Error::new(expr.span(), "expected range"));
+        };
+        let start = match start {
+            Bound::Included(Err(span)) | Bound::Excluded(Err(span)) => {
+                if let Some(suspicious_ident) = &state.suspicious_ident {
+                    abort!(
+                        suspicious_ident,
                         format!(
-                            "for length {} range contains no values",
-                            self.typle_len.unwrap_or(self.typle_macro.max_len)
-                        ),
-                    )
-                })?;
-            Ok((pattern, start..end))
-        } else {
-            Err(Error::new(expr.span(), "expected range"))
-        }
+                            "range start invalid, possibly missing `{}: {}` bound",
+                            suspicious_ident, self.typle_macro.ident
+                        )
+                    );
+                } else {
+                    abort!(span, "range start invalid");
+                }
+            }
+            Bound::Included(Ok(start)) => start,
+            Bound::Excluded(Ok(start)) => start.saturating_add(1),
+            Bound::Unbounded => 0,
+        };
+        let end = match end {
+            Bound::Included(Err(span)) | Bound::Excluded(Err(span)) => {
+                if let Some(suspicious_ident) = &state.suspicious_ident {
+                    abort!(
+                        suspicious_ident,
+                        format!(
+                            "range end invalid, possibly missing `{}: {}` bound",
+                            suspicious_ident, self.typle_macro.ident
+                        )
+                    );
+                } else {
+                    abort!(span, "range end invalid");
+                }
+            }
+            Bound::Included(Ok(end)) => end.saturating_add(1),
+            Bound::Excluded(Ok(end)) => end,
+            Bound::Unbounded => match self.typle_len {
+                Some(end) => end,
+                None => {
+                    abort!(expr, "need an explicit end in range");
+                }
+            },
+        };
+        Ok((pattern, start..end))
     }
 
     fn replace_pat(&self, pat: &mut Pat) -> Result<()> {
@@ -2692,47 +2673,37 @@ impl<'a> TypleContext<'a> {
                                 Ok(_) => {}
                                 Err(e) => return ListIterator4::Variant0(std::iter::once(Err(e))),
                             }
-                            if let Some(range) = evaluate_range(expr) {
+                            if let Some((start, end)) = evaluate_range(expr) {
                                 // T<{..}>
-                                let start = match range
-                                    .start
-                                    .as_deref()
-                                    .map(|start| {
-                                        evaluate_usize(start).ok_or_else(|| {
-                                            Error::new(start.span(), "expected integer")
-                                        })
-                                    })
-                                    .transpose()
-                                {
-                                    Ok(start) => start.unwrap_or(0),
-                                    Err(e) => {
-                                        return ListIterator4::Variant0(std::iter::once(Err(e)))
+                                let start = match start {
+                                    Bound::Included(Err(span)) | Bound::Excluded(Err(span)) => {
+                                        return ListIterator4::Variant0(std::iter::once(Err(
+                                            Error::new(span, "expected integer for start of range"),
+                                        )));
                                     }
+                                    Bound::Included(Ok(start)) => start,
+                                    Bound::Excluded(Ok(start)) => start.saturating_add(1),
+                                    Bound::Unbounded => 0,
                                 };
-                                let end = match &range.end {
-                                    Some(expr) => match evaluate_usize(expr) {
-                                        Some(end) => end,
-                                        None => {
-                                            return ListIterator4::Variant0(std::iter::once(Err(
-                                                Error::new(range.end.span(), "expected integer"),
-                                            )));
-                                        }
-                                    },
-                                    None => match self.typle_len {
+                                let end = match end {
+                                    Bound::Included(Err(span)) | Bound::Excluded(Err(span)) => {
+                                        return ListIterator4::Variant0(std::iter::once(Err(
+                                            Error::new(span, "expected integer for end of range"),
+                                        )));
+                                    }
+                                    Bound::Included(Ok(end)) => end.saturating_add(1),
+                                    Bound::Excluded(Ok(end)) => end,
+                                    Bound::Unbounded => match self.typle_len {
                                         Some(end) => end,
                                         None => {
                                             return ListIterator4::Variant0(std::iter::once(Err(
                                                 Error::new(
-                                                    range.end.span(),
+                                                    expr.span(),
                                                     "need an explicit range end",
                                                 ),
                                             )));
                                         }
                                     },
-                                };
-                                let end = match range.limits {
-                                    RangeLimits::HalfOpen(_) => end,
-                                    RangeLimits::Closed(_) => end.saturating_add(1),
                                 };
                                 return ListIterator4::Variant1((start..end).map({
                                     let span = path.span();

@@ -1,8 +1,11 @@
+use std::ops::Bound;
+
+use proc_macro2::Span;
 use syn::spanned::Spanned as _;
-use syn::{Error, Expr, Result, Stmt};
+use syn::{Error, Expr, Stmt};
 
 #[allow(clippy::single_match)]
-pub fn evaluate_bool(expr: &Expr) -> Result<bool> {
+pub fn evaluate_bool(expr: &Expr) -> syn::Result<bool> {
     match expr {
         Expr::Binary(binary) => match binary.op {
             syn::BinOp::Eq(_) => {
@@ -54,7 +57,12 @@ pub fn evaluate_bool(expr: &Expr) -> Result<bool> {
     Err(Error::new(expr.span(), "unsupported boolean expression"))
 }
 
-pub fn evaluate_range(expr: &Expr) -> Option<&syn::ExprRange> {
+// None -> Not a range
+// Bound<Err(Span)> -> Span for a bound that is not an integer
+#[allow(clippy::type_complexity)]
+pub fn evaluate_range(
+    expr: &Expr,
+) -> Option<(Bound<Result<usize, Span>>, Bound<Result<usize, Span>>)> {
     match expr {
         Expr::Block(block) => {
             let mut stmts = block.block.stmts.iter().fuse();
@@ -63,7 +71,31 @@ pub fn evaluate_range(expr: &Expr) -> Option<&syn::ExprRange> {
             }
         }
         Expr::Range(range) => {
-            return Some(range);
+            let start = range
+                .start
+                .as_ref()
+                .map(|start_expr| {
+                    Bound::Included(
+                        evaluate_usize(start_expr)
+                            .map(Ok)
+                            .unwrap_or_else(|| Err(start_expr.span())),
+                    )
+                })
+                .unwrap_or(Bound::Unbounded);
+            let end = range
+                .end
+                .as_ref()
+                .map(|end_expr| {
+                    let end = evaluate_usize(end_expr)
+                        .map(Ok)
+                        .unwrap_or_else(|| Err(end_expr.span()));
+                    match range.limits {
+                        syn::RangeLimits::HalfOpen(_) => Bound::Excluded(end),
+                        syn::RangeLimits::Closed(_) => Bound::Included(end),
+                    }
+                })
+                .unwrap_or(Bound::Unbounded);
+            return Some((start, end));
         }
         _ => {}
     }
