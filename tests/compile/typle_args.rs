@@ -1,6 +1,21 @@
 #![allow(unused)]
 use typle::typle;
 
+#[typle(Tuple for 0..=3)]
+fn append<T: Tuple, A>(t: T, a: A) -> (T<{ .. }>, A) {
+    (t[[..]], a)
+}
+
+#[typle(Tuple for 1..=3)]
+fn append_array<T: Tuple<bool>>(t: T, a: bool) -> [bool; T::LEN + 1] {
+    [t[[..]], a]
+}
+
+#[typle(Tuple for 1..=3)]
+fn append_double<T: Tuple<u32>>(t: T, a: u32) -> [u32; T::LEN + 1] {
+    [typle_args!(i in .. => 2 * t[[i]]), 2 * a]
+}
+
 struct World {}
 
 trait ExclusiveSystemParam {}
@@ -21,8 +36,6 @@ trait ExclusiveSystemParamFunction<F> {
         param_value: ExclusiveSystemParamItem<Self::Param>,
     ) -> Self::Out;
 }
-
-struct Func {}
 
 // https://github.com/jongiddy/bevy/blob/ac91b191/crates/bevy_ecs/src/system/exclusive_function_system.rs#L183
 #[typle(Tuple for 0..=3)]

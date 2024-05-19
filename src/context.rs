@@ -379,9 +379,10 @@ impl<'a> TypleContext<'a> {
         match expr {
             Expr::Array(array) => {
                 self.replace_attrs(&mut array.attrs)?;
-                for expr in &mut array.elems {
-                    self.replace_expr(expr, state)?;
-                }
+                array.elems = std::mem::take(&mut array.elems)
+                    .into_iter()
+                    .flat_map(move |expr| self.replace_expr_in_list(expr))
+                    .collect::<Result<_>>()?;
             }
             Expr::Assign(assign) => {
                 self.replace_attrs(&mut assign.attrs)?;
@@ -422,9 +423,10 @@ impl<'a> TypleContext<'a> {
             Expr::Call(call) => {
                 self.replace_attrs(&mut call.attrs)?;
                 self.replace_expr(&mut call.func, state)?;
-                for expr in &mut call.args {
-                    self.replace_expr(expr, state)?;
-                }
+                call.args = std::mem::take(&mut call.args)
+                    .into_iter()
+                    .flat_map(move |expr| self.replace_expr_in_list(expr))
+                    .collect::<Result<_>>()?;
             }
             Expr::Cast(cast) => {
                 self.replace_attrs(&mut cast.attrs)?;
@@ -744,9 +746,10 @@ impl<'a> TypleContext<'a> {
                         method_call.turbofish = None;
                     }
                 }
-                for arg in &mut method_call.args {
-                    self.replace_expr(arg, state)?;
-                }
+                method_call.args = std::mem::take(&mut method_call.args)
+                    .into_iter()
+                    .flat_map(move |expr| self.replace_expr_in_list(expr))
+                    .collect::<Result<_>>()?;
             }
             Expr::Paren(paren) => {
                 self.replace_attrs(&mut paren.attrs)?;
@@ -880,9 +883,10 @@ impl<'a> TypleContext<'a> {
             }
             Expr::Tuple(tuple) => {
                 self.replace_attrs(&mut tuple.attrs)?;
-                for expr in &mut tuple.elems {
-                    self.replace_expr(expr, state)?;
-                }
+                tuple.elems = std::mem::take(&mut tuple.elems)
+                    .into_iter()
+                    .flat_map(move |expr| self.replace_expr_in_list(expr))
+                    .collect::<Result<_>>()?;
             }
             Expr::Unary(unary) => {
                 self.replace_attrs(&mut unary.attrs)?;
@@ -908,6 +912,108 @@ impl<'a> TypleContext<'a> {
             _ => {}
         }
         Ok(())
+    }
+
+    fn replace_expr_in_list(&'a self, mut expr: Expr) -> impl Iterator<Item = Result<Expr>> + 'a {
+        let mut state = BlockState::default();
+        match &mut expr {
+            Expr::Macro(syn::ExprMacro { mac, .. }) => {
+                if let Some(ident) = mac.path.get_ident() {
+                    if ident == "typle_args" {
+                        let token_stream = std::mem::take(&mut mac.tokens);
+                        let default_span = token_stream.span();
+                        let mut tokens = token_stream.into_iter();
+                        let (pattern, range) =
+                            match self.parse_pattern_range(&mut tokens, default_span) {
+                                Ok(t) => t,
+                                Err(e) => return ListIterator4::Variant0(std::iter::once(Err(e))),
+                            };
+                        if range.is_empty() {
+                            return ListIterator4::Variant1(std::iter::empty());
+                        }
+                        let token_stream = tokens.collect::<TokenStream>();
+                        let expr = match syn::parse2::<Expr>(token_stream) {
+                            Ok(expr) => expr,
+                            Err(e) => return ListIterator4::Variant0(std::iter::once(Err(e))),
+                        };
+                        let mut context = self.clone();
+                        if let Some(ident) = pattern.clone() {
+                            context.constants.insert(ident, 0);
+                        }
+                        return ListIterator4::Variant2(range.zip_clone(expr).map({
+                            move |(index, mut expr)| {
+                                if let Some(ident) = &pattern {
+                                    *context.constants.get_mut(ident).unwrap() = index;
+                                }
+                                match context.replace_expr(&mut expr, &mut state) {
+                                    Ok(()) => Ok(expr),
+                                    Err(e) => Err(e),
+                                }
+                            }
+                        }));
+                    }
+                }
+            }
+            Expr::Index(syn::ExprIndex { expr, index, .. }) => {
+                if let Expr::Array(array) = &mut **index {
+                    // t[[..]]
+                    let mut iter = array.elems.iter_mut().fuse();
+                    if let (Some(field), None) = (iter.next(), iter.next()) {
+                        if let Err(e) = self.replace_expr(field, &mut state) {
+                            return ListIterator4::Variant0(std::iter::once(Err(e)));
+                        }
+                        if let Some((start, end)) = evaluate_range(field) {
+                            let start = match start {
+                                Bound::Included(Err(span)) | Bound::Excluded(Err(span)) => {
+                                    return ListIterator4::Variant0(std::iter::once(Err(
+                                        Error::new(span, "expected integer for start of range"),
+                                    )));
+                                }
+                                Bound::Included(Ok(start)) => start,
+                                Bound::Excluded(Ok(start)) => start.saturating_add(1),
+                                Bound::Unbounded => 0,
+                            };
+                            let end = match end {
+                                Bound::Included(Err(span)) | Bound::Excluded(Err(span)) => {
+                                    return ListIterator4::Variant0(std::iter::once(Err(
+                                        Error::new(span, "expected integer for end of range"),
+                                    )));
+                                }
+                                Bound::Included(Ok(end)) => end.saturating_add(1),
+                                Bound::Excluded(Ok(end)) => end,
+                                Bound::Unbounded => match self.typle_len {
+                                    Some(end) => end,
+                                    None => {
+                                        return ListIterator4::Variant0(std::iter::once(Err(
+                                            Error::new(expr.span(), "need an explicit range end"),
+                                        )));
+                                    }
+                                },
+                            };
+                            return ListIterator4::Variant3({
+                                let span = index.span();
+                                (start..end).zip_clone(expr.clone()).map(move |(i, base)| {
+                                    Ok(Expr::Field(syn::ExprField {
+                                        attrs: Vec::new(),
+                                        base,
+                                        dot_token: token::Dot::default(),
+                                        member: Member::Unnamed(syn::Index {
+                                            index: i as u32,
+                                            span,
+                                        }),
+                                    }))
+                                })
+                            });
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
+        match self.replace_expr(&mut expr, &mut state) {
+            Ok(()) => ListIterator4::Variant0(std::iter::once(Ok(expr))),
+            Err(e) => ListIterator4::Variant0(std::iter::once(Err(e))),
+        }
     }
 
     fn replace_fields(&self, fields: &mut Fields) -> Result<()> {
@@ -2606,9 +2712,10 @@ impl<'a> TypleContext<'a> {
                 self.replace_type(&mut slice.elem)?;
             }
             Type::Tuple(tuple) => {
-                for elem in &mut tuple.elems {
-                    self.replace_type(elem)?;
-                }
+                tuple.elems = std::mem::take(&mut tuple.elems)
+                    .into_iter()
+                    .flat_map(|ty| self.replace_type_in_list(ty))
+                    .collect::<Result<_>>()?;
             }
             _ => {}
         }

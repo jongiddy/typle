@@ -521,8 +521,9 @@ impl TryFrom<TokenStream> for TypleMacro {
             .ok_or_else(|| Error::new(range.span(), "range end must be bounded"))?;
         let max = match range.limits {
             syn::RangeLimits::HalfOpen(_) => evaluate_usize(end)
-                .and_then(|max| max.checked_sub(1))
-                .ok_or_else(|| Error::new(end.span(), "range end invalid1"))?,
+                .ok_or_else(|| Error::new(end.span(), "range end invalid"))?
+                .checked_sub(1)
+                .ok_or_else(|| Error::new(end.span(), "range end invalid"))?,
             syn::RangeLimits::Closed(_) => {
                 evaluate_usize(end).ok_or_else(|| Error::new(end.span(), "range end invalid"))?
             }
@@ -607,6 +608,72 @@ pub fn typle_any(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
     Error::new_spanned(
         TokenStream::from(item),
         "typle_any macro only available in item with typle attribute",
+    )
+    .into_compile_error()
+    .into()
+}
+
+/// Insert tuple components into a sequence.
+///
+/// The `typle_args!` macro allows components of a tuple to be inserted into an existing sequence.
+///
+/// For types, `T<{..}>` is a shorthand for `typle_args!(i in .. => T<{i}>)`.
+/// For values, `t[[..]]` is a shorthand for `typle_args!(i in .. => t[[i]])`.
+///
+/// ```
+/// # use typle::typle;
+/// #[typle(Tuple for 0..12)]
+/// fn append<T: Tuple, A>(t: T, a: A) -> (T<{..}>, A) {
+///     (t[[..]], a)
+/// }
+///
+/// assert_eq!(append((1, 2, 3), 4), (1, 2, 3, 4));
+/// ```
+///
+/// The full `typle_args!` macro is required when modifying each component.
+/// ```
+/// # use typle::typle;
+/// #[typle(Tuple for 0..=12)]
+/// fn coalesce_some<S: Tuple, T: Tuple>(
+///     s: S,
+///     t: T
+/// ) -> (typle_args!(i in .. => Option<S<{i}>>), typle_args!(i in .. => Option<T<{i}>>))
+/// where
+///     T: Tuple,
+/// {
+///     (typle_args!(i in .. => Some(s[[i]])), typle_args!(i in .. => Some(t[[i]])))
+/// }
+///
+/// assert_eq!(
+///     coalesce_some((1, 2), (3, 4)),
+///     (Some(1), Some(2), Some(3), Some(4))
+/// );
+/// ```
+///
+/// Note how this behaves differently to [`typle_for!`]:
+/// ```
+/// # use typle::typle;
+/// #[typle(Tuple for 0..=12)]
+/// fn coalesce_some<S: Tuple, T: Tuple>(
+///     s: S,
+///     t: T
+/// ) -> (typle_for!(i in .. => Option<S<{i}>>), typle_for!(i in .. => Option<T<{i}>>))
+/// where
+///     T: Tuple,
+/// {
+///     (typle_for!(i in .. => Some(s[[i]])), typle_for!(i in .. => Some(t[[i]])))
+/// }
+///
+/// assert_eq!(
+///     coalesce_some((1, 2), (3, 4)),
+///     ((Some(1), Some(2)), (Some(3), Some(4)))
+/// );
+/// ```
+#[proc_macro]
+pub fn typle_args(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    Error::new_spanned(
+        TokenStream::from(item),
+        "typle_args macro only available in item with typle attribute",
     )
     .into_compile_error()
     .into()
@@ -746,6 +813,8 @@ pub fn typle_fold(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
 /// assert_eq!(append((1, 2, 3), 4), (1, 2, 3, 4));
 /// ```
 ///
+/// Note: See [`typle_args!`] for a shorter way to write `append`.
+///
 /// `typle_for![...]` with brackets creates an array expression.
 ///
 /// ```
@@ -789,7 +858,6 @@ pub fn typle_fold(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
 ///     ((1, 3, 5), (2, 4, 6))
 /// );
 /// ```
-///
 #[proc_macro]
 pub fn typle_for(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
     Error::new_spanned(

@@ -2035,6 +2035,110 @@ pub mod type_alias {
 pub mod typle_args {
     #![allow(unused)]
     use typle::typle;
+    #[allow(non_camel_case_types)]
+    trait _typle_fn_append {
+        type Return;
+        fn apply(self) -> Self::Return;
+    }
+    impl<A> _typle_fn_append for ((), A) {
+        type Return = (A,);
+        fn apply(self) -> Self::Return {
+            #[allow(unused_variables)]
+            let (t, a) = self;
+            { (a,) }
+        }
+    }
+    impl<T0, A> _typle_fn_append for ((T0,), A) {
+        type Return = (T0, A);
+        fn apply(self) -> Self::Return {
+            let (t, a) = self;
+            { (t.0, a) }
+        }
+    }
+    impl<T0, T1, A> _typle_fn_append for ((T0, T1), A) {
+        type Return = (T0, T1, A);
+        fn apply(self) -> Self::Return {
+            let (t, a) = self;
+            { (t.0, t.1, a) }
+        }
+    }
+    impl<T0, T1, T2, A> _typle_fn_append for ((T0, T1, T2), A) {
+        type Return = (T0, T1, T2, A);
+        fn apply(self) -> Self::Return {
+            let (t, a) = self;
+            { (t.0, t.1, t.2, a) }
+        }
+    }
+    fn append<T, A>(t: T, a: A) -> <(T, A) as _typle_fn_append>::Return
+    where
+        (T, A): _typle_fn_append,
+    {
+        <(T, A) as _typle_fn_append>::apply((t, a))
+    }
+    #[allow(non_camel_case_types)]
+    trait _typle_fn_append_array {
+        type Return;
+        fn apply(self) -> Self::Return;
+    }
+    impl _typle_fn_append_array for ((bool,), bool) {
+        type Return = [bool; 1 + 1];
+        fn apply(self) -> Self::Return {
+            let (t, a) = self;
+            { [t.0, a] }
+        }
+    }
+    impl _typle_fn_append_array for ((bool, bool), bool) {
+        type Return = [bool; 2 + 1];
+        fn apply(self) -> Self::Return {
+            let (t, a) = self;
+            { [t.0, t.1, a] }
+        }
+    }
+    impl _typle_fn_append_array for ((bool, bool, bool), bool) {
+        type Return = [bool; 3 + 1];
+        fn apply(self) -> Self::Return {
+            let (t, a) = self;
+            { [t.0, t.1, t.2, a] }
+        }
+    }
+    fn append_array<T>(t: T, a: bool) -> <(T, bool) as _typle_fn_append_array>::Return
+    where
+        (T, bool): _typle_fn_append_array,
+    {
+        <(T, bool) as _typle_fn_append_array>::apply((t, a))
+    }
+    #[allow(non_camel_case_types)]
+    trait _typle_fn_append_double {
+        type Return;
+        fn apply(self) -> Self::Return;
+    }
+    impl _typle_fn_append_double for ((u32,), u32) {
+        type Return = [u32; 1 + 1];
+        fn apply(self) -> Self::Return {
+            let (t, a) = self;
+            { [2 * t.0, 2 * a] }
+        }
+    }
+    impl _typle_fn_append_double for ((u32, u32), u32) {
+        type Return = [u32; 2 + 1];
+        fn apply(self) -> Self::Return {
+            let (t, a) = self;
+            { [2 * t.0, 2 * t.1, 2 * a] }
+        }
+    }
+    impl _typle_fn_append_double for ((u32, u32, u32), u32) {
+        type Return = [u32; 3 + 1];
+        fn apply(self) -> Self::Return {
+            let (t, a) = self;
+            { [2 * t.0, 2 * t.1, 2 * t.2, 2 * a] }
+        }
+    }
+    fn append_double<T>(t: T, a: u32) -> <(T, u32) as _typle_fn_append_double>::Return
+    where
+        (T, u32): _typle_fn_append_double,
+    {
+        <(T, u32) as _typle_fn_append_double>::apply((t, a))
+    }
     struct World {}
     trait ExclusiveSystemParam {}
     struct ExclusiveSystemParamItem<F> {
@@ -2051,7 +2155,6 @@ pub mod typle_args {
             param_value: ExclusiveSystemParamItem<Self::Param>,
         ) -> Self::Out;
     }
-    struct Func {}
     impl<Out, Func: Send + Sync + 'static> ExclusiveSystemParamFunction<fn() -> Out>
     for Func
     where
