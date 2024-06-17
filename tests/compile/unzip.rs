@@ -56,7 +56,7 @@ where
 
     fn try_unzip(self) -> Result<typle_for!(i in .. => Vec<T<{i}>>), Self::Error> {
         #[typle_attr_if(T::LEN == 0, allow(unused_mut))]
-        let mut vecs = typle_for!(i in .. => Vec::new());
+        let mut vecs = typle_for!(.. => Vec::new());
         for result in self {
             #[typle_attr_if(T::LEN == 0, allow(clippy::let_unit_value, unused_variables))]
             let t = result?;
@@ -94,7 +94,7 @@ where
         I: Iterator<Item = Result<T, E>>,
     {
         #[typle_attr_if(T::LEN == 0, allow(unused_mut))]
-        let mut vecs = typle_for!(i in .. => Vec::new());
+        let mut vecs = typle_for!(.. => Vec::new());
         for result in iter {
             #[typle_attr_if(T::LEN == 0, allow(clippy::let_unit_value, unused_variables))]
             let t = result?;

@@ -49,11 +49,8 @@
 //! Inside `typle` code, individual components of a tuple can be selected using
 //! `<{i}>` for types and `[[i]]` for values. The value `i` must be a *typle
 //! index expression*, an expression that only uses literal `usize` values or
-//! *typle index variables* created by one of several macros.
-//!
-//! The [`typle_for!`] macro can create a new tuple type or expression. Inside
-//! the macro the typle index variable can provide access to each component of
-//! an existing tuple type or expression.
+//! *typle index variables* created by one of several macros, and reduces to a
+//! single value or a range.
 //!
 //! ```rust
 //! # use typle::typle;
@@ -61,9 +58,9 @@
 //! #[typle(Tuple for 1..=12)]
 //! fn split<T: Tuple>(
 //!     t: T  // t: (T<0>, T<1>, T<2>,...)
-//! ) -> (T<0>, typle_for!(i in 1.. => T<{i}>))  // (T<0>, (T<1>, T<2>,...))
+//! ) -> (T<0>, (T<{1..}>,))  // (T<0>, (T<1>, T<2>,...))
 //! {
-//!     (t[[0]], typle_for!(i in 1.. => t[[i]]))  // (t.0, (t.1, t.2,...))
+//!     (t[[0]], (t[[1..]],))  // (t.0, (t.1, t.2,...))
 //! }
 //!
 //! assert_eq!(split(('1', 2, 3.0)), ('1', (2, 3.0)));
@@ -71,7 +68,27 @@
 //! assert_eq!(split((3.0,)), (3.0, ()));
 //! ```
 //!
+//! The [`typle_for!`] macro creates a new type or expression. Inside
+//! the macro the typle index variable provides access to each component of
+//! an existing tuple type or expression.
+//!
+//! The associated constant `LEN` provides the length of the tuple in each
+//! generated item. This value can be used in typle index expressions.
+//!
+//! ```
+//! # use typle::typle;
+//! #[typle(Tuple for 0..=12)]
+//! pub fn reverse<T: Tuple>(t: T) -> typle_for!(i in 1..=T::LEN => T<{T::LEN - i}>) {
+//!     typle_for!(i in 1..=T::LEN => t[[T::LEN - i]])
+//! }
+//!
+//! assert_eq!(reverse((Some(3), "four", 5)), (5, "four", Some(3)));
+//! ```
+//!
 //! The [`typle_fold!`] macro reduces a tuple to a single value.
+//!
+//! The default bounds for a macro range are `0..Tuple::LEN`, that is, for all
+//! components of the tuple.
 //!
 //! ```rust
 //! # use typle::typle;
@@ -79,6 +96,7 @@
 //! pub fn sum<T: Tuple<u32>>(t: T) -> u32 {
 //!     typle_fold!(0; i in .. => |total| total + t[[i]])
 //! }
+//!
 //! assert_eq!(sum(()), 0);
 //! assert_eq!(sum((1, 4, 9, 16)), 30);
 //! ```
@@ -118,9 +136,6 @@
 //!
 //! Use the `typle_index!` macro in a `for` loop to iterate over a range bounded
 //! by typle index expressions.
-//!
-//! The associated constant `LEN` provides the length of the tuple in each
-//! generated item. This value can be used in typle index expressions.
 //!
 //! ```rust
 //! # use typle::typle;
@@ -614,21 +629,6 @@ pub fn typle_any(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
 /// Insert tuple components into a sequence.
 ///
 /// The `typle_args!` macro allows components of a tuple to be inserted into an existing sequence.
-///
-/// For types, `T<{..}>` is a shorthand for `typle_args!(i in .. => T<{i}>)`.
-/// For values, `t[[..]]` is a shorthand for `typle_args!(i in .. => t[[i]])`.
-///
-/// ```
-/// # use typle::typle;
-/// #[typle(Tuple for 0..12)]
-/// fn append<T: Tuple, A>(t: T, a: A) -> (T<{..}>, A) {
-///     (t[[..]], a)
-/// }
-///
-/// assert_eq!(append((1, 2, 3), 4), (1, 2, 3, 4));
-/// ```
-///
-/// The full `typle_args!` macro is required when modifying each component.
 /// ```
 /// # use typle::typle;
 /// #[typle(Tuple for 0..=12)]
@@ -648,7 +648,9 @@ pub fn typle_any(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
 /// );
 /// ```
 ///
-/// Note how this behaves differently to [`typle_for!`]:
+/// Note that this behaves differently to [`typle_for!`]. `typle_for!` becomes a new tuple or array.
+/// `typle_args!` becomes a sequence of components and must appear inside an existing typle, array,
+/// or argument list.
 /// ```
 /// # use typle::typle;
 /// #[typle(Tuple for 0..=12)]
@@ -666,6 +668,19 @@ pub fn typle_any(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
 ///     coalesce_some((1, 2), (3, 4)),
 ///     ((Some(1), Some(2)), (Some(3), Some(4)))
 /// );
+///
+/// ```
+/// For types, `T<{start..end}>` is a shorthand for `typle_args!(i in start..end => T<{i}>)`.
+/// For expressions, `t[[start..end]]` is a shorthand for `typle_args!(i in start..end => t[[i]])`.
+///
+/// ```
+/// # use typle::typle;
+/// #[typle(Tuple for 0..12)]
+/// fn append<T: Tuple, A>(t: T, a: A) -> (T<{..}>, A) {
+///     (t[[..]], a)
+/// }
+///
+/// assert_eq!(append((1, 2, 3), 4), (1, 2, 3, 4));
 /// ```
 #[proc_macro]
 pub fn typle_args(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
