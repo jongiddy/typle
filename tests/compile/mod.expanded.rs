@@ -2271,37 +2271,49 @@ pub mod typle_fold {
     pub trait UsefulTrait {
         type UsefulType: IsUseful<Something>;
         const SIZE: usize;
+        #[allow(dead_code)]
+        fn display(&self) -> String;
     }
     impl<T0> UsefulTrait for (T0,)
     where
-        T0: UsefulTrait,
+        T0: UsefulTrait + std::fmt::Display,
     {
         type UsefulType = <T0>::UsefulType;
-        const SIZE: usize = loop {
+        const SIZE: usize = (loop {
             let total = 0;
             let total = total + <T0>::SIZE;
             break total;
-        };
+        });
+        fn display(&self) -> String {
+            ("[".to_string() + &self.0.to_string()) + "]"
+        }
     }
     impl<T0, T1> UsefulTrait for (T0, T1)
     where
-        T0: UsefulTrait,
-        T1: UsefulTrait,
+        T0: UsefulTrait + std::fmt::Display,
+        T1: UsefulTrait + std::fmt::Display,
         <T1>::UsefulType: IsUseful<<T0>::UsefulType>,
     {
         type UsefulType = <<T1>::UsefulType as IsUseful<<T0>::UsefulType>>::State;
-        const SIZE: usize = loop {
+        const SIZE: usize = (loop {
             let total = 0;
             let total = total + <T0>::SIZE;
             let total = total + <T1>::SIZE;
             break total;
-        };
+        });
+        fn display(&self) -> String {
+            (loop {
+                let s = "[".to_string() + &self.0.to_string();
+                let s = s + "," + &self.1.to_string();
+                break s;
+            }) + "]"
+        }
     }
     impl<T0, T1, T2> UsefulTrait for (T0, T1, T2)
     where
-        T0: UsefulTrait,
-        T1: UsefulTrait,
-        T2: UsefulTrait,
+        T0: UsefulTrait + std::fmt::Display,
+        T1: UsefulTrait + std::fmt::Display,
+        T2: UsefulTrait + std::fmt::Display,
         <T1>::UsefulType: IsUseful<<T0>::UsefulType>,
         <T2>::UsefulType: IsUseful<
             <<T1>::UsefulType as IsUseful<<T0>::UsefulType>>::State,
@@ -2310,13 +2322,21 @@ pub mod typle_fold {
         type UsefulType = <<T2>::UsefulType as IsUseful<
             <<T1>::UsefulType as IsUseful<<T0>::UsefulType>>::State,
         >>::State;
-        const SIZE: usize = loop {
+        const SIZE: usize = (loop {
             let total = 0;
             let total = total + <T0>::SIZE;
             let total = total + <T1>::SIZE;
             let total = total + <T2>::SIZE;
             break total;
-        };
+        });
+        fn display(&self) -> String {
+            (loop {
+                let s = "[".to_string() + &self.0.to_string();
+                let s = s + "," + &self.1.to_string();
+                let s = s + "," + &self.2.to_string();
+                break s;
+            }) + "]"
+        }
     }
 }
 pub mod unzip {

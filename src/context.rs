@@ -1746,7 +1746,11 @@ impl<'a> TypleContext<'a> {
         self.replace_expr(&mut init_expr, &mut inner_state)?;
         let (pattern, range) = self.parse_pattern_range(&mut tokens, default_span)?;
         if range.is_empty() {
-            return Ok(init_expr);
+            return Ok(Expr::Paren(syn::ExprParen {
+                attrs,
+                paren_token: token::Paren::default(),
+                expr: Box::new(init_expr),
+            }));
         }
         let fold_ident = Self::parse_fold_ident(&mut tokens, default_span)?;
         let fold_pat = Pat::Ident(syn::PatIdent {
@@ -1814,14 +1818,20 @@ impl<'a> TypleContext<'a> {
             }),
             Some(token::Semi::default()),
         ));
-        Ok(Expr::Loop(syn::ExprLoop {
+        // The fold may be used in an expression `typle_fold!() + ...`, in which
+        // case the loop needs to be in parentheses.
+        Ok(Expr::Paren(syn::ExprParen {
             attrs,
-            label: None,
-            loop_token: token::Loop::default(),
-            body: Block {
-                brace_token: token::Brace::default(),
-                stmts,
-            },
+            paren_token: token::Paren::default(),
+            expr: Box::new(Expr::Loop(syn::ExprLoop {
+                attrs: Vec::new(),
+                label: None,
+                loop_token: token::Loop::default(),
+                body: Block {
+                    brace_token: token::Brace::default(),
+                    stmts,
+                },
+            })),
         }))
     }
 

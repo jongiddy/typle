@@ -109,8 +109,8 @@
 //! - `T<0>: Copy` - the first component of the tuple implements `Copy`
 //! - `T<{1..=2}>: Copy` - the second and third components implement `Copy`
 //! - `typle_bound!` - the most general way to bound components, allowing
-//! arbitrary expressions using the typle index variable on both sides of the
-//! colon, as shown below:
+//!   arbitrary expressions using the typle index variable on both sides of
+//!   the colon, as shown below:
 //!
 //! ```rust
 //! # use typle::typle;
@@ -350,11 +350,11 @@
 //! # Limitations
 //!
 //! - The typle trait bound (`Tuple` in the examples) can only be applied to an
-//! unqualified type identifier, not to non-path types or associated types.
+//!   unqualified type identifier, not to non-path types or associated types.
 //! - `typle` does not work when the tuple types are only associated types
-//! because [associated types cannot distinguish implementations](https://github.com/rust-lang/rust/issues/20400).
-//! See [this file](https://github.com/jongiddy/typle/blob/main/tests/compile/unzip.rs)
-//! for workarounds.
+//!   because [associated types cannot distinguish implementations](https://github.com/rust-lang/rust/issues/20400).
+//!   See [this file](https://github.com/jongiddy/typle/blob/main/tests/compile/unzip.rs)
+//!   for workarounds.
 //! ```rust ignore
 //! // ERROR: conflicting implementations of trait `TryUnzip`
 //! # use typle::typle;
@@ -409,9 +409,9 @@
 //! # }
 //! ```
 //! - Due to interaction of `typle` with other macros, passing some types and
-//! expressions to a macro may produce unexpected results. To help work around
-//! this, inside a macro invocation the `typle_ty!` macro expands types and the
-//! `typle_expr!` macro expands expressions.
+//!   expressions to a macro may produce unexpected results. To help work around
+//!   this, inside a macro invocation the `typle_ty!` macro expands types and the
+//!   `typle_expr!` macro expands expressions.
 //!
 //! ```rust
 //! # use typle::typle;
@@ -717,11 +717,11 @@ pub fn typle_args(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
 /// followed by the expression. This makes it look similar to a closure, which
 /// it usually acts like. But there are some differences:
 /// - the "closure parameter" naming the accumulator can only contain a single
-/// identifier;
+///   identifier;
 /// - a `break` in the expression terminates the fold early with the value of
-/// the `break`;
+///   the `break`;
 /// - a `return` in the expression returns from the enclosing function (since
-/// the expression is not actually in a closure).
+///   the expression is not actually in a closure).
 ///
 /// The previous example could have been implemented using a `for` loop.
 /// However, unlike a `for` loop, the `typle_fold!` macro allows the accumulator
