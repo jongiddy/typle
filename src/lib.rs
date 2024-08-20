@@ -78,7 +78,7 @@
 //! ```
 //! # use typle::typle;
 //! #[typle(Tuple for 0..=12)]
-//! pub fn reverse<T: Tuple>(t: T) -> typle_for!(i in 1..=T::LEN => T<{T::LEN - i}>) {
+//! fn reverse<T: Tuple>(t: T) -> typle_for!(i in 1..=T::LEN => T<{T::LEN - i}>) {
 //!     typle_for!(i in 1..=T::LEN => t[[T::LEN - i]])
 //! }
 //!
@@ -93,7 +93,7 @@
 //! ```rust
 //! # use typle::typle;
 //! #[typle(Tuple for 0..=12)]
-//! pub fn sum<T: Tuple<u32>>(t: T) -> u32 {
+//! fn sum<T: Tuple<u32>>(t: T) -> u32 {
 //!     typle_fold!(0; i in .. => |total| total + t[[i]])
 //! }
 //!
@@ -167,120 +167,39 @@
 //! assert_eq!(m.interleave(), [14, 9]);
 //! ```
 //!
-//! The next example is simplified from code in the
-//! [`hefty`](https://github.com/jongiddy/hefty/blob/main/src/tuple.rs) crate and
-//! demonstrates the use of `typle` with `enum`s.
-//!
-//! Typled `enum`s are implemented for the maximum length. When referring to
-//! these types from other typled items, use `TupleSequenceState<T<{ ..T::MAX }>>`.
-//! This will fill in unused type parameters with the `never` type provided for
-//! the `typle` macro. The default type is [`!`] but this is not available in
-//! stable Rust. [`std::convert::Infallible`] is an uninhabited type that is
-//! available in stable Rust but any type is permissible.
+//! Applying `typle` to an `enum` implements the `enum` for the maximum length,
+//! allowing use of typle index variables to define the variants.
 //!
 //! The [`typle_variant!`] macro creates multiple enum variants by looping
 //! similarly to `typle_for!`.
 //!
-//! The `typle_ident!` macro concatenates a number to an identifier. For
-//! example `S::<typle_ident!(3)>` becomes the identifier `S3`.
-//!
-//! The `typle_attr_if` attribute allows conditional inclusion of attributes. It works similarly to
-//! [`cfg_attr`](https://doc.rust-lang.org/reference/conditional-compilation.html#the-cfg_attr-attribute)
-//! except that the first argument is a boolean typle index expression.
-//!
-//! The `typle_const!` macro supports const-if on a boolean typle index
-//! expression. const-if allows branches that do not compile, as long as they
-//! are `false` at compile-time. For example, this code compiles when
-//! `i + 1 == T::LEN` even though the identifier `S::<typle_ident!(i + 1)>`
-//! (`S3` when `T::LEN == 3`) is not valid because it only exists in the false
-//! branch of the `if`.
-//!
 //! ```rust
 //! # use typle::typle;
-//! #[typle(Tuple for 1..=4, never=std::convert::Infallible)]
-//! mod tuple {
-//!     pub trait Extract {
-//!         type State;
-//!         type Output;
+//! pub trait Extract {
+//!     type State;
+//!     type Output;
 //!
-//!         fn extract(&self, state: Option<Self::State>) -> Self::Output;
-//!     }
+//!     fn extract(&self, state: Option<Self::State>) -> Self::Output;
+//! }
 //!
-//!     impl Extract for std::convert::Infallible {
-//!         type State = std::convert::Infallible;
-//!         type Output = ();
-//!
-//!         fn extract(
-//!             &self,
-//!             _state: Option<Self::State>,
-//!         ) -> Self::Output {
-//!             ()
-//!         }
-//!     }
-//!
-//!     pub enum TupleSequenceState<T>
-//!     where
-//!         T: Tuple,
-//!         T<_>: Extract,
-//!     {
-//!         S = typle_variant!(i in ..T::MAX =>
-//!             typle_for!(j in ..i => T::<{j}>::Output), Option<T<{i}>::State>
-//!         ),
-//!     }
-//!
-//!     pub struct TupleSequence<T> {
-//!         tuple: T,
-//!     }
-//!
-//!     impl<T> Extract for TupleSequence<T>
-//!     where
-//!         T: Tuple,
-//!         T<_>: Extract,
-//!     {
-//!         // The state contains the output from all previous components and
-//!         // the state of the current component.
-//!         type State = TupleSequenceState<T<{ ..T::MAX }>>;
-//!         type Output = typle_for!(i in .. => <T<{i}> as Extract>::Output);
-//!
-//!         fn extract(&self, state: Option<Self::State>) -> Self::Output {
-//!             // When LEN == 1 the code never changes `state`
-//!             #[typle_attr_if(T::LEN == 1, allow(unused_mut))]
-//!             let mut state = state.unwrap_or(Self::State::S::<typle_ident!(0)>((), None));
-//!             for typle_index!(i) in 0..T::LEN {
-//!                 // When i == 0, the `output` state variable does not get used
-//!                 #[typle_attr_if(i == 0, allow(unused_variables))]
-//!                 if let Self::State::S::<typle_ident!(i)>(output, inner_state) = state {
-//!                     let matched = self.tuple[[i]].extract(inner_state);
-//!                     let output = (output[[..i]], matched);
-//!                     if typle_const!(i + 1 == T::LEN) {
-//!                         return output;
-//!                     } else {
-//!                         state = Self::State::S::<typle_ident!(i + 1)>(output, None);
-//!                     }
-//!                 }
-//!             }
-//!             unreachable!();
-//!         }
-//!     }
+//! #[typle(Tuple for 1..=4)]
+//! pub enum TupleSequenceState<T>
+//! where
+//!     T: Tuple,
+//!     T<_>: Extract,
+//! {
+//!     S = typle_variant!(i in ..T::MAX =>
+//!         typle_for!(j in ..i => T::<{j}>::Output), Option<T<{i}>::State>
+//!     ),
 //! }
 //! ```
 //!
-//! Generated implementation for 3-tuples:
+//! The single generated implementation:
 //! ```rust
 //! # pub trait Extract {
 //! #     type State;
 //! #     type Output;
 //! #     fn extract(&self, state: Option<Self::State>) -> Self::Output;
-//! # }
-//! # impl Extract for std::convert::Infallible {
-//! #     type State = std::convert::Infallible;
-//! #     type Output = ();
-//! #     fn extract(&self, _state: Option<Self::State>) -> Self::Output {
-//! #         ()
-//! #     }
-//! # }
-//! # pub struct TupleSequence<T> {
-//! #     tuple: T,
 //! # }
 //! // enum implemented only for maximum size
 //! pub enum TupleSequenceState<T0, T1, T2, T3>
@@ -295,7 +214,126 @@
 //!     S2((<T0>::Output, <T1>::Output), Option<<T2>::State>),
 //!     S3((<T0>::Output, <T1>::Output, <T2>::Output), Option<<T3>::State>),
 //! }
+//! ```
 //!
+//! Other `typle` implementations can refer to this enum using
+//! `TupleSequenceState<T<{ ..T::MAX }>>`. This will fill in unused type
+//! parameters with the `never` type provided for the `typle` macro. The default
+//! type is [`!`] but this is not available in stable Rust.
+//! [`std::convert::Infallible`] is an uninhabited type that is available in
+//! stable Rust, but any type is permissible.
+//!
+//! The `typle_ident!` macro concatenates a number to an identifier. For
+//! example `S::<typle_ident!(3)>` becomes the identifier `S3`. This is mainly
+//! used to refer to enum variants.
+//!
+//! The `typle_attr_if` attribute allows conditional inclusion of attributes. It works similarly to
+//! [`cfg_attr`](https://doc.rust-lang.org/reference/conditional-compilation.html#the-cfg_attr-attribute)
+//! except that the first argument is a boolean typle index expression.
+//!
+//! The `typle_const!` macro supports const-if on a boolean typle index
+//! expression. const-if allows branches that do not compile, as long as they
+//! are `false` at compile-time. For example, this code compiles for `T::LEN == 4`
+//! even though the variant `TupleSequenceState::S4` does not exist because the
+//! branch that refers to it is `false` when `(i + 1 == T::LEN)`
+//!
+//! ```rust
+//! # use typle::typle;
+//! # pub trait Extract {
+//! #     type State;
+//! #     type Output;
+//! #     fn extract(&self, state: Option<Self::State>) -> Self::Output;
+//! # }
+//! # #[typle(Tuple for 1..=4)]
+//! # pub enum TupleSequenceState<T>
+//! # where
+//! #     T: Tuple,
+//! #     T<_>: Extract,
+//! # {
+//! #     S = typle_variant!(i in ..T::MAX =>
+//! #         typle_for!(j in ..i => T::<{j}>::Output), Option<T<{i}>::State>
+//! #     ),
+//! # }
+//! // Relevant traits may need to be implemented for the never type.
+//! impl Extract for std::convert::Infallible {
+//!     type State = std::convert::Infallible;
+//!     type Output = ();
+//!
+//!     fn extract(
+//!         &self,
+//!         _state: Option<Self::State>,
+//!     ) -> Self::Output {
+//!         ()
+//!     }
+//! }
+//!
+//! pub struct TupleSequence<T> {
+//!     tuple: T,
+//! }
+//!
+//! #[typle(Tuple for 1..=4, never=std::convert::Infallible)]
+//! impl<T> Extract for TupleSequence<T>
+//! where
+//!     T: Tuple,
+//!     T<_>: Extract,
+//! {
+//!     // The state contains the output from all previous components and
+//!     // the state of the current component.
+//!     type State = TupleSequenceState<T<{ ..T::MAX }>>;
+//!     // The final output is a tuple of outputs from all components.
+//!     type Output = typle_for!(i in .. => <T<{i}> as Extract>::Output);
+//!
+//!     fn extract(&self, state: Option<Self::State>) -> Self::Output {
+//!         // When LEN == 1 the code never changes `state`
+//!         #[typle_attr_if(T::LEN == 1, allow(unused_mut))]
+//!         let mut state = state.unwrap_or(Self::State::S::<typle_ident!(0)>((), None));
+//!         for typle_index!(i) in 0..T::LEN {
+//!             // When i == 0, the `output` state variable does not get used
+//!             #[typle_attr_if(i == 0, allow(unused_variables))]
+//!             if let Self::State::S::<typle_ident!(i)>(output, inner_state) = state {
+//!                 let matched = self.tuple[[i]].extract(inner_state);
+//!                 let output = (output[[..i]], matched);
+//!                 if typle_const!(i + 1 == T::LEN) {
+//!                     return output;
+//!                 } else {
+//!                     state = Self::State::S::<typle_ident!(i + 1)>(output, None);
+//!                 }
+//!             }
+//!         }
+//!         unreachable!();
+//!     }
+//! }
+//! ```
+//!
+//! Generated implementation for 3-tuples:
+//! ```rust
+//! # pub trait Extract {
+//! #     type State;
+//! #     type Output;
+//! #     fn extract(&self, state: Option<Self::State>) -> Self::Output;
+//! # }
+//! # pub enum TupleSequenceState<T0, T1, T2, T3>
+//! # where
+//! #     T0: Extract,
+//! #     T1: Extract,
+//! #     T2: Extract,
+//! #     T3: Extract,
+//! # {
+//! #     S0((), Option<<T0>::State>),
+//! #     S1((<T0>::Output,), Option<<T1>::State>),
+//! #     S2((<T0>::Output, <T1>::Output), Option<<T2>::State>),
+//! #     S3((<T0>::Output, <T1>::Output, <T2>::Output), Option<<T3>::State>),
+//! # }
+//! # impl Extract for std::convert::Infallible {
+//! #     type State = std::convert::Infallible;
+//! #     type Output = ();
+//! #     fn extract(&self, _state: Option<Self::State>) -> Self::Output {
+//! #         ()
+//! #     }
+//! # }
+//! # pub struct TupleSequence<T> {
+//! #     tuple: T,
+//! # }
 //! impl<T0, T1, T2> Extract for TupleSequence<(T0, T1, T2)>
 //! where
 //!     T0: Extract,
