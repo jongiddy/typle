@@ -1202,6 +1202,69 @@ pub mod function {
         <(T,) as _typle_fn_double>::apply((t,))
     }
 }
+pub mod get {
+    #![allow(dead_code)]
+    use typle::typle;
+    pub struct MyStruct<T> {
+        t: T,
+    }
+    impl<T0> MyStruct<(T0,)>
+    where
+        T0: ToString,
+        T0: Default,
+    {
+        fn select(&mut self) {
+            ::std::option::Option::Some(&self.t.0);
+            ::std::option::Option::None::<&std::convert::Infallible>;
+            ::std::option::Option::None::<&std::convert::Infallible>;
+            let _: Option<String> = ::std::option::Option::None::<
+                &std::convert::Infallible,
+            >
+                .map(ToString::to_string);
+            let _: Option<String> = ::std::option::Option::None::<
+                &std::convert::Infallible,
+            >
+                .map(|s| s.to_string());
+            *::std::option::Option::Some(&mut self.t.0)
+                .unwrap() = <T0 as Default>::default();
+            let i = 1;
+            let _: Option<String> = match i {
+                0 => ::std::option::Option::Some(&self.t.0).map(ToString::to_string),
+                _ => {
+                    ::std::option::Option::None::<&std::convert::Infallible>
+                        .map(ToString::to_string)
+                }
+            };
+        }
+    }
+    impl<T0, T1> MyStruct<(T0, T1)>
+    where
+        T0: ToString,
+        T1: ToString,
+        T0: Default,
+    {
+        fn select(&mut self) {
+            ::std::option::Option::Some(&self.t.0);
+            ::std::option::Option::Some(&self.t.1);
+            ::std::option::Option::None::<&std::convert::Infallible>;
+            let _: Option<String> = ::std::option::Option::Some(&self.t.1)
+                .map(ToString::to_string);
+            let _: Option<String> = ::std::option::Option::Some(&self.t.1)
+                .map(|s| s.to_string());
+            *::std::option::Option::Some(&mut self.t.0)
+                .unwrap() = <T0 as Default>::default();
+            let i = 1;
+            let _: Option<String> = match i {
+                0 => ::std::option::Option::Some(&self.t.0).map(ToString::to_string),
+                1 => ::std::option::Option::Some(&self.t.1).map(ToString::to_string),
+                _ => {
+                    ::std::option::Option::None::<&std::convert::Infallible>
+                        .map(ToString::to_string)
+                }
+            };
+        }
+    }
+}
 pub mod issue1 {
     #![allow(unused)]
     use typle::typle;

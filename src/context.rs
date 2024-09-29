@@ -8,10 +8,10 @@ use quote::{format_ident, ToTokens};
 use syn::parse::Parser as _;
 use syn::spanned::Spanned as _;
 use syn::{
-    punctuated, token, AttrStyle, Attribute, BinOp, Block, Error, Expr, Fields, FnArg,
-    GenericArgument, GenericParam, Generics, ImplItem, Item, Label, Lit, Macro, MacroDelimiter,
-    Member, Meta, Pat, Path, PathArguments, QSelf, Result, ReturnType, Signature, Stmt, Type,
-    TypeParamBound, Visibility, WherePredicate,
+    punctuated, token, AngleBracketedGenericArguments, AttrStyle, Attribute, BinOp, Block, Error,
+    Expr, ExprMethodCall, Fields, FnArg, GenericArgument, GenericParam, Generics, ImplItem, Item,
+    Label, Lit, Macro, MacroDelimiter, Member, Meta, Pat, Path, PathArguments, QSelf, Result,
+    ReturnType, Signature, Stmt, Type, TypeParamBound, TypeReference, Visibility, WherePredicate,
 };
 use zip_clone::ZipClone as _;
 
@@ -1904,10 +1904,192 @@ impl<'a> TypleContext<'a> {
                     false,
                 )?;
                 return Ok(Some(expr));
+            } else if macro_name == "typle_get" {
+                let token_stream = std::mem::take(&mut mac.tokens);
+                let expr = self.replace_typle_get(token_stream)?;
+                return Ok(Some(expr));
             }
         }
         mac.tokens = self.replace_macro_token_stream(std::mem::take(&mut mac.tokens))?;
         Ok(None)
+    }
+
+    fn replace_typle_get(&self, token_stream: TokenStream) -> Result<Expr> {
+        let default_span = token_stream.span();
+        let mut tokens = token_stream.into_iter();
+        let expr = syn::parse2::<Expr>(Self::extract_to_comma_or_end(&mut tokens)?)?;
+        let (refmut, expr) = if let Expr::Reference(reference) = expr {
+            (
+                if reference.mutability.is_none() {
+                    Some(false)
+                } else {
+                    Some(true)
+                },
+                *reference.expr,
+            )
+        } else {
+            (None, expr)
+        };
+        let Expr::Index(expr_index) = expr else {
+            return Err(Error::new(default_span, "expected index expression"));
+        };
+        let typle = expr_index.expr;
+        let index = expr_index.index;
+        let token_stream = tokens.collect::<TokenStream>();
+        let func = if token_stream.is_empty() {
+            None
+        } else {
+            Some(syn::parse2::<Expr>(token_stream)?)
+        };
+        let Some(typle_len) = self.typle_len else {
+            return Err(Error::new(
+                default_span,
+                "cannot use typle_get outside of typle macro",
+            ));
+        };
+        let expr = match evaluate_usize(&index) {
+            Some(i) => {
+                // The index is a typle const expression
+                let expr = if i < typle_len {
+                    // Some(t.0)
+                    let mut ts = typle.into_token_stream();
+                    ts.extend([
+                        TokenTree::Punct(proc_macro2::Punct::new('.', proc_macro2::Spacing::Alone)),
+                        TokenTree::Literal(proc_macro2::Literal::usize_unsuffixed(i)),
+                    ]);
+                    let mut expr = Expr::Verbatim(ts);
+                    if let Some(b) = refmut {
+                        expr = Expr::Reference(syn::ExprReference {
+                            attrs: vec![],
+                            and_token: token::And::default(),
+                            mutability: b.then_some(token::Mut::default()),
+                            expr: Box::new(expr),
+                        });
+                    };
+                    some_expr(expr, default_span)
+                } else {
+                    // None - to ensure `None` is the right type of `Option<T>`,
+                    // start with None::<!> and then map it through the map
+                    // function. Although the map function is not applied, this
+                    // ensures it has the right type. If the map function takes
+                    // a reference, then we need a reference to the never type.
+                    let generic = self.typle_macro.never_type.clone();
+                    let generic = match refmut {
+                        Some(b) => Type::Reference(TypeReference {
+                            and_token: token::And::default(),
+                            lifetime: None,
+                            mutability: b.then_some(token::Mut::default()),
+                            elem: Box::new(generic),
+                        }),
+                        None => generic,
+                    };
+                    none_expr(generic, default_span)
+                };
+                if let Some(func) = func {
+                    Expr::MethodCall(ExprMethodCall {
+                        attrs: vec![],
+                        receiver: Box::new(expr),
+                        dot_token: token::Dot::default(),
+                        method: Ident::new("map", default_span),
+                        turbofish: None,
+                        paren_token: token::Paren::default(),
+                        args: [func].into_iter().collect(),
+                    })
+                } else {
+                    expr
+                }
+            }
+            None => {
+                // The index is not const. Use a match ...
+                let ts = typle.into_token_stream();
+                let mut arms = (0..typle_len)
+                    .zip_clone(ts)
+                    .map(|(i, mut ts)| {
+                        ts.extend([
+                            TokenTree::Punct(proc_macro2::Punct::new(
+                                '.',
+                                proc_macro2::Spacing::Alone,
+                            )),
+                            TokenTree::Literal(proc_macro2::Literal::usize_unsuffixed(i)),
+                        ]);
+                        let mut expr = Expr::Verbatim(ts);
+                        if let Some(b) = refmut {
+                            expr = Expr::Reference(syn::ExprReference {
+                                attrs: vec![],
+                                and_token: token::And::default(),
+                                mutability: b.then_some(token::Mut::default()),
+                                expr: Box::new(expr),
+                            });
+                        };
+                        expr = some_expr(expr, default_span);
+                        if let Some(func) = &func {
+                            expr = Expr::MethodCall(ExprMethodCall {
+                                attrs: vec![],
+                                receiver: Box::new(expr),
+                                dot_token: token::Dot::default(),
+                                method: Ident::new("map", default_span),
+                                turbofish: None,
+                                paren_token: token::Paren::default(),
+                                args: [func.clone()].into_iter().collect(),
+                            })
+                        }
+                        syn::Arm {
+                            attrs: vec![],
+                            pat: Pat::Lit(syn::ExprLit {
+                                attrs: vec![],
+                                lit: Lit::Int(syn::LitInt::new(&i.to_string(), default_span)),
+                            }),
+                            guard: None,
+                            fat_arrow_token: token::FatArrow::default(),
+                            body: Box::new(expr),
+                            comma: Some(token::Comma::default()),
+                        }
+                    })
+                    .collect::<Vec<_>>();
+                let generic = self.typle_macro.never_type.clone();
+                let generic = match refmut {
+                    Some(b) => Type::Reference(TypeReference {
+                        and_token: token::And::default(),
+                        lifetime: None,
+                        mutability: b.then_some(token::Mut::default()),
+                        elem: Box::new(generic),
+                    }),
+                    None => generic,
+                };
+                let mut expr = none_expr(generic, default_span);
+                if let Some(func) = func {
+                    expr = Expr::MethodCall(ExprMethodCall {
+                        attrs: vec![],
+                        receiver: Box::new(expr),
+                        dot_token: token::Dot::default(),
+                        method: Ident::new("map", default_span),
+                        turbofish: None,
+                        paren_token: token::Paren::default(),
+                        args: [func].into_iter().collect(),
+                    })
+                }
+
+                arms.push(syn::Arm {
+                    attrs: vec![],
+                    pat: Pat::Wild(syn::PatWild {
+                        attrs: vec![],
+                        underscore_token: token::Underscore::default(),
+                    }),
+                    guard: None,
+                    fat_arrow_token: token::FatArrow::default(),
+                    body: Box::new(expr),
+                    comma: Some(token::Comma::default()),
+                });
+                Expr::Match(syn::ExprMatch {
+                    attrs: vec![],
+                    match_token: token::Match::default(),
+                    expr: index,
+                    brace_token: token::Brace::default(),
+                    arms,
+                })
+            }
+        };
+        Ok(expr)
     }
 
     fn anyall(
@@ -2285,6 +2467,23 @@ impl<'a> TypleContext<'a> {
             }
         }
         Ok(output)
+    }
+
+    fn extract_to_comma_or_end(
+        tokens: &mut impl Iterator<Item = TokenTree>,
+    ) -> Result<TokenStream> {
+        let mut collect = TokenStream::new();
+        for token in tokens.by_ref() {
+            match token {
+                TokenTree::Punct(punct) if punct.as_char() == ',' => {
+                    break;
+                }
+                tt => {
+                    collect.extend([tt]);
+                }
+            }
+        }
+        Ok(collect)
     }
 
     fn extract_to_semicolon(
@@ -2860,6 +3059,78 @@ impl<'a> TypleContext<'a> {
         }
         Ok(None)
     }
+}
+
+// Wrap an Expr with `Some`
+fn some_expr(expr: Expr, span: Span) -> Expr {
+    Expr::Call(syn::ExprCall {
+        attrs: vec![],
+        func: Box::new(Expr::Path(syn::ExprPath {
+            attrs: vec![],
+            qself: None,
+            path: Path {
+                leading_colon: Some(token::PathSep::default()),
+                segments: [
+                    syn::PathSegment {
+                        ident: Ident::new("std", span),
+                        arguments: PathArguments::None,
+                    },
+                    syn::PathSegment {
+                        ident: Ident::new("option", span),
+                        arguments: PathArguments::None,
+                    },
+                    syn::PathSegment {
+                        ident: Ident::new("Option", span),
+                        arguments: PathArguments::None,
+                    },
+                    syn::PathSegment {
+                        ident: Ident::new("Some", span),
+                        arguments: PathArguments::None,
+                    },
+                ]
+                .into_iter()
+                .collect(),
+            },
+        })),
+        paren_token: token::Paren::default(),
+        args: [expr].into_iter().collect(),
+    })
+}
+
+// Create an Option<T>::None for type T
+fn none_expr(wrapped_type: Type, span: Span) -> Expr {
+    Expr::Path(syn::ExprPath {
+        attrs: vec![],
+        qself: None,
+        path: Path {
+            leading_colon: Some(token::PathSep::default()),
+            segments: [
+                syn::PathSegment {
+                    ident: Ident::new("std", span),
+                    arguments: PathArguments::None,
+                },
+                syn::PathSegment {
+                    ident: Ident::new("option", span),
+                    arguments: PathArguments::None,
+                },
+                syn::PathSegment {
+                    ident: Ident::new("Option", span),
+                    arguments: PathArguments::None,
+                },
+                syn::PathSegment {
+                    ident: Ident::new("None", span),
+                    arguments: PathArguments::AngleBracketed(AngleBracketedGenericArguments {
+                        colon2_token: Some(token::PathSep::default()),
+                        lt_token: token::Lt::default(),
+                        args: [GenericArgument::Type(wrapped_type)].into_iter().collect(),
+                        gt_token: token::Gt::default(),
+                    }),
+                },
+            ]
+            .into_iter()
+            .collect(),
+        },
+    })
 }
 
 #[inline]

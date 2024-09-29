@@ -919,6 +919,41 @@ pub fn typle_for(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
     .into()
 }
 
+/// Select an element from a tuple.
+///
+/// Select an element from a tuple using an index, and return as an [`Option`].
+/// If the index is in the tuple return `Some(t[i])`. Otherwise, return `None`.
+///
+/// Unlike other macros, `typle_get!` can use a non-const index. A function
+/// can be supplied to map the element type to a common type.
+///
+/// The never type may need to be specified as a type that implements the map
+/// function.
+///
+/// Examples:
+///
+/// ```
+/// # use typle::typle;
+/// #[typle(Tuple for 0..=12, never=std::convert::Infallible)]
+/// fn get<'a, T: Tuple>(t: &'a T, i: usize) -> Option<String>
+/// where
+///     T<_>: ToString,
+/// {
+///     typle_get!(&t[i], ToString::to_string)
+/// }
+/// assert_eq!(get(&('a', 'b', 'c'), 1), Some("b".to_string()));
+/// assert_eq!(get(&('a', 'b', 'c'), 4), None);
+/// ```
+#[proc_macro]
+pub fn typle_get(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    Error::new_spanned(
+        TokenStream::from(item),
+        "typle_get macro only available in item with typle attribute",
+    )
+    .into_compile_error()
+    .into()
+}
+
 /// Create variants in an enum.
 ///
 /// In an enum, the `typle_variant` macro allows the creation of variants for each component.
