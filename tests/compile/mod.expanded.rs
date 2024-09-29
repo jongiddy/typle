@@ -1225,8 +1225,7 @@ pub mod get {
                 &std::convert::Infallible,
             >
                 .map(|s| s.to_string());
-            *::std::option::Option::Some(&mut self.t.0)
-                .unwrap() = <T0 as Default>::default();
+            *::std::option::Option::Some(&mut self.t.0).unwrap() = <T0 as Default>::default();
             let i = 1;
             let _: Option<String> = match i {
                 0 => ::std::option::Option::Some(&self.t.0).map(ToString::to_string),
@@ -1251,8 +1250,7 @@ pub mod get {
                 .map(ToString::to_string);
             let _: Option<String> = ::std::option::Option::Some(&self.t.1)
                 .map(|s| s.to_string());
-            *::std::option::Option::Some(&mut self.t.0)
-                .unwrap() = <T0 as Default>::default();
+            *::std::option::Option::Some(&mut self.t.0).unwrap() = <T0 as Default>::default();
             let i = 1;
             let _: Option<String> = match i {
                 0 => ::std::option::Option::Some(&self.t.0).map(ToString::to_string),
