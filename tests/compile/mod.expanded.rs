@@ -2200,6 +2200,96 @@ pub mod typle_args {
     {
         <(T, u32) as _typle_fn_append_double>::apply((t, a))
     }
+    #[allow(non_camel_case_types)]
+    trait _typle_fn_append_even {
+        type Return;
+        fn apply(self) -> Self::Return;
+    }
+    impl _typle_fn_append_even for ((), u32) {
+        type Return = (u32,);
+        fn apply(self) -> Self::Return {
+            #[allow(unused_variables)]
+            let (t, a) = self;
+            { (a,) }
+        }
+    }
+    impl<T0> _typle_fn_append_even for ((T0,), u32) {
+        type Return = (T0, u32);
+        fn apply(self) -> Self::Return {
+            let (t, a) = self;
+            { (t.0, a) }
+        }
+    }
+    impl<T0, T1> _typle_fn_append_even for ((T0, T1), u32) {
+        type Return = (T0, u32);
+        fn apply(self) -> Self::Return {
+            let (t, a) = self;
+            { (t.0, a) }
+        }
+    }
+    impl<T0, T1, T2> _typle_fn_append_even for ((T0, T1, T2), u32) {
+        type Return = (T0, T2, u32);
+        fn apply(self) -> Self::Return {
+            let (t, a) = self;
+            { (t.0, t.2, a) }
+        }
+    }
+    fn append_even<T>(t: T, a: u32) -> <(T, u32) as _typle_fn_append_even>::Return
+    where
+        (T, u32): _typle_fn_append_even,
+    {
+        <(T, u32) as _typle_fn_append_even>::apply((t, a))
+    }
+    #[allow(non_camel_case_types)]
+    trait _typle_fn_even_string_odd {
+        type Return;
+        fn apply(self) -> Self::Return;
+    }
+    impl _typle_fn_even_string_odd for ((),) {
+        type Return = ();
+        fn apply(self) -> Self::Return {
+            #[allow(unused_variables)]
+            let (t,) = self;
+            { #[allow(clippy::unused_unit)] () }
+        }
+    }
+    impl<T0> _typle_fn_even_string_odd for ((T0,),)
+    where
+        T0: ToString,
+    {
+        type Return = (String,);
+        fn apply(self) -> Self::Return {
+            let (t,) = self;
+            { (t.0.to_string(),) }
+        }
+    }
+    impl<T0, T1> _typle_fn_even_string_odd for ((T0, T1),)
+    where
+        T0: ToString,
+    {
+        type Return = (String, T1);
+        fn apply(self) -> Self::Return {
+            let (t,) = self;
+            { (t.0.to_string(), t.1) }
+        }
+    }
+    impl<T0, T1, T2> _typle_fn_even_string_odd for ((T0, T1, T2),)
+    where
+        T0: ToString,
+        T2: ToString,
+    {
+        type Return = (String, T1, String);
+        fn apply(self) -> Self::Return {
+            let (t,) = self;
+            { (t.0.to_string(), t.1, t.2.to_string()) }
+        }
+    }
+    fn even_string_odd<T>(t: T) -> <(T,) as _typle_fn_even_string_odd>::Return
+    where
+        (T,): _typle_fn_even_string_odd,
+    {
+        <(T,) as _typle_fn_even_string_odd>::apply((t,))
+    }
     struct World {}
     trait ExclusiveSystemParam {}
     struct ExclusiveSystemParamItem<F> {
