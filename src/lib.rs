@@ -7,7 +7,7 @@
 //!     t: T,
 //! }
 //!
-//! #[typle(Tuple for 0..=3)]
+//! #[typle(Tuple for 2..=3)]
 //! impl<T: Tuple> From<T> for MyStruct<T>
 //! {
 //!     fn from(t: T) -> Self {
@@ -16,23 +16,11 @@
 //! }
 //! ```
 //!
-//! generates implementations of the `From` trait for tuples with 0 to 3 components:
+//! generates implementations of the `From` trait for tuples with 2 to 3 components:
 //! ```rust
 //! # struct MyStruct<T> {
 //! #     t: T,
 //! # }
-//! impl From<()> for MyStruct<()> {
-//!     fn from(t: ()) -> Self {
-//!         MyStruct { t }
-//!     }
-//! }
-//!
-//! impl<T0> From<(T0,)> for MyStruct<(T0,)> {
-//!     fn from(t: (T0,)) -> Self {
-//!         MyStruct { t }
-//!     }
-//! }
-//!
 //! impl<T0, T1> From<(T0, T1)> for MyStruct<(T0, T1)> {
 //!     fn from(t: (T0, T1)) -> Self {
 //!         MyStruct { t }
@@ -68,7 +56,7 @@
 //! assert_eq!(split((3.0,)), (3.0, ()));
 //! ```
 //!
-//! The [`typle_for!`] macro creates a new type or expression. Inside
+//! The [`typle_for!`] macro creates a new tuple type or expression. Inside
 //! the macro the typle index variable provides access to each component of
 //! an existing tuple type or expression.
 //!
@@ -132,6 +120,65 @@
 //!     multiply((Duration::from_secs(5), 2), (4, 3)),
 //!     (Duration::from_secs(20), 6)
 //! )
+//! ```
+//!
+//! The `typle!` macro allows components of a tuple to be inserted into an existing sequence.
+//! ```
+//! # use typle::typle;
+//! #[typle(Tuple for 0..=12)]
+//! fn coalesce_some<S: Tuple, T: Tuple>(
+//!     s: S,
+//!     t: T
+//! ) -> (typle!(i in .. => Option<S<{i}>>), typle!(i in .. => Option<T<{i}>>))
+//! where
+//!     T: Tuple,
+//! {
+//!     (typle!(i in .. => Some(s[[i]])), typle!(i in .. => Some(t[[i]])))
+//! }
+//!
+//! assert_eq!(
+//!     coalesce_some((1, 2), (3, 4)),
+//!     (Some(1), Some(2), Some(3), Some(4))
+//! );
+//! ```
+//!
+//! Note that this behaves differently to [`typle_for!`]. The `typle_for!` macro
+//! produces a new tuple. The `typle!` macro produces a sequence of components
+//! that must appear inside an existing tuple, array, or argument list.
+//!
+//! The `typle!`, `typle_for!`, and `typle_bound!` macros accept an `if` statement with an optional
+//! `else` clause. If there is no `else` clause the macro filters out components that do not match
+//! the condition.
+//!
+//! The `typle_attr_if` attribute allows conditional inclusion of attributes. It works similarly to
+//! [`cfg_attr`](https://doc.rust-lang.org/reference/conditional-compilation.html#the-cfg_attr-attribute)
+//! except that the first argument is a boolean typle index expression.
+//!
+//! ```
+//! # use typle::typle;
+//! #[typle(Tuple for 0..=12)]
+//! fn even_string_odd<T: Tuple>(
+//!     t: T,
+//! ) -> typle_for!(i in .. => if i % 2 == 0 { String } else { T<{i}> })
+//! where
+//!     typle_bound!(i in .. => if i % 2 == 0 { T<{i}> }): ToString,
+//! {
+//!     #[typle_attr_if(T::LEN == 0, allow(clippy::unused_unit))]
+//!     typle_for!(i in .. => if i % 2 == 0 { t[[i]].to_string() } else { t[[i]] })
+//! }
+//! ```
+//!
+//! For types, `T<{start..end}>` is a shorthand for `typle!(i in start..end => T<{i}>)`.
+//! For expressions, `t[[start..end]]` is a shorthand for `typle!(i in start..end => t[[i]])`.
+//!
+//! ```
+//! # use typle::typle;
+//! #[typle(Tuple for 0..12)]
+//! fn append<T: Tuple, A>(t: T, a: A) -> (T<{..}>, A) {
+//!     (t[[..]], a)
+//! }
+//!
+//! assert_eq!(append((1, 2, 3), 4), (1, 2, 3, 4));
 //! ```
 //!
 //! Use the `typle_index!` macro in a `for` loop to iterate over a range bounded
@@ -226,10 +273,6 @@
 //! The `typle_ident!` macro concatenates a number to an identifier. For
 //! example `S::<typle_ident!(3)>` becomes the identifier `S3`. This is mainly
 //! used to refer to enum variants.
-//!
-//! The `typle_attr_if` attribute allows conditional inclusion of attributes. It works similarly to
-//! [`cfg_attr`](https://doc.rust-lang.org/reference/conditional-compilation.html#the-cfg_attr-attribute)
-//! except that the first argument is a boolean typle index expression.
 //!
 //! The `typle_const!` macro supports const-if on a boolean typle index
 //! expression. const-if allows branches that do not compile, as long as they
@@ -664,72 +707,6 @@ pub fn typle_any(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
     .into()
 }
 
-/// Insert tuple components into a sequence.
-///
-/// The `typle_args!` macro allows components of a tuple to be inserted into an existing sequence.
-/// ```
-/// # use typle::typle;
-/// #[typle(Tuple for 0..=12)]
-/// fn coalesce_some<S: Tuple, T: Tuple>(
-///     s: S,
-///     t: T
-/// ) -> (typle_args!(i in .. => Option<S<{i}>>), typle_args!(i in .. => Option<T<{i}>>))
-/// where
-///     T: Tuple,
-/// {
-///     (typle_args!(i in .. => Some(s[[i]])), typle_args!(i in .. => Some(t[[i]])))
-/// }
-///
-/// assert_eq!(
-///     coalesce_some((1, 2), (3, 4)),
-///     (Some(1), Some(2), Some(3), Some(4))
-/// );
-/// ```
-///
-/// Note that this behaves differently to [`typle_for!`]. `typle_for!` becomes a new tuple or array.
-/// `typle_args!` becomes a sequence of components and must appear inside an existing typle, array,
-/// or argument list.
-/// ```
-/// # use typle::typle;
-/// #[typle(Tuple for 0..=12)]
-/// fn coalesce_some<S: Tuple, T: Tuple>(
-///     s: S,
-///     t: T
-/// ) -> (typle_for!(i in .. => Option<S<{i}>>), typle_for!(i in .. => Option<T<{i}>>))
-/// where
-///     T: Tuple,
-/// {
-///     (typle_for!(i in .. => Some(s[[i]])), typle_for!(i in .. => Some(t[[i]])))
-/// }
-///
-/// assert_eq!(
-///     coalesce_some((1, 2), (3, 4)),
-///     ((Some(1), Some(2)), (Some(3), Some(4)))
-/// );
-///
-/// ```
-/// For types, `T<{start..end}>` is a shorthand for `typle_args!(i in start..end => T<{i}>)`.
-/// For expressions, `t[[start..end]]` is a shorthand for `typle_args!(i in start..end => t[[i]])`.
-///
-/// ```
-/// # use typle::typle;
-/// #[typle(Tuple for 0..12)]
-/// fn append<T: Tuple, A>(t: T, a: A) -> (T<{..}>, A) {
-///     (t[[..]], a)
-/// }
-///
-/// assert_eq!(append((1, 2, 3), 4), (1, 2, 3, 4));
-/// ```
-#[proc_macro]
-pub fn typle_args(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    Error::new_spanned(
-        TokenStream::from(item),
-        "typle_args macro only available in item with typle attribute",
-    )
-    .into_compile_error()
-    .into()
-}
-
 /// Reduce a tuple to a single value.
 ///
 /// The `typle_fold!` macro repeatedly applies an expression to an accumulator
@@ -824,96 +801,6 @@ pub fn typle_fold(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
     Error::new_spanned(
         TokenStream::from(item),
         "typle_fold macro only available in item with typle attribute",
-    )
-    .into_compile_error()
-    .into()
-}
-
-/// Create a tuple or array.
-///
-/// Loop over the indices of the tuple, returning an expression, pattern, or type for each index.
-///
-/// The `typle_for!` macro behavior depends on the delimiters around the macro tokens.
-///
-/// `typle_for!(...)` with parentheses creates a new tuple expression, pattern, or type.
-///
-/// ```
-/// # use typle::typle;
-/// #[typle(Tuple for 0..=12)]
-/// pub fn reverse<T: Tuple>(t: T) -> typle_for!(i in 1..=T::LEN => T<{T::LEN - i}>) {
-///     typle_for!(i in 1..=T::LEN => t[[T::LEN - i]])
-/// }
-///
-/// assert_eq!(reverse((Some(3), "four", 5)), (5, "four", Some(3)));
-/// ```
-///
-/// `typle_for!{...}` with braces requires an expression that evaluates to the
-/// components of the tuple. Use the `typle_pat!` or `typle_ty!` macros where a
-/// pattern or type is not a valid expression. Inside `typle_for!{...}`, `if`
-/// expressions are always const so `typle_const!` is not required.
-/// ```
-/// # use typle::typle;
-/// #[typle(Tuple for 0..12)]
-/// fn append<T: Tuple, A>(
-///     t: T,
-///     a: A,
-/// ) -> typle_for!{i in ..=T::LEN => if i < T::LEN { typle_ty!(T<{i}>) } else { A }} {
-///     typle_for!{i in ..=T::LEN => if i < T::LEN { t[[i]] } else { a }}
-/// }
-///
-/// assert_eq!(append((1, 2, 3), 4), (1, 2, 3, 4));
-/// ```
-///
-/// Note: See [`typle_args!`] for a shorter way to write `append`.
-///
-/// `typle_for![...]` with brackets creates an array expression.
-///
-/// ```
-/// # use typle::typle;
-/// #[typle(Tuple for 0..=12)]
-/// fn to_strings<T>(t: T) -> [String; T::LEN]
-/// where
-///     T: Tuple,
-///     T<_>: ToString,
-/// {
-///     typle_for![i in .. => t[[i]].to_string()]
-/// }
-///
-/// assert_eq!(
-///     to_strings((3, std::io::Error::new(std::io::ErrorKind::Other, "test"))),
-///     [String::from("3"), String::from("test")]
-/// );
-/// ```
-///
-/// With any delimiter, components can be filtered using a const-if expression
-/// with no `else` clause.
-/// ```
-/// # use typle::typle;
-/// #[typle(Tuple for 0..=12)]
-/// fn split_components<T: Tuple>(
-///     t: T
-/// ) -> (
-///     // (T<0>, T<2>,...)
-///     typle_for!{i in .. => if i % 2 == 0 { typle_ty!(T<{i}>) }},
-///     // (T<1>, T<3>,...)
-///     typle_for!{i in .. => if i % 2 == 1 { typle_ty!(T<{i}>) }},
-/// ) {
-///     (
-///         typle_for!{i in .. => if i % 2 == 0 { t[[i]] }},
-///         typle_for!{i in .. => if i % 2 == 1 { t[[i]] }},
-///     )
-/// }
-///
-/// assert_eq!(
-///     split_components((1, 2, 3, 4, 5, 6)),
-///     ((1, 3, 5), (2, 4, 6))
-/// );
-/// ```
-#[proc_macro]
-pub fn typle_for(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    Error::new_spanned(
-        TokenStream::from(item),
-        "typle_for macro only available in item with typle attribute",
     )
     .into_compile_error()
     .into()

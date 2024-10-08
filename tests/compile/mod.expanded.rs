@@ -84,7 +84,7 @@ pub mod doc_typle {
                         #[allow(irrefutable_let_patterns)] #[allow(unused_variables)]
                         if let Self::State::S0(output, inner_state) = state {
                             let matched = self.tuple.0.extract(inner_state);
-                            let output = ({ matched },);
+                            let output = (matched,);
                             {
                                 return output;
                             }
@@ -109,7 +109,7 @@ pub mod doc_typle {
                         #[allow(unused_variables)]
                         if let Self::State::S0(output, inner_state) = state {
                             let matched = self.tuple.0.extract(inner_state);
-                            let output = ({ matched },);
+                            let output = (matched,);
                             {
                                 state = Self::State::S1(output, None);
                             }
@@ -118,7 +118,7 @@ pub mod doc_typle {
                     {
                         if let Self::State::S1(output, inner_state) = state {
                             let matched = self.tuple.1.extract(inner_state);
-                            let output = ({ output.0 }, { matched });
+                            let output = (output.0, matched);
                             {
                                 return output;
                             }
@@ -148,7 +148,7 @@ pub mod doc_typle {
                         #[allow(unused_variables)]
                         if let Self::State::S0(output, inner_state) = state {
                             let matched = self.tuple.0.extract(inner_state);
-                            let output = ({ matched },);
+                            let output = (matched,);
                             {
                                 state = Self::State::S1(output, None);
                             }
@@ -157,7 +157,7 @@ pub mod doc_typle {
                     {
                         if let Self::State::S1(output, inner_state) = state {
                             let matched = self.tuple.1.extract(inner_state);
-                            let output = ({ output.0 }, { matched });
+                            let output = (output.0, matched);
                             {
                                 state = Self::State::S2(output, None);
                             }
@@ -166,7 +166,7 @@ pub mod doc_typle {
                     {
                         if let Self::State::S2(output, inner_state) = state {
                             let matched = self.tuple.2.extract(inner_state);
-                            let output = ({ output.0 }, { output.1 }, { matched });
+                            let output = (output.0, output.1, matched);
                             {
                                 return output;
                             }
@@ -198,7 +198,7 @@ pub mod doc_typle {
                         #[allow(unused_variables)]
                         if let Self::State::S0(output, inner_state) = state {
                             let matched = self.tuple.0.extract(inner_state);
-                            let output = ({ matched },);
+                            let output = (matched,);
                             {
                                 state = Self::State::S1(output, None);
                             }
@@ -207,7 +207,7 @@ pub mod doc_typle {
                     {
                         if let Self::State::S1(output, inner_state) = state {
                             let matched = self.tuple.1.extract(inner_state);
-                            let output = ({ output.0 }, { matched });
+                            let output = (output.0, matched);
                             {
                                 state = Self::State::S2(output, None);
                             }
@@ -216,7 +216,7 @@ pub mod doc_typle {
                     {
                         if let Self::State::S2(output, inner_state) = state {
                             let matched = self.tuple.2.extract(inner_state);
-                            let output = ({ output.0 }, { output.1 }, { matched });
+                            let output = (output.0, output.1, matched);
                             {
                                 state = Self::State::S3(output, None);
                             }
@@ -225,12 +225,7 @@ pub mod doc_typle {
                     {
                         if let Self::State::S3(output, inner_state) = state {
                             let matched = self.tuple.3.extract(inner_state);
-                            let output = (
-                                { output.0 },
-                                { output.1 },
-                                { output.2 },
-                                { matched },
-                            );
+                            let output = (output.0, output.1, output.2, matched);
                             {
                                 return output;
                             }

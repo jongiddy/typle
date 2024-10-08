@@ -1715,34 +1715,47 @@ impl<'a> TypleContext<'a> {
         &'a self,
         mac: &mut Macro,
         state: &'a mut BlockState,
-        const_if: bool,
     ) -> Result<impl Iterator<Item = Result<Expr>> + 'a> {
         let token_stream = std::mem::take(&mut mac.tokens);
         let default_span = token_stream.span();
         let mut tokens = token_stream.into_iter();
         let (pattern, range) = self.parse_pattern_range(&mut tokens, default_span)?;
-        let expr = syn::parse2::<Expr>(tokens.collect())?;
+        let token_stream = tokens.collect::<TokenStream>();
         let mut context = self.clone();
-        context.const_if = const_if;
         if let Some(ident) = &pattern {
             context.constants.insert(ident.clone(), 0);
         }
-        Ok(range.zip_clone(expr).flat_map(move |(index, mut expr)| {
-            if let Some(ident) = &pattern {
-                *context.constants.get_mut(ident).unwrap() = index;
-            }
-            match context.replace_expr(&mut expr, state) {
-                Ok(()) => {
-                    if let Expr::Verbatim(_token_stream) = expr {
-                        // Verbatim causes typle to omit the component from the tuple
-                        None
-                    } else {
-                        Some(Ok(expr))
-                    }
+        Ok(range
+            .zip_clone(token_stream)
+            .flat_map(move |(index, token_stream)| {
+                if let Some(ident) = &pattern {
+                    *context.constants.get_mut(ident).unwrap() = index;
                 }
-                Err(error) => Some(Err(error)),
-            }
-        }))
+                let token_stream = match context.evaluate_if(token_stream) {
+                    Ok(Some(token_stream)) => token_stream,
+                    Ok(None) => {
+                        return None;
+                    }
+                    Err(e) => {
+                        return Some(Err(e));
+                    }
+                };
+                let mut expr = match syn::parse2::<Expr>(token_stream) {
+                    Ok(expr) => expr,
+                    Err(e) => return Some(Err(e)),
+                };
+                match context.replace_expr(&mut expr, state) {
+                    Ok(()) => {
+                        if let Expr::Verbatim(_token_stream) = expr {
+                            // Verbatim causes typle to omit the component from the tuple
+                            None
+                        } else {
+                            Some(Ok(expr))
+                        }
+                    }
+                    Err(error) => Some(Err(error)),
+                }
+            }))
     }
 
     fn replace_typle_fold_expr(
@@ -1864,34 +1877,14 @@ impl<'a> TypleContext<'a> {
         if let Some(macro_name) = mac.path.get_ident() {
             let default_span = macro_name.span();
             if macro_name == "typle_for" {
-                let expr = match &mac.delimiter {
-                    MacroDelimiter::Paren(_) => {
-                        let elems = self.replace_typle_for_expr(mac, state, false)?;
-                        let tuple = syn::ExprTuple {
-                            attrs: std::mem::take(attrs),
-                            paren_token: token::Paren::default(),
-                            elems: elems.collect::<Result<_>>()?,
-                        };
-                        Expr::Tuple(tuple)
-                    }
-                    MacroDelimiter::Brace(_) => {
-                        let elems = self.replace_typle_for_expr(mac, state, true)?;
-                        let tuple = syn::ExprTuple {
-                            attrs: std::mem::take(attrs),
-                            paren_token: token::Paren::default(),
-                            elems: elems.collect::<Result<_>>()?,
-                        };
-                        Expr::Tuple(tuple)
-                    }
-                    MacroDelimiter::Bracket(_) => {
-                        let elems = self.replace_typle_for_expr(mac, state, false)?;
-                        let array = syn::ExprArray {
-                            attrs: std::mem::take(attrs),
-                            bracket_token: token::Bracket::default(),
-                            elems: elems.collect::<Result<_>>()?,
-                        };
-                        Expr::Array(array)
-                    }
+                let expr = {
+                    let elems = self.replace_typle_for_expr(mac, state)?;
+                    let tuple = syn::ExprTuple {
+                        attrs: std::mem::take(attrs),
+                        paren_token: token::Paren::default(),
+                        elems: elems.collect::<Result<_>>()?,
+                    };
+                    Expr::Tuple(tuple)
                 };
                 return Ok(Some(expr));
             } else if macro_name == "typle_fold" {
@@ -2320,52 +2313,26 @@ impl<'a> TypleContext<'a> {
                     return Ok(Some(Type::Tuple(tuple)));
                 }
                 let token_stream = tokens.collect::<TokenStream>();
-                let body_span = token_stream.span();
-                match m.mac.delimiter {
-                    MacroDelimiter::Paren(_) => {
-                        let ty = syn::parse2::<Type>(token_stream)?;
-                        let mut context = self.clone();
-                        if let Some(ident) = &pattern {
-                            context.constants.insert(ident.clone(), 0);
-                        }
-                        for (index, mut component) in range.zip_clone(ty) {
-                            if let Some(ident) = &pattern {
-                                *context.constants.get_mut(ident).unwrap() = index;
-                            }
-                            context.replace_type(&mut component)?;
-                            tuple.elems.push(component);
-                        }
+                let mut context = self.clone();
+                if let Some(ident) = &pattern {
+                    context.constants.insert(ident.clone(), 0);
+                }
+                for (index, token_stream) in range.zip_clone(token_stream) {
+                    if let Some(ident) = &pattern {
+                        *context.constants.get_mut(ident).unwrap() = index;
                     }
-                    MacroDelimiter::Brace(_) => {
-                        let Ok(expr) = syn::parse2::<Expr>(token_stream) else {
-                            return Err(Error::new(
-                                body_span,
-                                "cannot parse, wrap types in `typle_ty!()`",
-                            ));
-                        };
-                        let mut context = self.clone();
-                        context.const_if = true;
-                        if let Some(ident) = &pattern {
-                            context.constants.insert(ident.clone(), 0);
+                    let token_stream = match context.evaluate_if(token_stream) {
+                        Ok(Some(token_stream)) => token_stream,
+                        Ok(None) => {
+                            continue;
                         }
-                        for (index, mut expr) in range.zip_clone(expr) {
-                            if let Some(ident) = &pattern {
-                                *context.constants.get_mut(ident).unwrap() = index;
-                            }
-                            let mut state = BlockState::default();
-                            context.replace_expr(&mut expr, &mut state)?;
-                            if let Expr::Verbatim(_) = expr {
-                                // Verbatim omits the type from the tuple.
-                            } else {
-                                let mut ty = expr_to_type(expr)?;
-                                context.replace_type(&mut ty)?;
-                                tuple.elems.push(ty);
-                            }
+                        Err(e) => {
+                            return Err(e);
                         }
-                    }
-                    MacroDelimiter::Bracket(_) => {
-                        abort!(m, "expected parentheses or braces");
-                    }
+                    };
+                    let mut ty = syn::parse2::<Type>(token_stream)?;
+                    context.replace_type(&mut ty)?;
+                    tuple.elems.push(ty);
                 }
                 return Ok(Some(Type::Tuple(tuple)));
             } else if macro_name == "typle_fold" {
@@ -3331,71 +3298,6 @@ fn pat_to_expr(pat: Pat) -> Result<Expr> {
                 .collect::<Result<_>>()?,
         })),
         _ => Err(Error::new(pat.span(), "unsupported pattern")),
-    }
-}
-
-fn expr_to_type(expr: Expr) -> Result<Type> {
-    match expr {
-        Expr::Block(expr) => {
-            let span = expr.span();
-            let mut iter = expr.block.stmts.into_iter();
-            let Some(stmt) = iter.next() else {
-                // empty block represents missing type
-                return Ok(Type::Verbatim(TokenStream::new()));
-            };
-            if iter.next().is_some() {
-                return Err(Error::new(
-                    span,
-                    "typle requires a block with a single type",
-                ));
-            }
-            match stmt {
-                Stmt::Local(local) => {
-                    Err(Error::new(local.span(), "let statement not supported here"))
-                }
-                Stmt::Item(item) => Err(Error::new(item.span(), "item not supported here")),
-                Stmt::Expr(expr, None) => expr_to_type(expr),
-                Stmt::Expr(_, Some(semi)) => Err(Error::new(semi.span(), "unexpected semicolon")),
-                Stmt::Macro(m) => match m.mac.path.get_ident() {
-                    Some(ident) if ident == "typle_ty" => syn::parse2(m.mac.tokens),
-                    _ => Ok(Type::Macro(syn::TypeMacro { mac: m.mac })),
-                },
-            }
-        }
-        Expr::Infer(expr) => Ok(Type::Infer(syn::TypeInfer {
-            underscore_token: expr.underscore_token,
-        })),
-        Expr::Macro(expr) => match expr.mac.path.get_ident() {
-            Some(ident) if ident == "typle_ty" => syn::parse2(expr.mac.tokens),
-            _ => Ok(Type::Macro(syn::TypeMacro { mac: expr.mac })),
-        },
-        Expr::Paren(expr) => Ok(Type::Paren(syn::TypeParen {
-            paren_token: expr.paren_token,
-            elem: Box::new(expr_to_type(*expr.expr)?),
-        })),
-        Expr::Path(expr) => Ok(Type::Path(syn::TypePath {
-            qself: None,
-            path: expr.path,
-        })),
-        Expr::Reference(expr) => Ok(Type::Reference(syn::TypeReference {
-            and_token: expr.and_token,
-            lifetime: None,
-            mutability: expr.mutability,
-            elem: Box::new(expr_to_type(*expr.expr)?),
-        })),
-        Expr::Tuple(expr) => Ok(Type::Tuple(syn::TypeTuple {
-            paren_token: expr.paren_token,
-            elems: expr
-                .elems
-                .into_iter()
-                .map(expr_to_type)
-                .collect::<Result<_>>()?,
-        })),
-        Expr::Verbatim(token_stream) => Ok(Type::Verbatim(token_stream)),
-        _ => Err(Error::new(
-            expr.span(),
-            "typle does not handle this expression here",
-        )),
     }
 }
 

@@ -19,7 +19,7 @@ impl<T: Tuple<u32>> MyStruct<T> {
     }
 
     pub fn test_slice(&self) -> u32 {
-        let [x0, x1] = typle_for![i in 0..2 => self.t[[i]] * 3];
+        let [x0, x1] = [typle!(i in 0..2 => self.t[[i]] * 3)];
         x0 + x1
     }
 

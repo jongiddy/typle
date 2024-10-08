@@ -13,23 +13,21 @@ fn append_array<T: Tuple<bool>>(t: T, a: bool) -> [bool; T::LEN + 1] {
 
 #[typle(Tuple for 1..=3)]
 fn append_double<T: Tuple<u32>>(t: T, a: u32) -> [u32; T::LEN + 1] {
-    [typle_args!(i in .. => 2 * t[[i]]), 2 * a]
+    [typle!(i in .. => 2 * t[[i]]), 2 * a]
 }
 
 #[typle(Tuple for 0..=3)]
-fn append_even<T: Tuple>(t: T, a: u32) -> (typle_args!(i in .. => if i % 2 == 0 {T<{i}>}), u32) {
-    (typle_args!(i in .. => if i % 2 == 0 {t[[i]]}), a)
+fn append_even<T: Tuple>(t: T, a: u32) -> (typle!(i in .. => if i % 2 == 0 {T<{i}>}), u32) {
+    (typle!(i in .. => if i % 2 == 0 {t[[i]]}), a)
 }
 
 #[typle(Tuple for 0..=3)]
-fn even_string_odd<T: Tuple>(
-    t: T,
-) -> (typle_args!(i in .. => if i % 2 == 0 {String} else {T<{i}>}),)
+fn even_string_odd<T: Tuple>(t: T) -> (typle!(i in .. => if i % 2 == 0 {String} else {T<{i}>}),)
 where
     typle_bound!(i in .. => if i % 2 == 0 {T<{i}>}): ToString,
 {
     #[typle_attr_if(T::LEN == 0, allow(clippy::unused_unit))]
-    (typle_args!(i in .. => if i % 2 == 0 {t[[i]].to_string()} else {t[[i]]}),)
+    (typle!(i in .. => if i % 2 == 0 {t[[i]].to_string()} else {t[[i]]}),)
 }
 
 struct World {}
@@ -59,7 +57,7 @@ impl<Out, Func: Send + Sync + 'static, F: Tuple> ExclusiveSystemParamFunction<fn
     for Func
 where
     for<'a> &'a mut Func: FnMut(&mut World, F<{ .. }>) -> Out
-        + FnMut(&mut World, typle_args!(i in .. => ExclusiveSystemParamItem<F<{i}>>)) -> Out,
+        + FnMut(&mut World, typle!(i in .. => ExclusiveSystemParamItem<F<{i}>>)) -> Out,
     Out: 'static,
     F<_>: ExclusiveSystemParam,
 {
