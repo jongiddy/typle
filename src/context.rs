@@ -8,10 +8,10 @@ use quote::{format_ident, ToTokens};
 use syn::parse::Parser as _;
 use syn::spanned::Spanned as _;
 use syn::{
-    punctuated, token, AngleBracketedGenericArguments, AttrStyle, Attribute, BinOp, Block, Error,
-    Expr, ExprMethodCall, Fields, FnArg, GenericArgument, GenericParam, Generics, ImplItem, Item,
+    parse_quote, punctuated, token, AngleBracketedGenericArguments, AttrStyle, Attribute, BinOp,
+    Block, Error, Expr, Fields, FnArg, GenericArgument, GenericParam, Generics, ImplItem, Item,
     Label, Lit, Macro, MacroDelimiter, Member, Meta, Pat, Path, PathArguments, QSelf, Result,
-    ReturnType, Signature, Stmt, Type, TypeParamBound, TypeReference, Visibility, WherePredicate,
+    ReturnType, Signature, Stmt, Type, TypeParamBound, Visibility, WherePredicate,
 };
 use zip_clone::ZipClone as _;
 
@@ -1924,178 +1924,98 @@ impl<'a> TypleContext<'a> {
     fn replace_typle_get(&self, token_stream: TokenStream) -> Result<Expr> {
         let default_span = token_stream.span();
         let mut tokens = token_stream.into_iter();
-        let expr = syn::parse2::<Expr>(Self::extract_to_comma_or_end(&mut tokens)?)?;
-        let (refmut, expr) = if let Expr::Reference(reference) = expr {
-            (
-                if reference.mutability.is_none() {
-                    Some(false)
-                } else {
-                    Some(true)
-                },
-                *reference.expr,
-            )
-        } else {
-            (None, expr)
-        };
-        let Expr::Index(expr_index) = expr else {
-            return Err(Error::new(default_span, "expected index expression"));
-        };
-        let typle = expr_index.expr;
-        let index = expr_index.index;
-        let token_stream = tokens.collect::<TokenStream>();
-        let func = if token_stream.is_empty() {
-            None
-        } else {
-            Some(syn::parse2::<Expr>(token_stream)?)
-        };
-        let Some(typle_len) = self.typle_len else {
-            return Err(Error::new(
-                default_span,
-                "cannot use typle_get outside of typle macro",
-            ));
-        };
-        let expr = match evaluate_usize(&index) {
-            Some(i) => {
-                // The index is a typle const expression
-                let expr = if i < typle_len {
-                    // Some(t.0)
-                    let mut ts = typle.into_token_stream();
-                    ts.extend([
-                        TokenTree::Punct(proc_macro2::Punct::new('.', proc_macro2::Spacing::Alone)),
-                        TokenTree::Literal(proc_macro2::Literal::usize_unsuffixed(i)),
-                    ]);
-                    let mut expr = Expr::Verbatim(ts);
-                    if let Some(b) = refmut {
-                        expr = Expr::Reference(syn::ExprReference {
-                            attrs: vec![],
-                            and_token: token::And::default(),
-                            mutability: b.then_some(token::Mut::default()),
-                            expr: Box::new(expr),
-                        });
-                    };
-                    some_expr(expr, default_span)
-                } else {
-                    // None - to ensure `None` is the right type of `Option<T>`,
-                    // start with None::<!> and then map it through the map
-                    // function. Although the map function is not applied, this
-                    // ensures it has the right type. If the map function takes
-                    // a reference, then we need a reference to the never type.
-                    let generic = self.typle_macro.never_type.clone();
-                    let generic = match refmut {
-                        Some(b) => Type::Reference(TypeReference {
-                            and_token: token::And::default(),
-                            lifetime: None,
-                            mutability: b.then_some(token::Mut::default()),
-                            elem: Box::new(generic),
-                        }),
-                        None => generic,
-                    };
-                    none_expr(generic, default_span)
-                };
-                if let Some(func) = func {
-                    Expr::MethodCall(ExprMethodCall {
-                        attrs: vec![],
-                        receiver: Box::new(expr),
-                        dot_token: token::Dot::default(),
-                        method: Ident::new("map", default_span),
-                        turbofish: None,
-                        paren_token: token::Paren::default(),
-                        args: [func].into_iter().collect(),
-                    })
-                } else {
-                    expr
+        let (tokens, if_group, else_group) = match tokens.next() {
+            Some(TokenTree::Ident(ident)) if ident == "if" => {
+                let mut tokens = tokens.collect::<Vec<_>>();
+                match tokens.pop() {
+                    Some(TokenTree::Group(group1)) => match tokens.last() {
+                        Some(TokenTree::Ident(ident)) if ident == "else" => {
+                            let else_span = ident.span();
+                            tokens.pop().unwrap();
+                            match tokens.pop() {
+                                Some(TokenTree::Group(group0)) => (tokens, group0, Some(group1)),
+                                Some(tt) => {
+                                    abort!(tt, "Expect body before `else`");
+                                }
+                                None => {
+                                    abort!(else_span, "Expect body before `else`");
+                                }
+                            }
+                        }
+                        Some(_) => (tokens, group1, None),
+                        None => abort!(ident, "Expect expression after `if`"),
+                    },
+                    Some(tt) => {
+                        abort!(tt, "Expect body at end of `if`");
+                    }
+                    None => {
+                        abort!(ident, "Expect expression after `if`");
+                    }
                 }
             }
-            None => {
-                // The index is not const. Use a match ...
-                let ts = typle.into_token_stream();
-                let mut arms = (0..typle_len)
-                    .zip_clone(ts)
-                    .map(|(i, mut ts)| {
-                        ts.extend([
-                            TokenTree::Punct(proc_macro2::Punct::new(
-                                '.',
-                                proc_macro2::Spacing::Alone,
-                            )),
-                            TokenTree::Literal(proc_macro2::Literal::usize_unsuffixed(i)),
-                        ]);
-                        let mut expr = Expr::Verbatim(ts);
-                        if let Some(b) = refmut {
-                            expr = Expr::Reference(syn::ExprReference {
-                                attrs: vec![],
-                                and_token: token::And::default(),
-                                mutability: b.then_some(token::Mut::default()),
-                                expr: Box::new(expr),
-                            });
-                        };
-                        expr = some_expr(expr, default_span);
-                        if let Some(func) = &func {
-                            expr = Expr::MethodCall(ExprMethodCall {
-                                attrs: vec![],
-                                receiver: Box::new(expr),
-                                dot_token: token::Dot::default(),
-                                method: Ident::new("map", default_span),
-                                turbofish: None,
-                                paren_token: token::Paren::default(),
-                                args: [func.clone()].into_iter().collect(),
-                            })
-                        }
-                        syn::Arm {
-                            attrs: vec![],
-                            pat: Pat::Lit(syn::ExprLit {
-                                attrs: vec![],
-                                lit: Lit::Int(syn::LitInt::new(&i.to_string(), default_span)),
-                            }),
-                            guard: None,
-                            fat_arrow_token: token::FatArrow::default(),
-                            body: Box::new(expr),
-                            comma: Some(token::Comma::default()),
-                        }
-                    })
-                    .collect::<Vec<_>>();
-                let generic = self.typle_macro.never_type.clone();
-                let generic = match refmut {
-                    Some(b) => Type::Reference(TypeReference {
-                        and_token: token::And::default(),
-                        lifetime: None,
-                        mutability: b.then_some(token::Mut::default()),
-                        elem: Box::new(generic),
-                    }),
-                    None => generic,
-                };
-                let mut expr = none_expr(generic, default_span);
-                if let Some(func) = func {
-                    expr = Expr::MethodCall(ExprMethodCall {
-                        attrs: vec![],
-                        receiver: Box::new(expr),
-                        dot_token: token::Dot::default(),
-                        method: Ident::new("map", default_span),
-                        turbofish: None,
-                        paren_token: token::Paren::default(),
-                        args: [func].into_iter().collect(),
-                    })
-                }
+            _ => abort!(default_span, "Expect `if` expression"),
+        };
+        let mut tokens = tokens.into_iter();
+        let (pattern, range) = self.parse_pattern_range(&mut tokens, default_span)?;
+        if let Some(tt) = tokens.next() {
+            abort!(tt, "Unexpected token");
+        }
+        let expr = syn::parse2::<Expr>(TokenTree::Group(if_group).into())?;
+        let mut context = self.clone();
+        if let Some(ident) = &pattern {
+            context.constants.insert(ident.clone(), 0);
+        }
 
-                arms.push(syn::Arm {
+        let mut arms = range
+            .zip_clone(expr)
+            .map(|(index, mut expr)| {
+                if let Some(ident) = &pattern {
+                    *context.constants.get_mut(ident).unwrap() = index;
+                }
+                let mut state = BlockState::default();
+                context.replace_expr(&mut expr, &mut state)?;
+                Ok(syn::Arm {
                     attrs: vec![],
-                    pat: Pat::Wild(syn::PatWild {
+                    pat: Pat::Lit(syn::ExprLit {
                         attrs: vec![],
-                        underscore_token: token::Underscore::default(),
+                        lit: Lit::Int(syn::LitInt::new(&index.to_string(), default_span)),
                     }),
                     guard: None,
                     fat_arrow_token: token::FatArrow::default(),
                     body: Box::new(expr),
                     comma: Some(token::Comma::default()),
-                });
-                Expr::Match(syn::ExprMatch {
-                    attrs: vec![],
-                    match_token: token::Match::default(),
-                    expr: index,
-                    brace_token: token::Brace::default(),
-                    arms,
                 })
-            }
-        };
+            })
+            .collect::<Result<Vec<_>>>()?;
+        let expr = syn::parse2::<Expr>(
+            TokenTree::Group(else_group.unwrap_or_else(|| parse_quote!({ unreachable!() }))).into(),
+        )?;
+        arms.push(syn::Arm {
+            attrs: vec![],
+            pat: Pat::Wild(syn::PatWild {
+                attrs: vec![],
+                underscore_token: token::Underscore::default(),
+            }),
+            guard: None,
+            fat_arrow_token: token::FatArrow::default(),
+            body: Box::new(expr),
+            comma: Some(token::Comma::default()),
+        });
+        let expr = Expr::Match(syn::ExprMatch {
+            attrs: vec![],
+            match_token: token::Match::default(),
+            expr: pattern
+                .map(|pat| {
+                    Box::new(Expr::Path(syn::ExprPath {
+                        attrs: vec![],
+                        qself: None,
+                        path: ident_to_path(pat),
+                    }))
+                })
+                .unwrap_or_else(|| parse_quote!(unreachable!())),
+            brace_token: token::Brace::default(),
+            arms,
+        });
         Ok(expr)
     }
 
@@ -2920,6 +2840,7 @@ impl<'a> TypleContext<'a> {
                 match tokens.pop() {
                     Some(TokenTree::Group(group1)) => match tokens.last() {
                         Some(TokenTree::Ident(ident)) if ident == "else" => {
+                            let else_span = ident.span();
                             tokens.pop().unwrap();
                             match tokens.pop() {
                                 Some(TokenTree::Group(group0)) => {
@@ -2938,7 +2859,7 @@ impl<'a> TypleContext<'a> {
                                     abort!(tt, "Expect body before `else`");
                                 }
                                 None => {
-                                    unreachable!("there is at least one token (the `if` token)");
+                                    abort!(else_span, "Expect body before `else`");
                                 }
                             }
                         }
@@ -2953,13 +2874,13 @@ impl<'a> TypleContext<'a> {
                                 Ok(None)
                             }
                         }
-                        None => unreachable!("there is at least one token (the `if` token)"),
+                        None => abort!(ident, "Expect expression after `if`"),
                     },
                     Some(tt) => {
                         abort!(tt, "Expect body at end of `if`");
                     }
                     None => {
-                        unreachable!("there is at least one token (the `if` token)");
+                        abort!(ident, "Expect expression after `if`");
                     }
                 }
             }

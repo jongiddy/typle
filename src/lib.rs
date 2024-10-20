@@ -808,14 +808,7 @@ pub fn typle_fold(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
 
 /// Select an element from a tuple.
 ///
-/// Select an element from a tuple using an index, and return as an [`Option`].
-/// If the index is in the tuple return `Some(t[i])`. Otherwise, return `None`.
-///
-/// Unlike other macros, `typle_get!` can use a non-const index. A function
-/// can be supplied to map the element type to a common type.
-///
-/// The never type may need to be specified as a type that implements the map
-/// function.
+/// Unlike other macros, `typle_get!` can use a non-const index.
 ///
 /// Examples:
 ///
@@ -826,7 +819,7 @@ pub fn typle_fold(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
 /// where
 ///     T<_>: ToString,
 /// {
-///     typle_get!(&t[i], ToString::to_string)
+///     typle_get!(if i in .. { Some(t[[i]].to_string()) } else { None })
 /// }
 /// assert_eq!(get(&('a', 'b', 'c'), 1), Some("b".to_string()));
 /// assert_eq!(get(&('a', 'b', 'c'), 4), None);

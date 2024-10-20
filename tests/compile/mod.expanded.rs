@@ -1209,25 +1209,10 @@ pub mod get {
         T0: Default,
     {
         fn select(&mut self) {
-            ::std::option::Option::Some(&self.t.0);
-            ::std::option::Option::None::<&std::convert::Infallible>;
-            ::std::option::Option::None::<&std::convert::Infallible>;
-            let _: Option<String> = ::std::option::Option::None::<
-                &std::convert::Infallible,
-            >
-                .map(ToString::to_string);
-            let _: Option<String> = ::std::option::Option::None::<
-                &std::convert::Infallible,
-            >
-                .map(|s| s.to_string());
-            *::std::option::Option::Some(&mut self.t.0).unwrap() = <T0 as Default>::default();
             let i = 1;
-            let _: Option<String> = match i {
-                0 => ::std::option::Option::Some(&self.t.0).map(ToString::to_string),
-                _ => {
-                    ::std::option::Option::None::<&std::convert::Infallible>
-                        .map(ToString::to_string)
-                }
+            let _: String = match i {
+                0 => self.t.0.to_string(),
+                _ => String::new(),
             };
         }
     }
@@ -1238,22 +1223,11 @@ pub mod get {
         T0: Default,
     {
         fn select(&mut self) {
-            ::std::option::Option::Some(&self.t.0);
-            ::std::option::Option::Some(&self.t.1);
-            ::std::option::Option::None::<&std::convert::Infallible>;
-            let _: Option<String> = ::std::option::Option::Some(&self.t.1)
-                .map(ToString::to_string);
-            let _: Option<String> = ::std::option::Option::Some(&self.t.1)
-                .map(|s| s.to_string());
-            *::std::option::Option::Some(&mut self.t.0).unwrap() = <T0 as Default>::default();
             let i = 1;
-            let _: Option<String> = match i {
-                0 => ::std::option::Option::Some(&self.t.0).map(ToString::to_string),
-                1 => ::std::option::Option::Some(&self.t.1).map(ToString::to_string),
-                _ => {
-                    ::std::option::Option::None::<&std::convert::Infallible>
-                        .map(ToString::to_string)
-                }
+            let _: String = match i {
+                0 => self.t.0.to_string(),
+                1 => self.t.1.to_string(),
+                _ => String::new(),
             };
         }
     }

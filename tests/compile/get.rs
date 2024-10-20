@@ -9,17 +9,15 @@ pub struct MyStruct<T> {
 impl<T> MyStruct<T>
 where
     T: Tuple,
-    T<_>: ToString,
-    T<0>: Default,
+    T<_>: Default + ToString,
 {
     fn select(&mut self) {
-        typle_get!(&self.t[0]);
-        typle_get!(&self.t[1]);
-        typle_get!(&self.t[2]);
-        let _: Option<String> = typle_get!(&self.t[1], ToString::to_string);
-        let _: Option<String> = typle_get!(&self.t[1], |s| s.to_string());
-        *typle_get!(&mut self.t[0]).unwrap() = <T<0> as Default>::default();
         let i = 1;
-        let _: Option<String> = typle_get!(&self.t[i], ToString::to_string);
+        typle_get!(if i in .. {self.t[[i]] = <T<{i}> as Default>::default();});
+        let _: String = typle_get!(if i in .. {self.t[[i]].to_string()} else { String::new() });
+        match typle_const!(i * 2) {
+            j@.. => {self.t[[j]].to_string()},
+            _ => { String::new() }
+        }
     }
 }
