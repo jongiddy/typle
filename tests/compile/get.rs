@@ -13,11 +13,21 @@ where
 {
     fn select(&mut self) {
         let i = 1;
-        typle_get!(if i in .. {self.t[[i]] = <T<{i}> as Default>::default();});
-        let _: String = typle_get!(if i in .. {self.t[[i]].to_string()} else { String::new() });
-        match typle_const!(i * 2) {
-            j@.. => {self.t[[j]].to_string()},
-            _ => { String::new() }
+        #[typle_attr_if(T::LEN == 1, allow(clippy::single_match))]
+        match i {
+            j @ typle_index!(0..T::LEN) => {
+                self.t[[j]] = <T<{ j }> as Default>::default();
+            }
+            _ => {}
         }
+        #[typle_attr_if(T::LEN == 1, allow(clippy::match_single_binding))]
+        match i {
+            j @ typle_index!(0..T::LEN - 1) => self.t[[j]].to_string(),
+            _ => String::new(),
+        };
+        match i * 2 {
+            j @ typle_index!(0..T::LEN) => self.t[[j]].to_string(),
+            _ => String::new(),
+        };
     }
 }

@@ -6,3 +6,5 @@
     - `typle_for!` macro no longer needs `typle_const!` on an `if` expression.
     - `typle_for!` macro no longer requires `typle_ty!` and `typle_pat!` for
 non-expression types and patterns inside an `if` body.
+
+- `typle_get!` is replaced by `match` with a `typle_index!` range.

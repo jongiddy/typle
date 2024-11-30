@@ -806,34 +806,6 @@ pub fn typle_fold(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
     .into()
 }
 
-/// Select an element from a tuple.
-///
-/// Unlike other macros, `typle_get!` can use a non-const index.
-///
-/// Examples:
-///
-/// ```
-/// # use typle::typle;
-/// #[typle(Tuple for 0..=12, never=std::convert::Infallible)]
-/// fn get<'a, T: Tuple>(t: &'a T, i: usize) -> Option<String>
-/// where
-///     T<_>: ToString,
-/// {
-///     typle_get!(if i in .. { Some(t[[i]].to_string()) } else { None })
-/// }
-/// assert_eq!(get(&('a', 'b', 'c'), 1), Some("b".to_string()));
-/// assert_eq!(get(&('a', 'b', 'c'), 4), None);
-/// ```
-#[proc_macro]
-pub fn typle_get(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    Error::new_spanned(
-        TokenStream::from(item),
-        "typle_get macro only available in item with typle attribute",
-    )
-    .into_compile_error()
-    .into()
-}
-
 /// Create variants in an enum.
 ///
 /// In an enum, the `typle_variant` macro allows the creation of variants for each component.

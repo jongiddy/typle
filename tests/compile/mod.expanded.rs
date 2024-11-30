@@ -1205,12 +1205,22 @@ pub mod get {
     }
     impl<T0> MyStruct<(T0,)>
     where
-        T0: ToString,
-        T0: Default,
+        T0: Default + ToString,
     {
         fn select(&mut self) {
             let i = 1;
-            let _: String = match i {
+            #[allow(clippy::single_match)]
+            match i {
+                0 => {
+                    self.t.0 = <T0 as Default>::default();
+                }
+                _ => {}
+            }
+            #[allow(clippy::match_single_binding)]
+            match i {
+                _ => String::new(),
+            };
+            match i * 2 {
                 0 => self.t.0.to_string(),
                 _ => String::new(),
             };
@@ -1218,13 +1228,25 @@ pub mod get {
     }
     impl<T0, T1> MyStruct<(T0, T1)>
     where
-        T0: ToString,
-        T1: ToString,
-        T0: Default,
+        T0: Default + ToString,
+        T1: Default + ToString,
     {
         fn select(&mut self) {
             let i = 1;
-            let _: String = match i {
+            match i {
+                0 => {
+                    self.t.0 = <T0 as Default>::default();
+                }
+                1 => {
+                    self.t.1 = <T1 as Default>::default();
+                }
+                _ => {}
+            }
+            match i {
+                0 => self.t.0.to_string(),
+                _ => String::new(),
+            };
+            match i * 2 {
                 0 => self.t.0.to_string(),
                 1 => self.t.1.to_string(),
                 _ => String::new(),
