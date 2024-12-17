@@ -1253,6 +1253,215 @@ pub mod get {
             };
         }
     }
+    #[allow(non_camel_case_types)]
+    trait _typle_fn_get_component {
+        type Return;
+        fn apply(self) -> Self::Return;
+    }
+    impl<'t, C> _typle_fn_get_component for (&'t (C,), usize) {
+        type Return = Option<&'t C>;
+        fn apply(self) -> Self::Return {
+            let (t, i) = self;
+            {
+                match i {
+                    0 => Some(&t.0),
+                    _ => None,
+                }
+            }
+        }
+    }
+    impl<'t, C> _typle_fn_get_component for (&'t (C, C), usize) {
+        type Return = Option<&'t C>;
+        fn apply(self) -> Self::Return {
+            let (t, i) = self;
+            {
+                match i {
+                    0 => Some(&t.0),
+                    1 => Some(&t.1),
+                    _ => None,
+                }
+            }
+        }
+    }
+    impl<'t, C> _typle_fn_get_component for (&'t (C, C, C), usize) {
+        type Return = Option<&'t C>;
+        fn apply(self) -> Self::Return {
+            let (t, i) = self;
+            {
+                match i {
+                    0 => Some(&t.0),
+                    1 => Some(&t.1),
+                    2 => Some(&t.2),
+                    _ => None,
+                }
+            }
+        }
+    }
+    impl<'t, C> _typle_fn_get_component for (&'t (C, C, C, C), usize) {
+        type Return = Option<&'t C>;
+        fn apply(self) -> Self::Return {
+            let (t, i) = self;
+            {
+                match i {
+                    0 => Some(&t.0),
+                    1 => Some(&t.1),
+                    2 => Some(&t.2),
+                    3 => Some(&t.3),
+                    _ => None,
+                }
+            }
+        }
+    }
+    impl<'t, C> _typle_fn_get_component for (&'t (C, C, C, C, C), usize) {
+        type Return = Option<&'t C>;
+        fn apply(self) -> Self::Return {
+            let (t, i) = self;
+            {
+                match i {
+                    0 => Some(&t.0),
+                    1 => Some(&t.1),
+                    2 => Some(&t.2),
+                    3 => Some(&t.3),
+                    4 => Some(&t.4),
+                    _ => None,
+                }
+            }
+        }
+    }
+    impl<'t, C> _typle_fn_get_component for (&'t (C, C, C, C, C, C), usize) {
+        type Return = Option<&'t C>;
+        fn apply(self) -> Self::Return {
+            let (t, i) = self;
+            {
+                match i {
+                    0 => Some(&t.0),
+                    1 => Some(&t.1),
+                    2 => Some(&t.2),
+                    3 => Some(&t.3),
+                    4 => Some(&t.4),
+                    5 => Some(&t.5),
+                    _ => None,
+                }
+            }
+        }
+    }
+    fn get_component<'t, T>(
+        t: &'t T,
+        i: usize,
+    ) -> <(&'t T, usize) as _typle_fn_get_component>::Return
+    where
+        (&'t T, usize): _typle_fn_get_component,
+    {
+        <(&'t T, usize) as _typle_fn_get_component>::apply((t, i))
+    }
+    #[allow(non_camel_case_types)]
+    trait _typle_fn_get_component_or_default {
+        type Return;
+        fn apply(self) -> Self::Return;
+    }
+    impl<'t, C> _typle_fn_get_component_or_default for (&'t (C,), usize, &'t C) {
+        type Return = &'t C;
+        fn apply(self) -> Self::Return {
+            let (t, i, default) = self;
+            {
+                match i {
+                    0 => &t.0,
+                    _ => default,
+                }
+            }
+        }
+    }
+    impl<'t, C> _typle_fn_get_component_or_default for (&'t (C, C), usize, &'t C) {
+        type Return = &'t C;
+        fn apply(self) -> Self::Return {
+            let (t, i, default) = self;
+            {
+                match i {
+                    0 => &t.0,
+                    1 => &t.1,
+                    _ => default,
+                }
+            }
+        }
+    }
+    impl<'t, C> _typle_fn_get_component_or_default for (&'t (C, C, C), usize, &'t C) {
+        type Return = &'t C;
+        fn apply(self) -> Self::Return {
+            let (t, i, default) = self;
+            {
+                match i {
+                    0 => &t.0,
+                    1 => &t.1,
+                    2 => &t.2,
+                    _ => default,
+                }
+            }
+        }
+    }
+    impl<'t, C> _typle_fn_get_component_or_default for (&'t (C, C, C, C), usize, &'t C) {
+        type Return = &'t C;
+        fn apply(self) -> Self::Return {
+            let (t, i, default) = self;
+            {
+                match i {
+                    0 => &t.0,
+                    1 => &t.1,
+                    2 => &t.2,
+                    3 => &t.3,
+                    _ => default,
+                }
+            }
+        }
+    }
+    impl<'t, C> _typle_fn_get_component_or_default
+    for (&'t (C, C, C, C, C), usize, &'t C) {
+        type Return = &'t C;
+        fn apply(self) -> Self::Return {
+            let (t, i, default) = self;
+            {
+                match i {
+                    0 => &t.0,
+                    1 => &t.1,
+                    2 => &t.2,
+                    3 => &t.3,
+                    4 => &t.4,
+                    _ => default,
+                }
+            }
+        }
+    }
+    impl<'t, C> _typle_fn_get_component_or_default
+    for (&'t (C, C, C, C, C, C), usize, &'t C) {
+        type Return = &'t C;
+        fn apply(self) -> Self::Return {
+            let (t, i, default) = self;
+            {
+                match i {
+                    0 => &t.0,
+                    1 => &t.1,
+                    2 => &t.2,
+                    3 => &t.3,
+                    4 => &t.4,
+                    5 => &t.5,
+                    _ => default,
+                }
+            }
+        }
+    }
+    fn get_component_or_default<'t, T, C>(
+        t: &'t T,
+        i: usize,
+        default: &'t C,
+    ) -> <(&'t T, usize, &'t C) as _typle_fn_get_component_or_default>::Return
+    where
+        (&'t T, usize, &'t C): _typle_fn_get_component_or_default,
+    {
+        <(
+            &'t T,
+            usize,
+            &'t C,
+        ) as _typle_fn_get_component_or_default>::apply((t, i, default))
+    }
 }
 pub mod issue1 {
     #![allow(unused)]

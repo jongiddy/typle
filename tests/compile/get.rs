@@ -31,3 +31,25 @@ where
         };
     }
 }
+
+#[typle(Tuple for 1..=6)]
+fn get_component<'t, C, T>(t: &'t T, i: usize) -> Option<&'t C>
+where
+    T: Tuple<C>,
+{
+    match i {
+        j @ typle_index!(0..T::LEN) => Some(&t[[j]]),
+        _ => None,
+    }
+}
+
+#[typle(Tuple for 1..=6)]
+fn get_component_or_default<'t, C, T>(t: &'t T, i: usize, default: &'t C) -> &'t C
+where
+    T: Tuple<C>,
+{
+    match i {
+        j @ typle_index!(0..T::LEN) => &t[[j]],
+        _ => default,
+    }
+}

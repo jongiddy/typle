@@ -6,12 +6,13 @@ use std::rc::Rc;
 use proc_macro2::{Delimiter, Group, Ident, Span, TokenStream, TokenTree};
 use quote::{format_ident, ToTokens};
 use syn::parse::Parser as _;
+use syn::punctuated::Punctuated;
 use syn::spanned::Spanned as _;
 use syn::{
-    punctuated, token, AttrStyle, Attribute, BinOp, Block, Error, Expr, Fields, FnArg,
-    GenericArgument, GenericParam, Generics, ImplItem, Item, Label, Lit, Macro, MacroDelimiter,
+    token, AttrStyle, Attribute, BinOp, Block, Error, Expr, Fields, FnArg, GenericArgument,
+    GenericParam, Generics, ImplItem, Item, Label, LifetimeParam, Lit, Macro, MacroDelimiter,
     Member, Meta, Pat, Path, PathArguments, QSelf, Result, ReturnType, Signature, Stmt, Type,
-    TypeParamBound, Visibility, WherePredicate,
+    TypeParam, TypeParamBound, Visibility, WherePredicate,
 };
 use zip_clone::ZipClone as _;
 
@@ -174,7 +175,7 @@ impl<'a> TypleContext<'a> {
 
     fn typle_bounds(
         &self,
-        bounds: &mut punctuated::Punctuated<TypeParamBound, token::Plus>,
+        bounds: &mut Punctuated<TypeParamBound, token::Plus>,
         type_ident: &Ident,
     ) -> Result<Option<Typle>> {
         let mut result = None;
@@ -261,7 +262,7 @@ impl<'a> TypleContext<'a> {
                             if evaluate_bool(&expr)? {
                                 meta_list.tokens = tokens.collect();
                                 let nested = attr.parse_args_with(
-                                    punctuated::Punctuated::<Meta, token::Comma>::parse_terminated,
+                                    Punctuated::<Meta, token::Comma>::parse_terminated,
                                 )?;
                                 for meta in nested {
                                     attrs.push(Attribute {
@@ -1313,7 +1314,7 @@ impl<'a> TypleContext<'a> {
 
     fn replace_generic_arguments(
         &self,
-        args: &mut punctuated::Punctuated<GenericArgument, token::Comma>,
+        args: &mut Punctuated<GenericArgument, token::Comma>,
     ) -> Result<()> {
         for arg in std::mem::take(args) {
             match arg {
@@ -1413,22 +1414,21 @@ impl<'a> TypleContext<'a> {
         let fn_name = &function.sig.ident;
         let fn_meta = &function.attrs;
         let fn_vis = &function.vis;
-        let fn_type_params = &function.sig.generics.params;
-        let fn_type_params_no_constraints = remove_constraints(fn_type_params);
+        let fn_type_params_no_constraints = remove_constraints(&function.sig);
         let fn_input_params = &function.sig.inputs;
         let mut type_tuple = syn::TypeTuple {
             paren_token: token::Paren::default(),
-            elems: punctuated::Punctuated::new(),
+            elems: Punctuated::new(),
         };
         let mut pat_tuple = syn::PatTuple {
             attrs: Vec::new(),
             paren_token: token::Paren::default(),
-            elems: punctuated::Punctuated::new(),
+            elems: Punctuated::new(),
         };
         let mut value_tuple = syn::ExprTuple {
             attrs: Vec::new(),
             paren_token: token::Paren::default(),
-            elems: punctuated::Punctuated::new(),
+            elems: Punctuated::new(),
         };
         let fn_body = function.block;
         for arg in fn_input_params {
@@ -1503,7 +1503,7 @@ impl<'a> TypleContext<'a> {
         let return_type = match function.sig.output {
             ReturnType::Default => Type::Tuple(syn::TypeTuple {
                 paren_token: token::Paren::default(),
-                elems: punctuated::Punctuated::new(),
+                elems: Punctuated::new(),
             }),
             ReturnType::Type(_, t) => *t,
         };
@@ -2082,7 +2082,7 @@ impl<'a> TypleContext<'a> {
                 let mut tuple = syn::PatTuple {
                     attrs: std::mem::take(&mut m.attrs),
                     paren_token: token::Paren::default(),
-                    elems: punctuated::Punctuated::new(),
+                    elems: Punctuated::new(),
                 };
                 let token_stream = std::mem::take(&mut m.mac.tokens);
                 let default_span = token_stream.span();
@@ -2202,7 +2202,7 @@ impl<'a> TypleContext<'a> {
             if macro_name == "typle_for" {
                 let mut tuple = syn::TypeTuple {
                     paren_token: token::Paren::default(),
-                    elems: punctuated::Punctuated::new(),
+                    elems: Punctuated::new(),
                 };
                 let token_stream = std::mem::take(&mut m.mac.tokens);
                 let default_span = token_stream.span();
@@ -3002,18 +3002,114 @@ pub fn ident_to_path(ident: Ident) -> Path {
     }
 }
 
-fn remove_constraints(
-    fn_type_params: &punctuated::Punctuated<GenericParam, token::Comma>,
-) -> punctuated::Punctuated<GenericParam, token::Comma> {
-    let mut output = punctuated::Punctuated::new();
-    for param in fn_type_params.iter() {
-        if let GenericParam::Type(type_param) = param {
-            output.push(GenericParam::Type(syn::TypeParam {
-                bounds: punctuated::Punctuated::new(),
-                ..type_param.clone()
-            }));
-        } else {
-            output.push(param.clone());
+#[derive(Default)]
+struct GenericParameterMap<'a> {
+    lifetimes: HashMap<&'a Ident, &'a LifetimeParam>,
+    named: HashMap<&'a Ident, &'a GenericParam>,
+}
+
+// Remove any bounds on a signature's generic parameters. Return a list of generic parameters that
+// are still required. e.g. `fn f<'a, C, T: Tuple<C>>(t: &'a T)` becomes `fn f<'a, T>(t: &'a T)`.
+fn remove_constraints(sig: &Signature) -> Punctuated<GenericParam, token::Comma> {
+    let mut output = Punctuated::new();
+    let mut param_map = GenericParameterMap::default();
+    for param in &sig.generics.params {
+        match param {
+            GenericParam::Lifetime(lifetime_param) => {
+                param_map
+                    .lifetimes
+                    .insert(&lifetime_param.lifetime.ident, lifetime_param);
+            }
+            GenericParam::Type(type_param) => {
+                param_map.named.insert(&type_param.ident, param);
+            }
+            GenericParam::Const(const_param) => {
+                param_map.named.insert(&const_param.ident, param);
+            }
+        }
+    }
+    fn handle_type(
+        ty: &Type,
+        param_map: &mut GenericParameterMap,
+        output: &mut Punctuated<GenericParam, token::Comma>,
+    ) {
+        match ty {
+            Type::Array(type_array) => {
+                handle_type(&type_array.elem, param_map, output);
+            }
+            Type::BareFn(_type_bare_fn) => {}
+            Type::Group(type_group) => {
+                handle_type(&type_group.elem, param_map, output);
+            }
+            Type::ImplTrait(_type_impl_trait) => {}
+            Type::Infer(_type_infer) => {}
+            Type::Macro(_type_macro) => {}
+            Type::Never(_type_never) => {}
+            Type::Paren(type_paren) => {
+                handle_type(&type_paren.elem, param_map, output);
+            }
+            Type::Path(type_path) => {
+                if let Some(ident) = type_path.path.get_ident() {
+                    if let Some(param) = param_map.named.remove(ident) {
+                        match param {
+                            GenericParam::Lifetime(_) => unreachable!(),
+                            GenericParam::Type(type_param) => {
+                                output.push(GenericParam::Type(TypeParam {
+                                    attrs: vec![],
+                                    ident: type_param.ident.clone(),
+                                    colon_token: None,
+                                    bounds: Punctuated::new(),
+                                    eq_token: None,
+                                    default: None,
+                                }))
+                            }
+                            GenericParam::Const(_) => {
+                                output.push(param.clone());
+                            }
+                        }
+                    }
+                }
+            }
+            Type::Ptr(type_ptr) => {
+                handle_type(&type_ptr.elem, param_map, output);
+            }
+            Type::Reference(type_reference) => {
+                if let Some(lifetime) = &type_reference.lifetime {
+                    if let Some(param) = param_map.lifetimes.remove(&lifetime.ident) {
+                        output.push(GenericParam::Lifetime(param.clone()))
+                    }
+                }
+                handle_type(&type_reference.elem, param_map, output);
+            }
+            Type::Slice(type_slice) => {
+                handle_type(&type_slice.elem, param_map, output);
+            }
+            Type::TraitObject(_type_trait_object) => {}
+            Type::Tuple(type_tuple) => {
+                for elem in &type_tuple.elems {
+                    handle_type(elem, param_map, output);
+                }
+            }
+            Type::Verbatim(_token_stream) => {}
+            _ => {}
+        }
+    }
+    for input in &sig.inputs {
+        match input {
+            FnArg::Receiver(receiver) => {
+                if let Some(lifetime) = receiver
+                    .reference
+                    .as_ref()
+                    .and_then(|(_, lifetime)| lifetime.as_ref())
+                {
+                    if let Some(param) = param_map.lifetimes.remove(&lifetime.ident) {
+                        output.push(GenericParam::Lifetime(param.clone()));
+                    }
+                }
+            }
+            FnArg::Typed(pat_type) => {
+                handle_type(&pat_type.ty, &mut param_map, &mut output);
+            }
         }
     }
     output

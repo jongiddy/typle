@@ -214,6 +214,25 @@
 //! assert_eq!(m.interleave(), [14, 9]);
 //! ```
 //!
+//! `typle_index!` can also be used in a `match` expression:
+//!
+//! ```rust
+//! # use typle::typle;
+//! #[typle(Tuple for 1..=12)]
+//! fn get_component<'t, C, T>(t: &'t T, i: usize) -> Option<&'t C>
+//! where
+//!     T: Tuple<C>,
+//! {
+//!     match i {
+//!         j @ typle_index!(0..T::LEN) => Some(&t[[j]]),
+//!         _ => None,
+//!     }
+//! }
+//!
+//! let t = ('a', 'b', 'c');
+//! assert_eq!(get_component(&t, 1), Some(&'b'));
+//! assert_eq!(get_component(&t, 4), None);
+//! ```
 //! Applying `typle` to an `enum` implements the `enum` for the maximum length,
 //! allowing use of typle index variables to define the variants.
 //!
