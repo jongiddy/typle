@@ -1,3 +1,60 @@
+pub mod const_generic {
+    #![allow(dead_code)]
+    use typle::typle;
+    struct Test<const N: usize> {
+        t: [usize; N],
+    }
+    #[allow(unused_braces)]
+    impl<'a> From<()> for Test<{ 0 }> {
+        #[expect(unused_variables)]
+        fn from(t: ()) -> Self {
+            Self { t: [] }
+        }
+    }
+    #[allow(unused_braces)]
+    impl<'a> From<(&'a str,)> for Test<{ 1 }> {
+        fn from(t: (&'a str,)) -> Self {
+            Self { t: [t.0.len()] }
+        }
+    }
+    #[allow(unused_braces)]
+    impl<'a> From<(&'a str, &'a str)> for Test<{ 2 }> {
+        fn from(t: (&'a str, &'a str)) -> Self {
+            Self { t: [t.0.len(), t.1.len()] }
+        }
+    }
+    const X: usize = 1;
+    impl<'a> From<(usize, ())> for Test<{ X }> {
+        fn from(value: (usize, ())) -> Self {
+            Self { t: [value.0] }
+        }
+    }
+    impl<'a> From<(usize, (&'a str,))> for Test<{ X }> {
+        fn from(value: (usize, (&'a str,))) -> Self {
+            Self { t: [value.0] }
+        }
+    }
+    impl<'a> From<(usize, (&'a str, &'a str))> for Test<{ X }> {
+        fn from(value: (usize, (&'a str, &'a str))) -> Self {
+            Self { t: [value.0] }
+        }
+    }
+    impl<'a> From<(u8, ())> for Test<1> {
+        fn from(value: (u8, ())) -> Self {
+            Self { t: [value.0 as usize] }
+        }
+    }
+    impl<'a> From<(u8, (&'a str,))> for Test<1> {
+        fn from(value: (u8, (&'a str,))) -> Self {
+            Self { t: [value.0 as usize] }
+        }
+    }
+    impl<'a> From<(u8, (&'a str, &'a str))> for Test<1> {
+        fn from(value: (u8, (&'a str, &'a str))) -> Self {
+            Self { t: [value.0 as usize] }
+        }
+    }
+}
 pub mod doc_typle {
     #![allow(dead_code)]
     use typle::typle;

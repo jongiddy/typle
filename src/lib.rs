@@ -56,7 +56,7 @@
 //! assert_eq!(split((3.0,)), (3.0, ()));
 //! ```
 //!
-//! The [`typle_for!`] macro creates a new tuple type or expression. Inside
+//! The `typle_for!` macro creates a new tuple type or expression. Inside
 //! the macro the typle index variable provides access to each component of
 //! an existing tuple type or expression.
 //!
@@ -142,7 +142,7 @@
 //! );
 //! ```
 //!
-//! Note that this behaves differently to [`typle_for!`]. The `typle_for!` macro
+//! Note that this behaves differently to `typle_for!`. The `typle_for!` macro
 //! produces a new tuple. The `typle!` macro produces a sequence of components
 //! that must appear inside an existing tuple, array, or argument list.
 //!
