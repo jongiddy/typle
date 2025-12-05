@@ -11,4 +11,5 @@ non-expression types and patterns inside an `if` body.
 - `typle_get!` is replaced by `match` with a `typle_index!` range.
 
 ## Other changes
+- `typle_for!` is deprecated. Use `typle!` inside a tuple or array instead.
 - add `LAST` associated variable equal to `LEN - 1`.

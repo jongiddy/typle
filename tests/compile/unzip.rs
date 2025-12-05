@@ -22,11 +22,11 @@ pub trait TryUnzip {
 //     I: Iterator<Item = Result<T, E>>,
 //     T: Tuple,
 // {
-//     type Output = typle_for!(i in .. => Vec<T<{i}>>);
+//     type Output = (typle!(i in .. => Vec<T<{i}>>));
 //     type Error = E;
 //
 //     fn try_unzip(self) -> Result<Self::Output, Self::Error> {
-//         let mut vecs = typle_for!(i in .. => Vec::new());
+//         let mut vecs = (typle!(i in .. => Vec::new()));
 //         for result in self {
 //             let t = result?;
 //             for typle_index!(i) in 0..T::LEN {
@@ -47,16 +47,16 @@ pub trait TryUnzipModified<Output> {
 }
 
 #[typle(Tuple for 2..=3)]
-impl<I, T, E> TryUnzipModified<typle_for!(i in .. => Vec<T<{i}>>)> for I
+impl<I, T, E> TryUnzipModified<(typle!(i in .. => Vec<T<{i}>>))> for I
 where
     I: Iterator<Item = Result<T, E>>,
     T: Tuple,
 {
     type Error = E;
 
-    fn try_unzip(self) -> Result<typle_for!(i in .. => Vec<T<{i}>>), Self::Error> {
+    fn try_unzip(self) -> Result<(typle!(i in .. => Vec<T<{i}>>)), Self::Error> {
         #[typle_attr_if(T::LEN == 0, allow(unused_mut))]
-        let mut vecs = typle_for!(.. => Vec::new());
+        let mut vecs = (typle!(.. => Vec::new()));
         for result in self {
             #[typle_attr_if(T::LEN == 0, allow(clippy::let_unit_value, unused_variables))]
             let t = result?;
@@ -87,14 +87,14 @@ impl<T, E> TryUnzipTuple<T, E> for T
 where
     T: Tuple,
 {
-    type Output = typle_for!(i in .. => Vec<T<{i}>>);
+    type Output = (typle!(i in .. => Vec<T<{i}>>));
 
     fn try_unzip<I>(iter: I) -> Result<Self::Output, E>
     where
         I: Iterator<Item = Result<T, E>>,
     {
         #[typle_attr_if(T::LEN == 0, allow(unused_mut))]
-        let mut vecs = typle_for!(.. => Vec::new());
+        let mut vecs = (typle!(.. => Vec::new()));
         for result in iter {
             #[typle_attr_if(T::LEN == 0, allow(clippy::let_unit_value, unused_variables))]
             let t = result?;

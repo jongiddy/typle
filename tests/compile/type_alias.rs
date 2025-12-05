@@ -14,4 +14,4 @@ type Alias<T>
 where
     T: Tuple,
     T<_>: Process,
-= typle_for!(i in ..T::MAX => Option<T<{i}>::Output>);
+= (typle!(i in ..T::MAX => Option<T<{i}>::Output>));

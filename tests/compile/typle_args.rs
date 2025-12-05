@@ -22,12 +22,12 @@ fn append_even<T: Tuple>(t: T, a: u32) -> (typle!(i in .. => if i % 2 == 0 {T<{i
 }
 
 #[typle(Tuple for 0..=3)]
-fn even_string_odd<T: Tuple>(t: T) -> (typle!(i in .. => if i % 2 == 0 {String} else {T<{i}>}),)
+fn even_string_odd<T: Tuple>(t: T) -> (typle!(i in .. => if i % 2 == 0 {String} else {T<{i}>}))
 where
     typle_bound!(i in .. => if i % 2 == 0 {T<{i}>}): ToString,
 {
     #[typle_attr_if(T::LEN == 0, allow(clippy::unused_unit))]
-    (typle!(i in .. => if i % 2 == 0 {t[[i]].to_string()} else {t[[i]]}),)
+    (typle!(i in .. => if i % 2 == 0 {t[[i]].to_string()} else {t[[i]]}))
 }
 
 struct World {}
