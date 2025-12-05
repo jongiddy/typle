@@ -6,7 +6,7 @@ pub mod const_generic {
     }
     #[allow(unused_braces)]
     impl<'a> From<()> for Test<{ 0 }> {
-        #[expect(unused_variables)]
+        #[allow(unused_variables)]
         fn from(t: ()) -> Self {
             Self { t: [] }
         }
