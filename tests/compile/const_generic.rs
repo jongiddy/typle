@@ -12,7 +12,7 @@ impl<'a> From<T> for Test<{T::LEN}>
 where
     T: Tuple<&'a str>,
 {
-    #[typle_attr_if(T::LEN == 0, expect(unused_variables))]
+    #[typle_attr_if(T::LEN == 0, allow(unused_variables))]
     fn from(t: T) -> Self {
         Self {
             t: [
