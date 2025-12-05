@@ -9,7 +9,7 @@ pub fn hash<'a, T, S: Hasher>(tuple: &'a T, state: &'a mut S)
 where
     T: Tuple,
     T<_>: Hash,
-    T<{ T::LEN - 1 }>: ?Sized,
+    T<{ T::LAST }>: ?Sized,
 {
     for typle_index!(i) in 0..T::LEN {
         tuple[[i]].hash(state);

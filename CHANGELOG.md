@@ -1,4 +1,5 @@
 # 0.11
+
 ## Backwards-incompatible changes
 - `typle_for!` no longer supports different behaviour based on delimiters.
     - To create an array use `typle!` inside brackets.
@@ -8,3 +9,6 @@
 non-expression types and patterns inside an `if` body.
 
 - `typle_get!` is replaced by `match` with a `typle_index!` range.
+
+## Other changes
+- add `LAST` associated variable equal to `LEN - 1`.

@@ -22,7 +22,7 @@ where
         }
         #[typle_attr_if(T::LEN == 1, allow(clippy::match_single_binding))]
         match i {
-            j @ typle_index!(0..T::LEN - 1) => self.t[[j]].to_string(),
+            j @ typle_index!(0..T::LAST) => self.t[[j]].to_string(),
             _ => String::new(),
         };
         match i * 2 {

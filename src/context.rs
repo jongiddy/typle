@@ -876,6 +876,30 @@ impl<'a> TypleContext<'a> {
                                     // may have omitted the typle constraint.
                                     state.suspicious_ident = Some(ident1.clone());
                                 }
+                            } else if ident2 == "LAST" {
+                                if ident1 == &self.typle_macro.ident
+                                    || self.typles.contains_key(ident1)
+                                {
+                                    // Tuple::LAST or <T as Tuple>::LAST
+                                    let Some(typle_len) = self.typle_len else {
+                                        abort!(ident2, "LAST not available outside fn or impl");
+                                    };
+                                    if typle_len == 0 {
+                                        abort!(ident2, "LAST not available when LEN == 0");
+                                    }
+                                    *expr = Expr::Lit(syn::PatLit {
+                                        attrs: std::mem::take(&mut path.attrs),
+                                        lit: Lit::Int(syn::LitInt::new(
+                                            &(typle_len - 1).to_string(),
+                                            path.span(),
+                                        )),
+                                    });
+                                    return Ok(());
+                                } else {
+                                    // Path looks like a typle associated constant: the caller
+                                    // may have omitted the typle constraint.
+                                    state.suspicious_ident = Some(ident1.clone());
+                                }
                             } else if ident2 == "MAX" {
                                 if ident1 == &self.typle_macro.ident
                                     || self.typles.contains_key(ident1)

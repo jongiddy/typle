@@ -62,6 +62,8 @@
 //!
 //! The associated constant `LEN` provides the length of the tuple in each
 //! generated item. This value can be used in typle index expressions.
+//! The associated constant `LAST` is always equal to `LEN - 1`. Using `LAST`
+//! for a zero-length tuple will fail to compile.
 //!
 //! ```
 //! # use typle::typle;
@@ -490,7 +492,7 @@
 //! where
 //!     T: Tuple,
 //!     T<_>: Hash,
-//!     T<{T::LEN - 1}>: ?Sized,
+//!     T<{T::LAST}>: ?Sized,
 //! {
 //!     for typle_index!(i) in 0..T::LEN {
 //!         tuple[[i]].hash(state);
