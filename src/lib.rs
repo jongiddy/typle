@@ -146,6 +146,21 @@
 //! produces a new tuple. The `typle!` macro produces a sequence of components
 //! that must appear inside an existing tuple, array, or argument list.
 //!
+//! For types, `T<{start..end}>` is a shorthand for `typle!(i in start..end => T<{i}>)`.
+//! For expressions, `t[[start..end]]` is a shorthand for `typle!(i in start..end => t[[i]])`.
+//!
+//! ```
+//! # use typle::typle;
+//! #[typle(Tuple for 0..12)]
+//! fn append<T: Tuple, A>(t: T, a: A) -> (T<{..}>, A) {
+//!     (t[[..]], a)
+//! }
+//!
+//! assert_eq!(append((1, 2, 3), 4), (1, 2, 3, 4));
+//! ```
+//!
+//! # Conditionals
+//!
 //! The `typle!`, `typle_for!`, and `typle_bound!` macros accept an `if` statement with an optional
 //! `else` clause. If there is no `else` clause the macro filters out components that do not match
 //! the condition.
@@ -166,20 +181,11 @@
 //!     #[typle_attr_if(T::LEN == 0, allow(clippy::unused_unit))]
 //!     typle_for!(i in .. => if i % 2 == 0 { t[[i]].to_string() } else { t[[i]] })
 //! }
+//!
+//! assert_eq!(even_string_odd((0, 1, 2, 3)), ("0".to_owned(), 1, "2".to_owned(), 3));
 //! ```
 //!
-//! For types, `T<{start..end}>` is a shorthand for `typle!(i in start..end => T<{i}>)`.
-//! For expressions, `t[[start..end]]` is a shorthand for `typle!(i in start..end => t[[i]])`.
-//!
-//! ```
-//! # use typle::typle;
-//! #[typle(Tuple for 0..12)]
-//! fn append<T: Tuple, A>(t: T, a: A) -> (T<{..}>, A) {
-//!     (t[[..]], a)
-//! }
-//!
-//! assert_eq!(append((1, 2, 3), 4), (1, 2, 3, 4));
-//! ```
+//! # Iteration
 //!
 //! Use the `typle_index!` macro in a `for` loop to iterate over a range bounded
 //! by typle index expressions.
@@ -214,7 +220,10 @@
 //! assert_eq!(m.interleave(), [14, 9]);
 //! ```
 //!
-//! `typle_index!` can also be used in a `match` expression:
+//! # Selection
+//!
+//! Indexing using `[[i]]` only works with tuple index expressions. To select a component from a
+//! tuple value using a variable, use `typle_index!` in a `match` expression:
 //!
 //! ```rust
 //! # use typle::typle;
@@ -223,6 +232,7 @@
 //! where
 //!     T: Tuple<C>,
 //! {
+//!     // `i` is a variable, `j` is a typle index variable.
 //!     match i {
 //!         j @ typle_index!(0..T::LEN) => Some(&t[[j]]),
 //!         _ => None,
@@ -233,8 +243,11 @@
 //! assert_eq!(get_component(&t, 1), Some(&'b'));
 //! assert_eq!(get_component(&t, 4), None);
 //! ```
-//! Applying `typle` to an `enum` implements the `enum` for the maximum length,
-//! allowing use of typle index variables to define the variants.
+//!
+//! # enums
+//!
+//! Applying `typle` to an `enum` implements the `enum` for the maximum length
+//! and allows use of typle index variables to define the variants.
 //!
 //! The [`typle_variant!`] macro creates multiple enum variants by looping
 //! similarly to `typle_for!`.
@@ -254,6 +267,7 @@
 //!     T: Tuple,
 //!     T<_>: Extract,
 //! {
+//!     // The output of all previous components plus the state of the current component.
 //!     S = typle_variant!(i in ..T::MAX =>
 //!         typle_for!(j in ..i => T::<{j}>::Output), Option<T<{i}>::State>
 //!     ),

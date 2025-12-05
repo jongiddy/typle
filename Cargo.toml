@@ -7,7 +7,7 @@ license = "MIT"
 categories = ["rust-patterns"]
 keywords = ["tuple", "metaprogramming", "variadic"]
 repository = "https://github.com/jongiddy/typle"
-rust-version = "1.65"
+rust-version = "1.68.2"
 
 [lib]
 proc-macro = true
