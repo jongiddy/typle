@@ -13,11 +13,11 @@ impl X {
     }
 
     pub fn associated<T: Tuple<u32>>(t: T, i: u32) -> T {
-        typle_for!(j in .. => t[[j]] + i)
+        (typle!(j in .. => t[[j]] + i))
     }
 
     pub fn inherent1<'a, T: Tuple<u32>>(&'a self, t: T) -> T {
-        typle_for!(j in .. => t[[j]] + self.i)
+        (typle!(j in .. => t[[j]] + self.i))
     }
 
     pub fn inherent2<'a, T: Tuple<u32>>(&'a self, t: T) -> T {
@@ -39,12 +39,12 @@ impl X {
     pub fn inherent5<'a, T: Tuple<u32>>(&'a self, t: T) -> T {
         #[typle_attr_if(T::LEN == 0, allow(unused_variables))]
         let X { i } = self;
-        typle_for!(j in .. => t[[j]] + i)
+        (typle!(j in .. => t[[j]] + i))
     }
 
     pub fn inherent6<'a, T: Tuple<u32>>(&'a self, t: T) -> T {
         #[typle_attr_if(T::LEN == 0, allow(unused_variables))]
         let Self { i } = self;
-        typle_for!(j in .. => t[[j]] + i)
+        (typle!(j in .. => t[[j]] + i))
     }
 }

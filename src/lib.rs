@@ -1,4 +1,4 @@
-//! The `typle` macro generates code for multiple tuple lengths. This code
+//! The `typle` attribute macro generates code for multiple tuple lengths. This code
 //!
 //! ```rust
 //! use typle::typle;
@@ -56,39 +56,21 @@
 //! assert_eq!(split((3.0,)), (3.0, ()));
 //! ```
 //!
-//! The `typle_for!` macro creates a new tuple type or expression. Inside
+//! The `typle!` macro creates a new sequence of types or expressions. Inside
 //! the macro the typle index variable provides access to each component of
 //! an existing tuple type or expression.
 //!
 //! The associated constant `LEN` provides the length of the tuple in each
 //! generated item. This value can be used in typle index expressions.
-//! The associated constant `LAST` is always equal to `LEN - 1`. Using `LAST`
-//! for a zero-length tuple will fail to compile.
 //!
 //! ```
 //! # use typle::typle;
 //! #[typle(Tuple for 0..=12)]
-//! fn reverse<T: Tuple>(t: T) -> typle_for!(i in 1..=T::LEN => T<{T::LEN - i}>) {
-//!     typle_for!(i in 1..=T::LEN => t[[T::LEN - i]])
+//! fn reverse<T: Tuple>(t: T) -> (typle!(i in 1..=T::LEN => T<{T::LEN - i}>)) {
+//!     (typle!(i in 1..=T::LEN => t[[T::LEN - i]]))
 //! }
 //!
 //! assert_eq!(reverse((Some(3), "four", 5)), (5, "four", Some(3)));
-//! ```
-//!
-//! The [`typle_fold!`] macro reduces a tuple to a single value.
-//!
-//! The default bounds for a macro range are `0..Tuple::LEN`, that is, for all
-//! components of the tuple.
-//!
-//! ```rust
-//! # use typle::typle;
-//! #[typle(Tuple for 0..=12)]
-//! fn sum<T: Tuple<u32>>(t: T) -> u32 {
-//!     typle_fold!(0; i in .. => |total| total + t[[i]])
-//! }
-//!
-//! assert_eq!(sum(()), 0);
-//! assert_eq!(sum((1, 4, 9, 16)), 30);
 //! ```
 //!
 //! Specify constraints on the tuple components using one of the following
@@ -111,11 +93,11 @@
 //! fn multiply<S: Tuple, T: Tuple>(
 //!     s: S,  // s: (S<0>,...)
 //!     t: T,  // t: (T<0>,...)
-//! ) -> typle_for!(i in .. => <S<{i}> as Mul<T<{i}>>>::Output)  // (<S<0> as Mul<T<0>>>::Output,...)
+//! ) -> (typle!(i in .. => <S<{i}> as Mul<T<{i}>>>::Output))  // (<S<0> as Mul<T<0>>>::Output,...)
 //! where
 //!     typle_bound!(i in .. => S<{i}>): Mul<T<{i}>>,  // S<0>: Mul<T<0>>,...
 //! {
-//!     typle_for!(i in .. => s[[i]] * t[[i]])  // (s.0 * t.0,...)
+//!     (typle!(i in .. => s[[i]] * t[[i]]))  // (s.0 * t.0,...)
 //! }
 //!
 //! assert_eq!(
@@ -124,32 +106,50 @@
 //! )
 //! ```
 //!
-//! The `typle!` macro allows components of a tuple to be inserted into an existing sequence.
+//! The `typle!` macro must appear inside an existing tuple, array, or argument list, but can appear
+//! alongside other values.
+//!
+//! The associated constant `LAST` is always equal to `LEN - 1`. This is useful for cases where the
+//! final component should be treated differently. Using `LAST` for a zero-length tuple will fail to
+//! compile.
+//!
 //! ```
 //! # use typle::typle;
-//! #[typle(Tuple for 0..=12)]
-//! fn coalesce_some<S: Tuple, T: Tuple>(
-//!     s: S,
-//!     t: T
-//! ) -> (typle!(i in .. => Option<S<{i}>>), typle!(i in .. => Option<T<{i}>>))
-//! where
-//!     T: Tuple,
-//! {
-//!     (typle!(i in .. => Some(s[[i]])), typle!(i in .. => Some(t[[i]])))
+//! # #[derive(Clone)]
+//! # struct Context {}
+//! trait HandleStuff {
+//!     type Output;
+//!
+//!     fn handle_stuff(&self, context: Context) -> Self::Output;
 //! }
 //!
-//! assert_eq!(
-//!     coalesce_some((1, 2), (3, 4)),
-//!     (Some(1), Some(2), Some(3), Some(4))
-//! );
-//! ```
+//! struct MultipleHandlers<T> {
+//!     handlers: T,
+//! }
 //!
-//! Note that this behaves differently to `typle_for!`. The `typle_for!` macro
-//! produces a new tuple. The `typle!` macro produces a sequence of components
-//! that must appear inside an existing tuple, array, or argument list.
+//! #[typle(Tuple for 1..=12)]
+//! impl<T> HandleStuff for MultipleHandlers<T>
+//! where
+//!     T: Tuple,
+//!     T<_>: HandleStuff,
+//! {
+//!     type Output = (typle!(i in .. => T<{i}>::Output));
+//!
+//!     fn handle_stuff(&self, context: Context) -> Self::Output {
+//!         // Avoid expensive clone for the last handler.
+//!         (
+//!             typle!(i in ..T::LAST => self.handlers[[i]].handle_stuff(context.clone())),
+//!             self.handlers[[T::LAST]].handle_stuff(context),
+//!         )
+//!     }
+//! }
+//! ```
 //!
 //! For types, `T<{start..end}>` is a shorthand for `typle!(i in start..end => T<{i}>)`.
 //! For expressions, `t[[start..end]]` is a shorthand for `typle!(i in start..end => t[[i]])`.
+//!
+//! The default bounds for a macro range are `0..Tuple::LEN`, that is, for all
+//! components of the tuple.
 //!
 //! ```
 //! # use typle::typle;
@@ -161,9 +161,24 @@
 //! assert_eq!(append((1, 2, 3), 4), (1, 2, 3, 4));
 //! ```
 //!
+//! # Aggregation
+//!
+//! The [`typle_fold!`] macro reduces a tuple to a single value.
+//!
+//! ```rust
+//! # use typle::typle;
+//! #[typle(Tuple for 0..=12)]
+//! fn sum<T: Tuple<u32>>(t: T) -> u32 {
+//!     typle_fold!(0; i in .. => |total| total + t[[i]])
+//! }
+//!
+//! assert_eq!(sum(()), 0);
+//! assert_eq!(sum((1, 4, 9, 16)), 30);
+//! ```
+//!
 //! # Conditionals
 //!
-//! The `typle!`, `typle_for!`, and `typle_bound!` macros accept an `if` statement with an optional
+//! The `typle!` and `typle_bound!` macros accept an `if` statement with an optional
 //! `else` clause. If there is no `else` clause the macro filters out components that do not match
 //! the condition.
 //!
@@ -176,12 +191,12 @@
 //! #[typle(Tuple for 0..=12)]
 //! fn even_string_odd<T: Tuple>(
 //!     t: T,
-//! ) -> typle_for!(i in .. => if i % 2 == 0 { String } else { T<{i}> })
+//! ) -> (typle!(i in .. => if i % 2 == 0 { String } else { T<{i}> }))
 //! where
 //!     typle_bound!(i in .. => if i % 2 == 0 { T<{i}> }): ToString,
 //! {
 //!     #[typle_attr_if(T::LEN == 0, allow(clippy::unused_unit))]
-//!     typle_for!(i in .. => if i % 2 == 0 { t[[i]].to_string() } else { t[[i]] })
+//!     (typle!(i in .. => if i % 2 == 0 { t[[i]].to_string() } else { t[[i]] }))
 //! }
 //!
 //! assert_eq!(even_string_odd((0, 1, 2, 3)), ("0".to_owned(), 1, "2".to_owned(), 3));
@@ -252,7 +267,7 @@
 //! and allows use of typle index variables to define the variants.
 //!
 //! The [`typle_variant!`] macro creates multiple enum variants by looping
-//! similarly to `typle_for!`.
+//! similarly to `typle!`.
 //!
 //! ```rust
 //! # use typle::typle;
@@ -271,7 +286,7 @@
 //! {
 //!     // The output of all previous components plus the state of the current component.
 //!     S = typle_variant!(i in ..T::MAX =>
-//!         typle_for!(j in ..i => T::<{j}>::Output), Option<T<{i}>::State>
+//!         (typle!(j in ..i => T::<{j}>::Output), Option<T<{i}>::State>)
 //!     ),
 //! }
 //! ```
@@ -329,7 +344,7 @@
 //! #     T<_>: Extract,
 //! # {
 //! #     S = typle_variant!(i in ..T::MAX =>
-//! #         typle_for!(j in ..i => T::<{j}>::Output), Option<T<{i}>::State>
+//! #         (typle!(j in ..i => T::<{j}>::Output)), Option<T<{i}>::State>
 //! #     ),
 //! # }
 //! // Relevant traits may need to be implemented for the never type.
@@ -359,7 +374,7 @@
 //!     // the state of the current component.
 //!     type State = TupleSequenceState<T<{ ..T::MAX }>>;
 //!     // The final output is a tuple of outputs from all components.
-//!     type Output = typle_for!(i in .. => <T<{i}> as Extract>::Output);
+//!     type Output = (typle!(i in .. => <T<{i}> as Extract>::Output));
 //!
 //!     fn extract(&self, state: Option<Self::State>) -> Self::Output {
 //!         // When LEN == 1 the code never changes `state`
@@ -544,7 +559,6 @@
 
 mod constant;
 mod context;
-mod iterator;
 mod syn_ext;
 
 use constant::evaluate_usize;
@@ -792,7 +806,7 @@ pub fn typle_any(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
 /// }
 ///
 /// #[typle(Tuple for 0..=12)]
-/// impl<T: Tuple> CoalesceSome<T> for typle_for!(i in .. => Option<T<{i}>>) {
+/// impl<T: Tuple> CoalesceSome<T> for (typle!(i in .. => Option<T<{i}>>)) {
 ///     type Output = T;
 ///
 ///     fn coalesce_some(self) -> Option<Self::Output>
@@ -804,8 +818,8 @@ pub fn typle_any(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
 ///                 Some(acc)
 ///             } else if let Some(curr) = self[[i]] {
 ///                 // Append the current value to the prior tuple to create a
-///                 // new accumulator with the type `Some(T<0>,...,T<{i}>)`
-///                 typle_for!{j in ..=i => if j < i { acc[[j]] } else { curr }}
+///                 // new accumulator with the type `(T<0>,...,T<{i}>)`
+///                 (acc[[..i]], curr)
 ///             } else {
 ///                 // If `None` is found at any point, short-circuit with a `None` result
 ///                 break None;

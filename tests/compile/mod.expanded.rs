@@ -2746,6 +2746,60 @@ pub mod typle_fold {
             }) + "]"
         }
     }
+    trait CoalesceSome<T> {
+        type Output;
+        /// Coalesce a tuple of Options into an Option of tuple that is `Some`
+        /// only if all the components are `Some`.
+        fn coalesce_some(self) -> Option<Self::Output>;
+    }
+    impl CoalesceSome<()> for () {
+        type Output = ();
+        fn coalesce_some(self) -> Option<Self::Output> {
+            #[allow(unused_variables)]
+            (loop {
+                let acc = ();
+                let acc = { Some(acc) };
+                break acc;
+            })
+        }
+    }
+    impl<T0> CoalesceSome<(T0,)> for (Option<T0>,) {
+        type Output = (T0,);
+        fn coalesce_some(self) -> Option<Self::Output> {
+            #[allow(unused_variables)]
+            (loop {
+                let acc = ();
+                let acc = if let Some(curr) = self.0 {
+                    (curr,)
+                } else {
+                    break None;
+                };
+                let acc = { Some(acc) };
+                break acc;
+            })
+        }
+    }
+    impl<T0, T1> CoalesceSome<(T0, T1)> for (Option<T0>, Option<T1>) {
+        type Output = (T0, T1);
+        fn coalesce_some(self) -> Option<Self::Output> {
+            #[allow(unused_variables)]
+            (loop {
+                let acc = ();
+                let acc = if let Some(curr) = self.0 {
+                    (curr,)
+                } else {
+                    break None;
+                };
+                let acc = if let Some(curr) = self.1 {
+                    (acc.0, curr)
+                } else {
+                    break None;
+                };
+                let acc = { Some(acc) };
+                break acc;
+            })
+        }
+    }
 }
 pub mod unzip {
     use typle::typle;

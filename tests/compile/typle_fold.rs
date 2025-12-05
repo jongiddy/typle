@@ -40,3 +40,33 @@ where
         ) + "]"
     }
 }
+
+trait CoalesceSome<T> {
+    type Output;
+    /// Coalesce a tuple of Options into an Option of tuple that is `Some`
+    /// only if all the components are `Some`.
+    fn coalesce_some(self) -> Option<Self::Output>;
+}
+
+#[typle(Tuple for 0..=2)]
+impl<T: Tuple> CoalesceSome<T> for (typle!(i in .. => Option<T<{i}>>)) {
+    type Output = T;
+    fn coalesce_some(self) -> Option<Self::Output>
+    {
+        #[allow(unused_variables)]
+        typle_fold!(
+            ();  // Initially an empty tuple
+            i in ..=T::LEN => |acc| if typle_const!(i == T::LEN) {
+                // Final iteration: wrap accumulated tuple in `Some`
+                Some(acc)
+            } else if let Some(curr) = self[[i]] {
+                // Append the current value to the prior tuple to create a
+                // new accumulator with the type `(T<0>,...,T<{i}>)`
+                (acc[[..i]], curr)
+            } else {
+                // If `None` is found at any point, short-circuit with a `None` result
+                break None;
+            }
+        )
+    }
+}

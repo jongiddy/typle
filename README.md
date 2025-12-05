@@ -10,9 +10,9 @@ For example, to define a function to zip a pair of tuples into a tuple of pairs:
 pub fn zip<A: Tuple, B: Tuple>(
     a: A,
     b: B,
-) -> typle_for!(i in .. => (A<{i}>, B<{i}>))
+) -> (typle![i in .. => (A<{i}>, B<{i}>)])
 {
-    typle_for!(i in .. => (a[[i]], b[[i]]))
+    (typle!{i in .. => (a[[i]], b[[i]])})
 }
 ```
 
@@ -20,7 +20,7 @@ The types `A` and `B` are generic but are constrained to be tuples. The tuples
 can have 0 to 12 components of any (sized) type, but both tuples must have the
 same length.
 
-The `typle_for!` macro loops over an index returning a new tuple with the
+The `typle!` macro loops over an index returning a new tuple with the
 specified components. For the function return type it creates a type tuple:
 `((A<0>, B<0>), (A<1>, B<1>),...)`. In the function body it creates a value tuple:
 `((a.0, b.0), (a.1, b.1),...)`.

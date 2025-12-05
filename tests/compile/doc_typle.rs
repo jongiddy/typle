@@ -41,7 +41,7 @@ mod tuple {
         T<_>: Extract,
     {
         S = typle_variant!(i in ..T::MAX =>
-            typle_for!(j in ..i => T::<{j}>::Output), Option<T<{i}>::State>
+            (typle!(j in ..i => T::<{j}>::Output)), Option<T<{i}>::State>
         ),
     }
 
@@ -57,7 +57,7 @@ mod tuple {
         // The state contains the output from all previous components and the state
         // of the current component.
         type State = TupleSequenceState<T<{ ..T::MAX }>>;
-        type Output = typle_for!(i in .. => <T<{i}> as Extract>::Output);
+        type Output = (typle!(i in .. => <T<{i}> as Extract>::Output));
 
         fn extract(&self, state: Option<Self::State>) -> Self::Output {
             #[typle_attr_if(T::LEN == 1, allow(unused_mut))]
@@ -69,9 +69,9 @@ mod tuple {
                 #[typle_attr_if(i == 0, allow(unused_variables))]
                 if let Self::State::S::<typle_ident!(i)>(output, inner_state) = state {
                     let matched = self.tuple[[i]].extract(inner_state);
-                    let output = typle_for! {j in ..=i =>
+                    let output = (typle! {j in ..=i =>
                         if j < i { output[[j]] } else { matched }
-                    };
+                    });
                     if typle_const!(i + 1 == T::LEN) {
                         return output;
                     } else {
