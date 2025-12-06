@@ -1463,6 +1463,20 @@ impl<'a> TypleContext<'a> {
                 GenericArgument::Const(mut generic_expr) => {
                     let mut state = BlockState::default();
                     self.replace_expr(&mut generic_expr, &mut state)?;
+                    if let Expr::Block(syn::ExprBlock {block, ..}) = &mut generic_expr {
+                        if block.stmts.len() == 1 {
+                            if let Stmt::Expr(expr, None) = &mut block.stmts[0] {
+                                let e = std::mem::replace(expr, Expr::Verbatim(TokenStream::new()));
+                                if let Expr::Lit(_) = e {
+                                    // If we resolved <{T::LEN}> -> <{4}> then remove braces -> <4>
+                                    generic_expr = e;
+                                } else {
+                                    // Put the expression back
+                                    *expr = e;
+                                }
+                            }
+                        }
+                    }
                     args.push(GenericArgument::Const(generic_expr));
                 }
                 GenericArgument::AssocType(mut assoc_type) => {
