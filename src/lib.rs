@@ -1,4 +1,4 @@
-//! The `typle` attribute macro generates code for multiple tuple lengths. This code
+//! The `typle` attribute macro generates code for multiple tuple lengths. This code:
 //!
 //! ```rust
 //! use typle::typle;
@@ -34,26 +34,26 @@
 //! }
 //! ```
 //!
-//! Inside `typle` code, individual components of a tuple can be selected using
-//! `<{i}>` for types and `[[i]]` for values. The value `i` must be a *typle
-//! index expression*, an expression that only uses literal `usize` values or
-//! *typle index variables* created by one of several macros, and reduces to a
-//! single value or a range.
+//! Individual components of a tuple can be selected using `<{i}>` for types and
+//! `[[i]]` for values. The value `i` must be a *typle index expression*, an
+//! expression that only uses literal `usize` values or *typle index variables*
+//! created by one of several macros in this crate. Typle index expressions can
+//! reduce to a single value or to a range.
 //!
 //! ```rust
 //! # use typle::typle;
 //! // Split off the first component
 //! #[typle(Tuple for 1..=12)]
-//! fn split<T: Tuple>(
+//! fn split_first<T: Tuple>(
 //!     t: T  // t: (T<0>, T<1>, T<2>,...)
-//! ) -> (T<0>, (T<{1..}>,))  // (T<0>, (T<1>, T<2>,...))
+//! ) -> (T<0>, (T<{1..}>))  // (T<0>, (T<1>, T<2>,...))
 //! {
-//!     (t[[0]], (t[[1..]],))  // (t.0, (t.1, t.2,...))
+//!     (t[[0]], (t[[1..]]))  // (t.0, (t.1, t.2,...))
 //! }
 //!
-//! assert_eq!(split(('1', 2, 3.0)), ('1', (2, 3.0)));
-//! assert_eq!(split((2, 3.0)), (2, (3.0,)));
-//! assert_eq!(split((3.0,)), (3.0, ()));
+//! assert_eq!(split_first(('1', 2, 3.0)), ('1', (2, 3.0)));
+//! assert_eq!(split_first((2, 3.0)), (2, (3.0,)));
+//! assert_eq!(split_first((3.0,)), (3.0, ()));
 //! ```
 //!
 //! The `typle!` macro creates a new sequence of types or expressions. Inside
@@ -76,10 +76,10 @@
 //! Specify constraints on the tuple components using one of the following
 //! forms. Except for the first form, these constraints can only appear in the
 //! `where` clause.
-//! - `T: Tuple<C>` - each component of the tuple has type `C`
-//! - `T<_>: Copy` - each component of the tuple implements `Copy`
-//! - `T<0>: Copy` - the first component of the tuple implements `Copy`
-//! - `T<{1..=2}>: Copy` - the second and third components implement `Copy`
+//! - `T: Tuple<C>` - all components of the tuple have type `C`
+//! - `T<_>: Copy` - all components of the tuple implement the `Copy` trait
+//! - `T<0>: Copy` - the first component of the tuple implements the `Copy` trait
+//! - `T<{1..=2}>: Copy` - the second and third components implement the `Copy` trait
 //! - `typle_bound!` - the most general way to bound components, allowing
 //!   arbitrary expressions using the typle index variable on both sides of
 //!   the colon, as shown below:
@@ -106,8 +106,8 @@
 //! )
 //! ```
 //!
-//! The `typle!` macro must appear inside an existing tuple, array, or argument list, but can appear
-//! alongside other values.
+//! The `typle!` macro must appear inside an existing tuple, array, or argument
+//! list. Other values can appear inside the same sequence.
 //!
 //! The associated constant `LAST` is always equal to `LEN - 1`. This is useful for cases where the
 //! final component should be treated differently. Using `LAST` for a zero-length tuple will fail to
@@ -225,11 +225,11 @@
 //! {
 //!     // Return the sums of all odd positions and all even positions.
 //!     fn interleave(&self) -> [C; 2] {
-//!         let mut odd_even = [C::default(), C::default()];
+//!         let mut even_odd = [C::default(), C::default()];
 //!         for typle_index!(i) in 0..T::LEN {
-//!             odd_even[i % 2] += &self.t[[i]];
+//!             even_odd[i % 2] += &self.t[[i]];
 //!         }
-//!         odd_even
+//!         even_odd
 //!     }
 //! }
 //!

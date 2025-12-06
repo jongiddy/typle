@@ -5,8 +5,7 @@ struct Test<const N: usize> {
     t: [usize; N],
 }
 
-// generic const that turns into literal should not be wrapped in block
-#[allow(unused_braces)]
+// generic const that turns into literal is not wrapped in block
 #[typle(Tuple for 0..=2)]
 impl<'a> From<T> for Test<{ T::LEN }>
 where
