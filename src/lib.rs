@@ -56,9 +56,9 @@
 //! assert_eq!(split_first((3.0,)), (3.0, ()));
 //! ```
 //!
-//! The `typle!` macro creates a new sequence of types or expressions. Inside
-//! the macro the typle index variable provides access to each component of
-//! an existing tuple type or expression.
+//! The `typle!` macro creates a new sequence of types or expressions. A
+//! `typle!` macro can only appear where a comma-separated sequence is valid
+//! (e.g. a tuple, array, or argument list).
 //!
 //! The associated constant `LEN` provides the length of the tuple in each
 //! generated item. This value can be used in typle index expressions.
@@ -71,6 +71,22 @@
 //! }
 //!
 //! assert_eq!(reverse((Some(3), "four", 5)), (5, "four", Some(3)));
+//! ```
+//!
+//! For types, `T<{start..end}>` is a shorthand for `typle!(i in start..end => T<{i}>)`.
+//! For expressions, `t[[start..end]]` is a shorthand for `typle!(i in start..end => t[[i]])`.
+//!
+//! The default bounds for a macro range are `0..Tuple::LEN`, that is, for all
+//! components of the tuple.
+//!
+//! ```
+//! # use typle::typle;
+//! #[typle(Tuple for 0..12)]
+//! fn append<T: Tuple, A>(t: T, a: A) -> (T<{..}>, A) {
+//!     (t[[..]], a)
+//! }
+//!
+//! assert_eq!(append((1, 2, 3), 4), (1, 2, 3, 4));
 //! ```
 //!
 //! Specify constraints on the tuple components using one of the following
@@ -106,9 +122,6 @@
 //! )
 //! ```
 //!
-//! The `typle!` macro must appear inside an existing tuple, array, or argument
-//! list. Other values can appear inside the same sequence.
-//!
 //! The associated constant `LAST` is always equal to `LEN - 1`. This is useful for cases where the
 //! final component should be treated differently. Using `LAST` for a zero-length tuple will fail to
 //! compile.
@@ -143,22 +156,6 @@
 //!         )
 //!     }
 //! }
-//! ```
-//!
-//! For types, `T<{start..end}>` is a shorthand for `typle!(i in start..end => T<{i}>)`.
-//! For expressions, `t[[start..end]]` is a shorthand for `typle!(i in start..end => t[[i]])`.
-//!
-//! The default bounds for a macro range are `0..Tuple::LEN`, that is, for all
-//! components of the tuple.
-//!
-//! ```
-//! # use typle::typle;
-//! #[typle(Tuple for 0..12)]
-//! fn append<T: Tuple, A>(t: T, a: A) -> (T<{..}>, A) {
-//!     (t[[..]], a)
-//! }
-//!
-//! assert_eq!(append((1, 2, 3), 4), (1, 2, 3, 4));
 //! ```
 //!
 //! # Aggregation
@@ -256,9 +253,24 @@
 //!     }
 //! }
 //!
-//! let t = ('a', 'b', 'c');
+//! #[typle(Tuple for 1..=12)]
+//! fn into_pair<C, T>(t: T, start: usize) -> Option<[C; 2]>
+//! where
+//!     T: Tuple<C>,
+//! {
+//!     match start {
+//!         j @ typle_index!(0..T::LAST) => {
+//!             Some([typle!(i in .. => if i == j || i == j + 1 { t[[i]] })])
+//!         }
+//!         _ => None
+//!     }
+//! }
+//!
+//! let t = ('a', 'b', 'c', 'd');
 //! assert_eq!(get_component(&t, 1), Some(&'b'));
-//! assert_eq!(get_component(&t, 4), None);
+//! assert_eq!(get_component(&t, 5), None);
+//! assert_eq!(into_pair(t, 1), Some(['b', 'c']));
+//! assert_eq!(into_pair(('a',), 0), None);
 //! ```
 //!
 //! # enums
@@ -549,8 +561,8 @@
 //! # #[typle(Tuple for 3..=3)]
 //! # fn test1<T: Tuple>(t: T) {
 //! assert_eq!(
-//!     stringify!([T, typle_ty!(T), T::LEN, typle_expr!(T::LEN)]),
-//!     "[T, (T0, T1, T2), T :: LEN, 3]"
+//!     stringify!([T, T::LEN, typle_ty!(T), typle_expr!(T::LEN)]),
+//!     "[T, T :: LEN, (T0, T1, T2), 3]"
 //! );
 //! # }
 //! # test1((1, 2, 3));

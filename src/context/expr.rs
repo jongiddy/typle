@@ -680,8 +680,8 @@ impl<'a> TypleContext<'a> {
                                 Ok(t) => t,
                                 Err(e) => {
                                     return Replacement::One(Err(e));
-                                }
-                            };
+                            }
+                        };
                         if range.is_empty() {
                             return Replacement::Empty;
                         }
