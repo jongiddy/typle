@@ -734,6 +734,7 @@ pub mod function {
         M: Copy,
     {
         type Return = ();
+        #[allow(unused_assignments)]
         fn apply(self) -> Self::Return {
             #[allow(unused_variables)]
             let (t, m) = self;
@@ -793,6 +794,7 @@ pub mod function {
     }
     impl _typle_fn_heapify for ((),) {
         type Return = ();
+        #[allow(unused_assignments)]
         fn apply(self) -> Self::Return {
             #[allow(unused_variables)]
             let (params,) = self;
@@ -834,6 +836,7 @@ pub mod function {
     impl _typle_fn_zip for ((), ()) {
         type Return = ();
         #[rustfmt::skip]
+        #[allow(unused_assignments)]
         fn apply(self) -> Self::Return {
             #[allow(unused_variables)]
             let (first, second) = self;
@@ -1217,6 +1220,7 @@ pub mod function {
     }
     impl _typle_fn_double for ((),) {
         type Return = ();
+        #[allow(unused_assignments)]
         fn apply(self) -> Self::Return {
             #[allow(unused_variables)]
             let (t,) = self;
@@ -1589,6 +1593,7 @@ pub mod method {
     }
     impl _typle_fn_associated for ((), u32) {
         type Return = ();
+        #[allow(unused_assignments)]
         fn apply(self) -> Self::Return {
             #[allow(unused_variables)]
             let (t, i) = self;
@@ -1623,6 +1628,7 @@ pub mod method {
     }
     impl<'a> _typle_fn_inherent1 for (&'a X, ()) {
         type Return = ();
+        #[allow(unused_assignments)]
         fn apply(self) -> Self::Return {
             #[allow(unused_variables)]
             let (_typle_self, t) = self;
@@ -1791,6 +1797,7 @@ pub mod method {
     }
     impl<'a> _typle_fn_inherent5 for (&'a X, ()) {
         type Return = ();
+        #[allow(unused_assignments)]
         fn apply(self) -> Self::Return {
             #[allow(unused_variables)]
             let (_typle_self, t) = self;
@@ -1838,6 +1845,7 @@ pub mod method {
     }
     impl<'a> _typle_fn_inherent6 for (&'a X, ()) {
         type Return = ();
+        #[allow(unused_assignments)]
         fn apply(self) -> Self::Return {
             #[allow(unused_variables)]
             let (_typle_self, t) = self;
@@ -2668,6 +2676,7 @@ pub mod typle_args {
     }
 }
 pub mod typle_fold {
+    #![allow(dead_code)]
     use typle::typle;
     pub struct Something {}
     pub trait IsUseful<Other> {
