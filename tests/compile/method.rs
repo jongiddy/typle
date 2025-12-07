@@ -12,10 +12,12 @@ impl X {
         Self { i }
     }
 
+    #[typle_attr_if(Tuple::LEN == 0, allow(unused_assignments))]
     pub fn associated<T: Tuple<u32>>(t: T, i: u32) -> T {
         (typle!(j in .. => t[[j]] + i))
     }
 
+    #[typle_attr_if(Tuple::LEN == 0, allow(unused_assignments))]
     pub fn inherent1<'a, T: Tuple<u32>>(&'a self, t: T) -> T {
         (typle!(j in .. => t[[j]] + self.i))
     }
@@ -36,12 +38,14 @@ impl X {
         t
     }
 
+    #[typle_attr_if(Tuple::LEN == 0, allow(unused_assignments))]
     pub fn inherent5<'a, T: Tuple<u32>>(&'a self, t: T) -> T {
         #[typle_attr_if(T::LEN == 0, allow(unused_variables))]
         let X { i } = self;
         (typle!(j in .. => t[[j]] + i))
     }
 
+    #[typle_attr_if(Tuple::LEN == 0, allow(unused_assignments))]
     pub fn inherent6<'a, T: Tuple<u32>>(&'a self, t: T) -> T {
         #[typle_attr_if(T::LEN == 0, allow(unused_variables))]
         let Self { i } = self;

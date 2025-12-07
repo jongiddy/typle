@@ -17,6 +17,7 @@ where
 }
 
 #[typle(Tuple for 0..=3)]
+#[typle_attr_if(Tuple::LEN == 0, allow(unused_assignments))]
 fn multiply<T, M>(t: T, m: M) -> (typle!(i in .. => <T<{i}> as Mul<M>>::Output))
 where
     T: Tuple,
@@ -29,12 +30,14 @@ where
 // `heapify` and `zip` as described at
 // https://gist.github.com/soqb/9ce3d4502cc16957b80c388c390baafc#syntax-for-type-transformations
 #[typle(Tuple for 0..=3)]
+#[typle_attr_if(Tuple::LEN == 0, allow(unused_assignments))]
 fn heapify<T: Tuple>(params: T) -> (typle!(i in .. => Box<T<{i}>>)) {
     (typle!(i in .. => Box::new(params[[i]])))
 }
 
 #[rustfmt::skip]
 #[typle(Tuple for 0..=12)]
+#[typle_attr_if(Tuple::LEN == 0, allow(unused_assignments))]
 pub fn zip<A: Tuple, B: Tuple>(
     first: A,
     second: B
@@ -44,6 +47,7 @@ pub fn zip<A: Tuple, B: Tuple>(
 }
 
 #[typle(Tuple for 0..=3)]
+#[typle_attr_if(Tuple::LEN == 0, allow(unused_assignments))]
 pub fn double<T: Tuple<u32>>(t: T) -> T {
     (typle!(i in ..Tuple::LEN => t[[i]] * 2))
 }

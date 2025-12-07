@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use typle::typle;
 
 pub struct Something {}
@@ -51,8 +52,7 @@ trait CoalesceSome<T> {
 #[typle(Tuple for 0..=2)]
 impl<T: Tuple> CoalesceSome<T> for (typle!(i in .. => Option<T<{i}>>)) {
     type Output = T;
-    fn coalesce_some(self) -> Option<Self::Output>
-    {
+    fn coalesce_some(self) -> Option<Self::Output> {
         #[allow(unused_variables)]
         typle_fold!(
             ();  // Initially an empty tuple
