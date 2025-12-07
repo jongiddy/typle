@@ -50,6 +50,12 @@ pub fn evaluate_bool(expr: &Expr) -> syn::Result<bool> {
                     }
                 }
             }
+            syn::BinOp::And(_) => {
+                return Ok(evaluate_bool(&binary.left)? && evaluate_bool(&binary.right)?);
+            }
+            syn::BinOp::Or(_) => {
+                return Ok(evaluate_bool(&binary.left)? || evaluate_bool(&binary.right)?);
+            }
             _ => {}
         },
         _ => {}

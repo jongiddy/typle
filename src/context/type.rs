@@ -98,8 +98,10 @@ impl<'a> TypleContext<'a> {
                         let (pattern, range) =
                             match self.parse_pattern_range(&mut tokens, default_span) {
                                 Ok(t) => t,
-                                Err(e) => return Replacement::One(Err(e)),
-                            };
+                                Err(e) => {
+                                    return Replacement::One(Err(e));
+                                }
+                        };
                         if range.is_empty() {
                             return Replacement::Empty;
                         }
