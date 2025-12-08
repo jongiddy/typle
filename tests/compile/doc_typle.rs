@@ -19,6 +19,28 @@ impl<T: Tuple<u32>> MyStruct<T> {
     }
 }
 
+/// Trait for types that can treated as an infinitely wrapping sequence of chars.
+trait WrappingString {
+    /// Return a 2 character substring starting at position `start`.
+    fn wrapping_substring_at(&self, start: usize) -> String;
+}
+
+#[typle(Tuple for 1..=3)]
+impl<T: Tuple<char>> WrappingString for T {
+    #[typle_attr_if(T::LEN < 2, allow(unused))]
+    fn wrapping_substring_at(&self, start: usize) -> String {
+        if typle_const!(T::LEN == 1) {
+            [self.0, self.0].into_iter().collect()
+        } else {
+            match start % T::LEN {
+                j @ typle_index!(0..T::LAST) => [self[[j..=j + 1]]].into_iter().collect(),
+                Tuple::LAST => [self[[T::LAST]], self.0].into_iter().collect(),
+                _ => unreachable!(),
+            }
+        }
+    }
+}
+
 #[typle(Tuple for 1..=4, never=())]
 mod tuple {
     pub trait Extract {
@@ -72,7 +94,7 @@ mod tuple {
                     let output = (typle! {j in ..=i =>
                         if j < i { output[[j]] } else { matched }
                     });
-                    if typle_const!(i + 1 == T::LEN) {
+                    if typle_const!(i == T::LAST) {
                         return output;
                     } else {
                         state = Self::State::S::<typle_ident!(i + 1)>(output, None);

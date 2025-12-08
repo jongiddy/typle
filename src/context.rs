@@ -332,7 +332,7 @@ impl<'a> TypleContext<'a> {
             match stmt {
                 Stmt::Local(mut local) => {
                     self.replace_attrs(&mut local.attrs)?;
-                    self.replace_pat(&mut local.pat)?;
+                    self.replace_pat(&mut local.pat, state)?;
                     if let Some(init) = &mut local.init {
                         self.replace_expr(&mut init.expr, state)?;
                         if let Some((_, diverge)) = &mut init.diverge {
@@ -1846,6 +1846,105 @@ impl<'a> TypleContext<'a> {
                         };
                         return Ok(Some(index));
                     }
+                }
+            }
+        }
+        Ok(None)
+    }
+
+    /// Replace typle constants with literal value.
+    ///
+    /// If the path matches a typle index variable (`i`) or typle associated
+    /// constant (`T::LEN`) return the literal replacement.
+    fn replace_typle_associated_const(
+        &self,
+        path: &syn::ExprPath,
+        state: &mut BlockState,
+    ) -> Result<Option<Lit>> {
+        if path.qself.is_some() {
+            // no support for `<T as Tuple>::LEN`
+            return Ok(None);
+        }
+        let mut segments = path.path.segments.iter().fuse();
+        if let Some(syn::PathSegment {
+            ident: ident1,
+            arguments: PathArguments::None,
+        }) = segments.next()
+        {
+            match segments.next() {
+                None => {
+                    // Path T
+                    if let Some(value) = self.constants.get(ident1) {
+                        return Ok(Some(Lit::Int(syn::LitInt::new(
+                            &value.to_string(),
+                            ident1.span(),
+                        ))));
+                    }
+                }
+                Some(syn::PathSegment {
+                    ident: ident2,
+                    arguments: PathArguments::None,
+                }) => {
+                    if segments.next().is_some() {
+                        // Path T::U::V
+                        return Ok(None);
+                    }
+                    // Path T::U
+                    if ident2 == "LEN" {
+                        if ident1 == &self.typle_macro.ident || self.typles.contains_key(ident1) {
+                            // Tuple::LEN or T::LEN
+                            let Some(typle_len) = self.typle_len else {
+                                abort!(ident2, "LEN not available outside fn or impl");
+                            };
+                            return Ok(Some(Lit::Int(syn::LitInt::new(
+                                &typle_len.to_string(),
+                                path.span(),
+                            ))));
+                        } else {
+                            // Path looks like a typle associated constant: the caller
+                            // may have omitted the typle constraint.
+                            state.suspicious_ident = Some(ident1.clone());
+                        }
+                    } else if ident2 == "LAST" {
+                        if ident1 == &self.typle_macro.ident || self.typles.contains_key(ident1) {
+                            // Tuple::LAST or T::LAST
+                            let Some(typle_len) = self.typle_len else {
+                                abort!(ident2, "LAST not available outside fn or impl");
+                            };
+                            if typle_len == 0 {
+                                abort!(ident2, "LAST not available when LEN == 0");
+                            }
+                            return Ok(Some(Lit::Int(syn::LitInt::new(
+                                &(typle_len - 1).to_string(),
+                                path.span(),
+                            ))));
+                        } else {
+                            state.suspicious_ident = Some(ident1.clone());
+                        }
+                    } else if ident2 == "MAX" {
+                        if ident1 == &self.typle_macro.ident || self.typles.contains_key(ident1) {
+                            // Tuple::MAX or <T as Tuple>::MAX
+                            return Ok(Some(Lit::Int(syn::LitInt::new(
+                                &self.typle_macro.max_len.to_string(),
+                                path.span(),
+                            ))));
+                        } else {
+                            state.suspicious_ident = Some(ident1.clone());
+                        }
+                    } else if ident2 == "MIN" {
+                        if ident1 == &self.typle_macro.ident || self.typles.contains_key(ident1) {
+                            // Tuple::MIN or <T as Tuple>::MIN
+                            return Ok(Some(Lit::Int(syn::LitInt::new(
+                                &self.typle_macro.min_len.to_string(),
+                                path.span(),
+                            ))));
+                        } else {
+                            state.suspicious_ident = Some(ident1.clone());
+                        }
+                    }
+                }
+                _ => {
+                    // Path T::U<V> or T::U(V)
                 }
             }
         }

@@ -1,7 +1,7 @@
 use super::*;
 
 impl<'a> TypleContext<'a> {
-    pub(super) fn replace_pat(&self, pat: &mut Pat) -> Result<()> {
+    pub(super) fn replace_pat(&self, pat: &mut Pat, state: &mut BlockState) -> Result<()> {
         match pat {
             Pat::Macro(m) => {
                 if let Some(p) = self.replace_macro_pat(m)? {
@@ -10,7 +10,7 @@ impl<'a> TypleContext<'a> {
             }
             Pat::Or(or) => {
                 for pat in &mut or.cases {
-                    self.replace_pat(pat)?;
+                    self.replace_pat(pat, state)?;
                 }
             }
             Pat::Paren(paren) => {
@@ -33,15 +33,23 @@ impl<'a> TypleContext<'a> {
             }
             Pat::Path(path) => {
                 // State::S::<typle_ident!(i)> -> State::S2
+                self.replace_attrs(&mut path.attrs)?;
+                if let Some(lit) = self.replace_typle_associated_const(path, state)? {
+                    *pat = Pat::Lit(syn::PatLit {
+                        attrs: std::mem::take(&mut path.attrs),
+                        lit,
+                    });
+                    return Ok(());
+                }
                 self.replace_qself_path(&mut path.qself, &mut path.path)?;
                 self.replace_path_arguments(&mut path.path)?;
             }
             Pat::Reference(reference) => {
-                self.replace_pat(&mut reference.pat)?;
+                self.replace_pat(&mut reference.pat, state)?;
             }
             Pat::Slice(slice) => {
                 for pat in &mut slice.elems {
-                    self.replace_pat(pat)?;
+                    self.replace_pat(pat, state)?;
                 }
             }
             Pat::Struct(pat) => {
@@ -93,7 +101,7 @@ impl<'a> TypleContext<'a> {
                 }
             }
             Pat::Type(pat_type) => {
-                self.replace_pat(&mut pat_type.pat)?;
+                self.replace_pat(&mut pat_type.pat, state)?;
                 self.replace_type(&mut pat_type.ty)?;
             }
             _ => {}
@@ -109,6 +117,7 @@ impl<'a> TypleContext<'a> {
         impl Iterator<Item = Result<Pat>> + 'a,
         std::iter::Empty<Result<Pat>>,
     > {
+        let mut state = BlockState::default();
         match &mut pat {
             Pat::Macro(syn::PatMacro { mac, .. }) => {
                 if let Some(ident) = mac.path.get_ident() {
@@ -149,7 +158,7 @@ impl<'a> TypleContext<'a> {
                                     Ok(pat) => pat,
                                     Err(e) => return Some(Err(e)),
                                 };
-                                match context.replace_pat(&mut pat) {
+                                match context.replace_pat(&mut pat, &mut state) {
                                     Ok(()) => Some(Ok(pat)),
                                     Err(e) => Some(Err(e)),
                                 }
@@ -160,7 +169,7 @@ impl<'a> TypleContext<'a> {
             }
             _ => {}
         }
-        match self.replace_pat(&mut pat) {
+        match self.replace_pat(&mut pat, &mut state) {
             Ok(()) => Replacement::Singleton(Ok(pat)),
             Err(e) => Replacement::Singleton(Err(e)),
         }
@@ -195,7 +204,8 @@ impl<'a> TypleContext<'a> {
                             if let Some(ident) = &pattern {
                                 *context.constants.get_mut(ident).unwrap() = index;
                             }
-                            context.replace_pat(&mut component)?;
+                            let mut state = BlockState::default();
+                            context.replace_pat(&mut component, &mut state)?;
                             tuple.elems.push(component);
                         }
                     }
@@ -221,7 +231,7 @@ impl<'a> TypleContext<'a> {
                                 // Verbatim omits the pattern from the tuple.
                             } else {
                                 let mut pat = expr_to_pat(expr)?;
-                                context.replace_pat(&mut pat)?;
+                                context.replace_pat(&mut pat, &mut state)?;
                                 tuple.elems.push(pat);
                             }
                         }

@@ -101,7 +101,7 @@ impl<'a> TypleContext<'a> {
                                 Err(e) => {
                                     return Replacement::One(Err(e));
                                 }
-                        };
+                            };
                         if range.is_empty() {
                             return Replacement::Empty;
                         }
