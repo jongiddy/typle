@@ -98,6 +98,48 @@ pub mod doc_typle {
             Some(max)
         }
     }
+    /// Trait for types that can treated as an infinitely wrapping sequence of chars.
+    trait WrappingString {
+        /// Return a 2 character substring starting at position `start`.
+        fn wrapping_substring_at(&self, start: usize) -> String;
+    }
+    impl WrappingString for (char,) {
+        #[allow(unused)]
+        fn wrapping_substring_at(&self, start: usize) -> String {
+            { [self.0, self.0].into_iter().collect() }
+        }
+    }
+    impl WrappingString for (char, char) {
+        fn wrapping_substring_at(&self, start: usize) -> String {
+            {
+                match start % 2 {
+                    0 => [self.0, self.1].into_iter().collect(),
+                    1 => [self.1, self.0].into_iter().collect(),
+                    _ => {
+                        ::core::panicking::panic(
+                            "internal error: entered unreachable code",
+                        )
+                    }
+                }
+            }
+        }
+    }
+    impl WrappingString for (char, char, char) {
+        fn wrapping_substring_at(&self, start: usize) -> String {
+            {
+                match start % 3 {
+                    0 => [self.0, self.1].into_iter().collect(),
+                    1 => [self.1, self.2].into_iter().collect(),
+                    2 => [self.2, self.0].into_iter().collect(),
+                    _ => {
+                        ::core::panicking::panic(
+                            "internal error: entered unreachable code",
+                        )
+                    }
+                }
+            }
+        }
+    }
     mod tuple {
         pub trait Extract {
             type State;

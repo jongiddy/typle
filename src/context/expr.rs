@@ -62,7 +62,7 @@ impl<'a> TypleContext<'a> {
             Expr::Closure(closure) => {
                 self.replace_attrs(&mut closure.attrs)?;
                 for pat in &mut closure.inputs {
-                    self.replace_pat(pat)?;
+                    self.replace_pat(pat, state)?;
                 }
                 if let ReturnType::Type(_, ret_type) = &mut closure.output {
                     self.replace_type(ret_type)?;
@@ -254,7 +254,7 @@ impl<'a> TypleContext<'a> {
                     }
                 }
                 // Otherwise it is a standard for loop
-                self.replace_pat(&mut for_loop.pat)?;
+                self.replace_pat(&mut for_loop.pat, state)?;
                 let mut inner_state = BlockState::default();
                 self.replace_block(&mut for_loop.body, &mut inner_state)?;
                 state.propagate(inner_state, for_loop.label.as_ref());
@@ -339,7 +339,7 @@ impl<'a> TypleContext<'a> {
             }
             Expr::Let(r#let) => {
                 self.replace_attrs(&mut r#let.attrs)?;
-                self.replace_pat(&mut r#let.pat)?;
+                self.replace_pat(&mut r#let.pat, state)?;
                 self.replace_expr(&mut r#let.expr, state)?;
             }
             Expr::Loop(r#loop) => {
@@ -435,7 +435,7 @@ impl<'a> TypleContext<'a> {
                             }
                         }
                     }
-                    self.replace_pat(&mut arm.pat)?;
+                    self.replace_pat(&mut arm.pat, state)?;
                     if let Some((_, expr)) = &mut arm.guard {
                         self.replace_expr(expr, state)?;
                     }
@@ -478,108 +478,12 @@ impl<'a> TypleContext<'a> {
             }
             Expr::Path(path) => {
                 self.replace_attrs(&mut path.attrs)?;
-                if path.qself.is_none() {
-                    let mut segments = path.path.segments.iter().fuse();
-                    if let Some(syn::PathSegment {
-                        ident: ident1,
-                        arguments: PathArguments::None,
-                    }) = segments.next()
-                    {
-                        if let (
-                            Some(syn::PathSegment {
-                                ident: ident2,
-                                arguments: PathArguments::None,
-                            }),
-                            None,
-                        ) = (segments.next(), segments.next())
-                        {
-                            if ident2 == "LEN" {
-                                if ident1 == &self.typle_macro.ident
-                                    || self.typles.contains_key(ident1)
-                                {
-                                    // Tuple::LEN or <T as Tuple>::LEN
-                                    // todo: check that any qself is a type tuple of the correct length
-                                    let Some(typle_len) = self.typle_len else {
-                                        abort!(ident2, "LEN not available outside fn or impl");
-                                    };
-                                    *expr = Expr::Lit(syn::PatLit {
-                                        attrs: std::mem::take(&mut path.attrs),
-                                        lit: Lit::Int(syn::LitInt::new(
-                                            &typle_len.to_string(),
-                                            path.span(),
-                                        )),
-                                    });
-                                    return Ok(());
-                                } else {
-                                    // Path looks like a typle associated constant: the caller
-                                    // may have omitted the typle constraint.
-                                    state.suspicious_ident = Some(ident1.clone());
-                                }
-                            } else if ident2 == "LAST" {
-                                if ident1 == &self.typle_macro.ident
-                                    || self.typles.contains_key(ident1)
-                                {
-                                    // Tuple::LAST or <T as Tuple>::LAST
-                                    let Some(typle_len) = self.typle_len else {
-                                        abort!(ident2, "LAST not available outside fn or impl");
-                                    };
-                                    if typle_len == 0 {
-                                        abort!(ident2, "LAST not available when LEN == 0");
-                                    }
-                                    *expr = Expr::Lit(syn::PatLit {
-                                        attrs: std::mem::take(&mut path.attrs),
-                                        lit: Lit::Int(syn::LitInt::new(
-                                            &(typle_len - 1).to_string(),
-                                            path.span(),
-                                        )),
-                                    });
-                                    return Ok(());
-                                } else {
-                                    // Path looks like a typle associated constant: the caller
-                                    // may have omitted the typle constraint.
-                                    state.suspicious_ident = Some(ident1.clone());
-                                }
-                            } else if ident2 == "MAX" {
-                                if ident1 == &self.typle_macro.ident
-                                    || self.typles.contains_key(ident1)
-                                {
-                                    // Tuple::MAX or <T as Tuple>::MAX
-                                    *expr = Expr::Lit(syn::PatLit {
-                                        attrs: std::mem::take(&mut path.attrs),
-                                        lit: Lit::Int(syn::LitInt::new(
-                                            &self.typle_macro.max_len.to_string(),
-                                            path.span(),
-                                        )),
-                                    });
-                                    return Ok(());
-                                } else {
-                                    state.suspicious_ident = Some(ident1.clone());
-                                }
-                            } else if ident2 == "MIN" {
-                                if ident1 == &self.typle_macro.ident
-                                    || self.typles.contains_key(ident1)
-                                {
-                                    // Tuple::MIN or <T as Tuple>::MIN
-                                    *expr = Expr::Lit(syn::PatLit {
-                                        attrs: std::mem::take(&mut path.attrs),
-                                        lit: Lit::Int(syn::LitInt::new(
-                                            &self.typle_macro.min_len.to_string(),
-                                            path.span(),
-                                        )),
-                                    });
-                                    return Ok(());
-                                } else {
-                                    state.suspicious_ident = Some(ident1.clone());
-                                }
-                            }
-                        } else if let Some(value) = self.constants.get(ident1) {
-                            *expr = Expr::Lit(syn::PatLit {
-                                attrs: std::mem::take(&mut path.attrs),
-                                lit: Lit::Int(syn::LitInt::new(&value.to_string(), ident1.span())),
-                            });
-                            return Ok(());
-                        }
-                    }
+                if let Some(lit) = self.replace_typle_associated_const(path, state)? {
+                    *expr = Expr::Lit(syn::ExprLit {
+                        attrs: std::mem::take(&mut path.attrs),
+                        lit,
+                    });
+                    return Ok(());
                 }
                 self.replace_qself_path(&mut path.qself, &mut path.path)?;
                 self.replace_path_arguments(&mut path.path)?;
@@ -680,8 +584,8 @@ impl<'a> TypleContext<'a> {
                                 Ok(t) => t,
                                 Err(e) => {
                                     return Replacement::One(Err(e));
-                            }
-                        };
+                                }
+                            };
                         if range.is_empty() {
                             return Replacement::Empty;
                         }

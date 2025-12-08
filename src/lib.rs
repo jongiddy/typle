@@ -42,7 +42,7 @@
 //!
 //! ```rust
 //! # use typle::typle;
-//! // Split off the first component
+//! /// Split off the first component of a tuple.
 //! #[typle(Tuple for 1..=12)]
 //! fn split_first<T: Tuple>(
 //!     t: T  // t: (T<0>, T<1>, T<2>,...)
@@ -92,10 +92,10 @@
 //! Specify constraints on the tuple components using one of the following
 //! forms. Except for the first form, these constraints can only appear in the
 //! `where` clause.
-//! - `T: Tuple<C>` - all components of the tuple have type `C`
-//! - `T<_>: Copy` - all components of the tuple implement the `Copy` trait
-//! - `T<0>: Copy` - the first component of the tuple implements the `Copy` trait
-//! - `T<{1..=2}>: Copy` - the second and third components implement the `Copy` trait
+//! - `T: Tuple<C>` - all components of the tuple have type `C`.
+//! - `T<_>: Copy` - all components of the tuple implement the `Copy` trait.
+//! - `T<0>: Copy` - the first component of the tuple implements the `Copy` trait.
+//! - `T<{1..=2}>: Copy` - the second and third components implement the `Copy` trait.
 //! - `typle_bound!` - the most general way to bound components, allowing
 //!   arbitrary expressions using the typle index variable on both sides of
 //!   the colon, as shown below:
@@ -122,18 +122,19 @@
 //! )
 //! ```
 //!
-//! The associated constant `LAST` is always equal to `LEN - 1`. This is useful for cases where the
-//! final component should be treated differently. Using `LAST` for a zero-length tuple will fail to
-//! compile.
+//! The associated constant `LAST` is always equal to `LEN - 1`. This is convenient for cases where
+//! the final component should be treated differently, such as avoiding an additional clone. Using
+//! `LAST` for a zero-length tuple causes a compilation error.
 //!
 //! ```
 //! # use typle::typle;
 //! # #[derive(Clone)]
 //! # struct Context {}
 //! trait HandleStuff {
+//!     type Context;
 //!     type Output;
 //!
-//!     fn handle_stuff(&self, context: Context) -> Self::Output;
+//!     fn handle_stuff(&self, context: Self::Context) -> Self::Output;
 //! }
 //!
 //! struct MultipleHandlers<T> {
@@ -141,17 +142,17 @@
 //! }
 //!
 //! #[typle(Tuple for 1..=12)]
-//! impl<T> HandleStuff for MultipleHandlers<T>
+//! impl<T: Tuple, Ctx: Clone> HandleStuff for MultipleHandlers<T>
 //! where
-//!     T: Tuple,
-//!     T<_>: HandleStuff,
+//!     T<_>: HandleStuff<Context = Ctx>,
 //! {
+//!     type Context = Ctx;
 //!     type Output = (typle!(i in .. => T<{i}>::Output));
 //!
-//!     fn handle_stuff(&self, context: Context) -> Self::Output {
-//!         // Avoid expensive clone for the last handler.
+//!     fn handle_stuff(&self, context: Self::Context) -> Self::Output {
 //!         (
 //!             typle!(i in ..T::LAST => self.handlers[[i]].handle_stuff(context.clone())),
+//!             // Avoid expensive clone for the last handler.
 //!             self.handlers[[T::LAST]].handle_stuff(context),
 //!         )
 //!     }
@@ -218,9 +219,9 @@
 //! impl<T, C> MyStruct<T>
 //! where
 //!     T: Tuple<C>,
-//!     C: for<'a> std::ops::AddAssign<&'a C> + Default,
+//!     C: Default + for<'a> std::ops::AddAssign<&'a C>,
 //! {
-//!     // Return the sums of all odd positions and all even positions.
+//!     // Return the sums of all even positions and all odd positions.
 //!     fn interleave(&self) -> [C; 2] {
 //!         let mut even_odd = [C::default(), C::default()];
 //!         for typle_index!(i) in 0..T::LEN {
@@ -253,30 +254,47 @@
 //!     }
 //! }
 //!
+//! let t = ('a', 'b', 'c', 'd', 'e');
+//! assert_eq!(get_component(&t, 1), Some(&'b'));
+//! assert_eq!(get_component(&t, 7), None);
+//! ```
+//! ```rust
+//! # use typle::typle;
+//! /// Trait for types that can treated as an infinitely wrapping sequence of chars.
+//! trait WrappingString {
+//!     /// Return a 2 character substring starting at position `start`.
+//!     fn wrapping_substring_at(&self, start: usize) -> String;
+//! }
+//!
 //! #[typle(Tuple for 1..=12)]
-//! fn into_pair<C, T>(t: T, start: usize) -> Option<[C; 2]>
-//! where
-//!     T: Tuple<C>,
-//! {
-//!     match start {
-//!         j @ typle_index!(0..T::LAST) => {
-//!             Some([typle!(i in .. => if i == j || i == j + 1 { t[[i]] })])
+//! impl<T: Tuple<char>> WrappingString for T {
+//!     #[typle_attr_if(T::LEN < 2, allow(unused))]
+//!     fn wrapping_substring_at(&self, start: usize) -> String {
+//!         if typle_const!(T::LEN == 1) {
+//!             [ self.0, self.0 ].into_iter().collect()
+//!         } else {
+//!             match start % T::LEN {
+//!                 j @ typle_index!(0..T::LAST) => {
+//!                     [ self[[j..=j + 1]] ].into_iter().collect()
+//!                 }
+//!                 T::LAST => {
+//!                     [ self[[T::LAST]], self.0 ].into_iter().collect()
+//!                 }
+//!                 _ => unreachable!(),
+//!             }
 //!         }
-//!         _ => None
 //!     }
 //! }
 //!
-//! let t = ('a', 'b', 'c', 'd');
-//! assert_eq!(get_component(&t, 1), Some(&'b'));
-//! assert_eq!(get_component(&t, 5), None);
-//! assert_eq!(into_pair(t, 1), Some(['b', 'c']));
-//! assert_eq!(into_pair(('a',), 0), None);
+//! let t = ('a', 'b', 'c', 'd', 'e');
+//! assert_eq!(t.wrapping_substring_at(6), "bc");
+//! assert_eq!(t.wrapping_substring_at(4), "ea");
+//! assert_eq!(('f',).wrapping_substring_at(12), "ff");
 //! ```
 //!
 //! # enums
 //!
-//! Applying `typle` to an `enum` implements the `enum` for the maximum length
-//! and allows use of typle index variables to define the variants.
+//! Applying `typle` to an `enum` implements the `enum` once for the maximum length only.
 //!
 //! The [`typle_variant!`] macro creates multiple enum variants by looping
 //! similarly to `typle!`.
@@ -303,7 +321,7 @@
 //! }
 //! ```
 //!
-//! The single generated implementation:
+//! The generated implementation:
 //! ```rust
 //! # pub trait Extract {
 //! #     type State;
@@ -340,7 +358,7 @@
 //! expression. const-if allows branches that do not compile, as long as they
 //! are `false` at compile-time. For example, this code compiles for `T::LEN == 4`
 //! even though the variant `TupleSequenceState::S4` does not exist because the
-//! branch that refers to it is `false` when `(i + 1 == T::LEN)`
+//! branch that refers to it is not compiled when `(i == T::LAST)`.
 //!
 //! ```rust
 //! # use typle::typle;
@@ -398,7 +416,7 @@
 //!             if let Self::State::S::<typle_ident!(i)>(output, inner_state) = state {
 //!                 let matched = self.tuple[[i]].extract(inner_state);
 //!                 let output = (output[[..i]], matched);
-//!                 if typle_const!(i + 1 == T::LEN) {
+//!                 if typle_const!(i == T::LAST) {
 //!                     return output;
 //!                 } else {
 //!                     state = Self::State::S::<typle_ident!(i + 1)>(output, None);
