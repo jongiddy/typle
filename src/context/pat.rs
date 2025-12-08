@@ -1,7 +1,7 @@
 use super::*;
 
-impl<'a> TypleContext<'a> {
-    pub(super) fn replace_pat(&self, pat: &mut Pat, state: &mut BlockState) -> Result<()> {
+impl TypleContext {
+    pub(super) fn replace_pat(&self, pat: &mut Pat, state: &mut BlockState) -> syn::Result<()> {
         match pat {
             Pat::Macro(m) => {
                 if let Some(p) = self.replace_macro_pat(m)? {
@@ -19,14 +19,14 @@ impl<'a> TypleContext<'a> {
                     &mut paren.pat,
                     Pat::Verbatim(TokenStream::new()),
                 )) {
-                    Replacement::Singleton(result) => {
-                        paren.pat = Box::new(result?);
+                    Replacement::Singleton(inner) => {
+                        paren.pat = Box::new(inner);
                     }
                     iter => {
                         *pat = Pat::Tuple(syn::PatTuple {
                             attrs: std::mem::take(&mut paren.attrs),
                             paren_token: paren.paren_token,
-                            elems: iter.collect::<Result<_>>()?,
+                            elems: iter.collect::<syn::Result<_>>()?,
                         });
                     }
                 }
@@ -68,7 +68,7 @@ impl<'a> TypleContext<'a> {
                 tuple.elems = std::mem::take(&mut tuple.elems)
                     .into_iter()
                     .flat_map(move |pat| self.replace_pat_in_list(pat))
-                    .collect::<Result<_>>()?;
+                    .collect::<syn::Result<_>>()?;
             }
             Pat::TupleStruct(tuple_struct) => {
                 // State::S::<typle_ident!(i)> -> State::S2
@@ -109,73 +109,31 @@ impl<'a> TypleContext<'a> {
         Ok(())
     }
 
-    pub(super) fn replace_pat_in_list(
-        &'a self,
-        mut pat: Pat,
-    ) -> Replacement<
-        Result<Pat>,
-        impl Iterator<Item = Result<Pat>> + 'a,
-        std::iter::Empty<Result<Pat>>,
-    > {
+    pub(super) fn replace_pat_in_list(&self, mut pat: Pat) -> Replacement<Pat> {
         let mut state = BlockState::default();
         match &mut pat {
             Pat::Macro(syn::PatMacro { mac, .. }) => {
                 if let Some(ident) = mac.path.get_ident() {
                     if ident == "typle" || ident == "typle_args" {
                         let token_stream = std::mem::take(&mut mac.tokens);
-                        let default_span = token_stream.span();
-                        let mut tokens = token_stream.into_iter();
-                        let (pattern, range) =
-                            match self.parse_pattern_range(&mut tokens, default_span) {
-                                Ok(t) => t,
-                                Err(e) => {
-                                    return Replacement::One(Err(e));
-                                }
-                            };
-                        if range.is_empty() {
-                            return Replacement::Empty;
-                        }
-                        let token_stream = tokens.collect::<TokenStream>();
-                        let mut context = self.clone();
-                        if let Some(ident) = pattern.clone() {
-                            context.constants.insert(ident, 0);
-                        }
-                        return Replacement::Iterator1(range.zip_clone(token_stream).flat_map({
-                            move |(index, token_stream)| {
-                                if let Some(ident) = &pattern {
-                                    *context.constants.get_mut(ident).unwrap() = index;
-                                }
-                                let token_stream = match context.evaluate_if(token_stream) {
-                                    Ok(Some(token_stream)) => token_stream,
-                                    Ok(None) => {
-                                        return None;
-                                    }
-                                    Err(e) => {
-                                        return Some(Err(e));
-                                    }
-                                };
-                                let mut pat = match Pat::parse_single.parse2(token_stream) {
-                                    Ok(pat) => pat,
-                                    Err(e) => return Some(Err(e)),
-                                };
-                                match context.replace_pat(&mut pat, &mut state) {
-                                    Ok(()) => Some(Ok(pat)),
-                                    Err(e) => Some(Err(e)),
-                                }
-                            }
-                        }));
+                        return self.expand_typle_macro(token_stream, |context, token_stream| {
+                            let mut pat = Pat::parse_single.parse2(token_stream)?;
+                            let mut state = BlockState::default();
+                            context.replace_pat(&mut pat, &mut state)?;
+                            Ok(pat)
+                        });
                     }
                 }
             }
             _ => {}
         }
         match self.replace_pat(&mut pat, &mut state) {
-            Ok(()) => Replacement::Singleton(Ok(pat)),
-            Err(e) => Replacement::Singleton(Err(e)),
+            Ok(()) => Replacement::Singleton(pat),
+            Err(e) => Replacement::Error(e),
         }
     }
 
-    fn replace_macro_pat(&self, m: &mut syn::PatMacro) -> Result<Option<Pat>> {
+    fn replace_macro_pat(&self, m: &mut syn::PatMacro) -> syn::Result<Option<Pat>> {
         self.replace_attrs(&mut m.attrs)?;
         if let Some(macro_name) = m.mac.path.get_ident() {
             if macro_name == "typle_for" {
@@ -211,7 +169,7 @@ impl<'a> TypleContext<'a> {
                     }
                     MacroDelimiter::Brace(_) => {
                         let Ok(expr) = syn::parse2::<Expr>(token_stream) else {
-                            return Err(Error::new(
+                            return Err(syn::Error::new(
                                 body_span,
                                 "cannot parse, wrap types in `typle_pat!()`",
                             ));

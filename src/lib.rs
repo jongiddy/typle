@@ -591,6 +591,8 @@ mod constant;
 mod context;
 mod syn_ext;
 
+use std::rc::Rc;
+
 use constant::evaluate_usize;
 use context::TypleContext;
 use proc_macro2::{Ident, TokenStream, TokenTree};
@@ -618,7 +620,7 @@ pub fn typle(
         }
     };
 
-    let context = TypleContext::from(&typle_macro);
+    let context = TypleContext::from(Rc::new(typle_macro));
 
     let mut items = Vec::new();
 
