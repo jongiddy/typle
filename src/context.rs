@@ -14,10 +14,10 @@ use syn::parse::Parser as _;
 use syn::punctuated::Punctuated;
 use syn::spanned::Spanned as _;
 use syn::{
-    token, AttrStyle, Attribute, BinOp, Block, Error, Expr, Fields, FnArg, GenericArgument,
-    GenericParam, Generics, ImplItem, Item, Label, LifetimeParam, Lit, Macro, MacroDelimiter,
-    Member, Meta, Pat, Path, PathArguments, QSelf, Result, ReturnType, Signature, Stmt, Type,
-    TypeParam, TypeParamBound, Visibility, WherePredicate,
+    token, AttrStyle, Attribute, BinOp, Block, Expr, Fields, FnArg, GenericArgument, GenericParam,
+    Generics, ImplItem, Item, Label, LifetimeParam, Lit, Macro, MacroDelimiter, Member, Meta, Pat,
+    Path, PathArguments, QSelf, ReturnType, Signature, Stmt, Type, TypeParam, TypeParamBound,
+    Visibility, WherePredicate,
 };
 use zip_clone::ZipClone as _;
 
@@ -27,42 +27,36 @@ use crate::TypleMacro;
 
 macro_rules! abort {
     ($spanned:expr, $message:expr) => {
-        return Err(Error::new($spanned.span(), $message))
+        return Err(syn::Error::new($spanned.span(), $message))
     };
 }
 
 pub(self) use abort;
 
-enum Replacement<T, I1, I2> {
-    Empty,
-    One(T),
-    Iterator1(I1),
-    Iterator2(I2),
+enum Replacement<T> {
+    /// A single value, not from a typle expansion
     Singleton(T),
+    /// An empty typle expansion
+    Empty,
+    /// A typle expansion
+    Iterator(Box<dyn Iterator<Item = syn::Result<T>>>),
+    /// An error outside of the iterator
+    Error(syn::Error),
 }
 
-impl<T, I1, I2> Iterator for Replacement<T, I1, I2>
-where
-    I1: Iterator<Item = T>,
-    I2: Iterator<Item = T>,
-{
-    type Item = T;
+impl<T> Iterator for Replacement<T> {
+    type Item = syn::Result<T>;
 
     fn next(&mut self) -> Option<Self::Item> {
         match std::mem::replace(self, Replacement::Empty) {
             Replacement::Empty => None,
-            Replacement::One(t) => Some(t),
-            Replacement::Iterator1(mut iterator) => {
+            Replacement::Error(t) => Some(Err(t)),
+            Replacement::Iterator(mut iterator) => {
                 let item = iterator.next();
-                *self = Replacement::Iterator1(iterator);
+                *self = Replacement::Iterator(iterator);
                 item
             }
-            Replacement::Iterator2(mut iterator) => {
-                let item = iterator.next();
-                *self = Replacement::Iterator2(iterator);
-                item
-            }
-            Replacement::Singleton(t) => Some(t),
+            Replacement::Singleton(t) => Some(Ok(t)),
         }
     }
 }
@@ -121,8 +115,8 @@ impl BlockState {
 }
 
 #[derive(Clone)]
-pub struct TypleContext<'a> {
-    typle_macro: &'a TypleMacro,
+pub struct TypleContext {
+    typle_macro: Rc<TypleMacro>,
     typle_len: Option<usize>,
     // typle indexes that must be replaced with a number
     constants: HashMap<Ident, usize>,
@@ -133,8 +127,8 @@ pub struct TypleContext<'a> {
     const_if: bool,
 }
 
-impl<'a> From<&'a TypleMacro> for TypleContext<'a> {
-    fn from(typle_macro: &'a TypleMacro) -> Self {
+impl From<Rc<TypleMacro>> for TypleContext {
+    fn from(typle_macro: Rc<TypleMacro>) -> Self {
         TypleContext {
             typle_macro,
             typle_len: None,
@@ -147,8 +141,8 @@ impl<'a> From<&'a TypleMacro> for TypleContext<'a> {
     }
 }
 
-impl<'a> TypleContext<'a> {
-    pub fn get_type(&self, typle: &Typle, i: usize, span: Span) -> Result<Type> {
+impl TypleContext {
+    pub fn get_type(&self, typle: &Typle, i: usize, span: Span) -> syn::Result<Type> {
         match self.typle_len {
             Some(typle_len) => {
                 if i < typle_len {
@@ -156,20 +150,20 @@ impl<'a> TypleContext<'a> {
                 } else if i < self.typle_macro.max_len {
                     Ok(self.typle_macro.never_type.clone())
                 } else {
-                    Err(Error::new(span, "typle index out of range"))
+                    Err(syn::Error::new(span, "typle index out of range"))
                 }
             }
             None => {
                 if i < self.typle_macro.max_len {
                     Ok(typle.get(i, span))
                 } else {
-                    Err(Error::new(span, "typle index out of range"))
+                    Err(syn::Error::new(span, "typle index out of range"))
                 }
             }
         }
     }
 
-    pub fn extract_typle_constraints(&self, generics: &mut Generics) -> Result<Option<Self>> {
+    pub fn extract_typle_constraints(&self, generics: &mut Generics) -> syn::Result<Option<Self>> {
         fn get_type_ident(ty: &Type) -> Option<&Ident> {
             if let Type::Path(type_path) = ty {
                 if type_path.qself.is_none() {
@@ -217,7 +211,7 @@ impl<'a> TypleContext<'a> {
         &self,
         bounds: &mut Punctuated<TypeParamBound, token::Plus>,
         type_ident: &Ident,
-    ) -> Result<Option<Typle>> {
+    ) -> syn::Result<Option<Typle>> {
         let mut result = None;
         for bound in std::mem::take(bounds) {
             if let TypeParamBound::Trait(trait_bound) = &bound {
@@ -277,7 +271,7 @@ impl<'a> TypleContext<'a> {
     }
 
     // Replace #[typle_attr_if(T::LEN == 1, unused_mut)]
-    fn replace_attrs(&self, attrs: &mut Vec<Attribute>) -> Result<()> {
+    fn replace_attrs(&self, attrs: &mut Vec<Attribute>) -> syn::Result<()> {
         if attrs.iter().any(|attr| {
             if let Some(ident) = attr.path().get_ident() {
                 ident == "typle_attr_if"
@@ -323,7 +317,7 @@ impl<'a> TypleContext<'a> {
         Ok(())
     }
 
-    fn replace_block(&self, block: &mut Block, state: &mut BlockState) -> Result<()> {
+    fn replace_block(&self, block: &mut Block, state: &mut BlockState) -> syn::Result<()> {
         let stmts_len = block.stmts.len();
         let mut stmts = std::mem::replace(&mut block.stmts, Vec::with_capacity(stmts_len))
             .into_iter()
@@ -391,7 +385,7 @@ impl<'a> TypleContext<'a> {
         Ok(())
     }
 
-    fn replace_fields(&self, fields: &mut Fields) -> Result<()> {
+    fn replace_fields(&self, fields: &mut Fields) -> syn::Result<()> {
         match fields {
             Fields::Named(syn::FieldsNamed { named: fields, .. })
             | Fields::Unnamed(syn::FieldsUnnamed {
@@ -406,7 +400,7 @@ impl<'a> TypleContext<'a> {
         Ok(())
     }
 
-    pub fn replace_generics(&self, generics: &mut Generics) -> Result<()> {
+    pub fn replace_generics(&self, generics: &mut Generics) -> syn::Result<()> {
         if let Some(where_clause) = &mut generics.where_clause {
             for mut predicate in std::mem::take(&mut where_clause.predicates) {
                 if let WherePredicate::Type(predicate_type) = &mut predicate {
@@ -542,7 +536,7 @@ impl<'a> TypleContext<'a> {
                                                 }
                                                 Ok(bound)
                                             })
-                                            .collect::<Result<_>>()?;
+                                            .collect::<syn::Result<_>>()?;
                                         where_clause.predicates.push(WherePredicate::Type(
                                             syn::PredicateType {
                                                 lifetimes: None,
@@ -599,7 +593,7 @@ impl<'a> TypleContext<'a> {
     fn replace_generic_arguments(
         &self,
         args: &mut Punctuated<GenericArgument, token::Comma>,
-    ) -> Result<()> {
+    ) -> syn::Result<()> {
         for arg in std::mem::take(args) {
             match arg {
                 GenericArgument::Type(Type::Path(syn::TypePath { qself, mut path }))
@@ -708,7 +702,7 @@ impl<'a> TypleContext<'a> {
         function: GeneralFunction,
         receiver_type: Option<&Type>,
         items: &mut Vec<Item>,
-    ) -> Result<GeneralFunction> {
+    ) -> syn::Result<GeneralFunction> {
         let fn_name = &function.sig.ident;
         let fn_meta = &function.attrs;
         let fn_vis = &function.vis;
@@ -865,7 +859,7 @@ impl<'a> TypleContext<'a> {
         Ok(fn_item)
     }
 
-    pub fn replace_item(&self, item: Item, items: &mut Vec<Item>) -> Result<()> {
+    pub fn replace_item(&self, item: Item, items: &mut Vec<Item>) -> syn::Result<()> {
         match item {
             Item::Const(mut constant) => {
                 let context = self.extract_typle_constraints(&mut constant.generics)?;
@@ -1040,7 +1034,7 @@ impl<'a> TypleContext<'a> {
         Ok(())
     }
 
-    fn replace_item_impl(&self, mut item: syn::ItemImpl, items: &mut Vec<Item>) -> Result<()> {
+    fn replace_item_impl(&self, mut item: syn::ItemImpl, items: &mut Vec<Item>) -> syn::Result<()> {
         self.replace_attrs(&mut item.attrs)?;
         self.replace_generics(&mut item.generics)?;
         if let Some((_, path, _)) = &mut item.trait_ {
@@ -1090,11 +1084,11 @@ impl<'a> TypleContext<'a> {
         Ok(())
     }
 
-    fn replace_typle_for_expr(
+    fn replace_typle_for_expr<'a>(
         &'a self,
         mac: &mut Macro,
         state: &'a mut BlockState,
-    ) -> Result<impl Iterator<Item = Result<Expr>> + 'a> {
+    ) -> syn::Result<impl Iterator<Item = syn::Result<Expr>> + 'a> {
         let token_stream = std::mem::take(&mut mac.tokens);
         let default_span = token_stream.span();
         let mut tokens = token_stream.into_iter();
@@ -1143,7 +1137,7 @@ impl<'a> TypleContext<'a> {
         attrs: Vec<Attribute>,
         state: &mut BlockState,
         default_span: Span,
-    ) -> Result<Expr> {
+    ) -> syn::Result<Expr> {
         let mut inner_state = BlockState::default();
         let token_stream = std::mem::take(&mut mac.tokens);
         let mut tokens = token_stream.into_iter();
@@ -1246,7 +1240,7 @@ impl<'a> TypleContext<'a> {
         mac: &mut Macro,
         attrs: &mut Vec<Attribute>,
         state: &mut BlockState,
-    ) -> Result<Option<Expr>> {
+    ) -> syn::Result<Option<Expr>> {
         // typle_for!(i in .. => Some<t[[i]]) -> (Some<t.0>, Some<t.1>)
         // typle_for!(i in .. => t.to_string()) -> (t.0.to_string(), t.1.to_string())
         // as opposed to
@@ -1261,7 +1255,7 @@ impl<'a> TypleContext<'a> {
                     let tuple = syn::ExprTuple {
                         attrs: std::mem::take(attrs),
                         paren_token: token::Paren::default(),
-                        elems: elems.collect::<Result<_>>()?,
+                        elems: elems.collect::<syn::Result<_>>()?,
                     };
                     Expr::Tuple(tuple)
                 };
@@ -1303,7 +1297,7 @@ impl<'a> TypleContext<'a> {
         state: &mut BlockState,
         op: BinOp,
         default: bool,
-    ) -> Result<Expr> {
+    ) -> syn::Result<Expr> {
         let mut tokens = token_stream.into_iter();
         let (pattern, mut range) = self.parse_pattern_range(&mut tokens, default_span)?;
         let expr = syn::parse2::<Expr>(tokens.collect())?;
@@ -1374,7 +1368,7 @@ impl<'a> TypleContext<'a> {
     }
 
     // Look for `typle_ty!(...)` or `typle_expr!(...)` and evaluate body.
-    fn replace_macro_token_stream(&self, input: TokenStream) -> Result<TokenStream> {
+    fn replace_macro_token_stream(&self, input: TokenStream) -> syn::Result<TokenStream> {
         enum TTState {
             Start,
             FoundIdent(Ident),
@@ -1472,7 +1466,10 @@ impl<'a> TypleContext<'a> {
                 output.extend([TokenTree::Ident(ident)]);
             }
             TTState::TypleTy | TTState::TypleExpr => {
-                return Err(Error::new(Span::call_site(), "typle: expected macro body"));
+                return Err(syn::Error::new(
+                    Span::call_site(),
+                    "typle: expected macro body",
+                ));
             }
         }
         Ok(output)
@@ -1481,7 +1478,7 @@ impl<'a> TypleContext<'a> {
     fn extract_to_semicolon(
         tokens: &mut impl Iterator<Item = TokenTree>,
         span: Span,
-    ) -> Result<TokenStream> {
+    ) -> syn::Result<TokenStream> {
         let mut collect = TokenStream::new();
         for token in tokens.by_ref() {
             match token {
@@ -1493,24 +1490,30 @@ impl<'a> TypleContext<'a> {
                 }
             }
         }
-        Err(Error::new(span, "typle expected tokens terminated by ;"))
+        Err(syn::Error::new(
+            span,
+            "typle expected tokens terminated by ;",
+        ))
     }
 
-    fn parse_fold_ident(tokens: &mut impl Iterator<Item = TokenTree>, span: Span) -> Result<Ident> {
+    fn parse_fold_ident(
+        tokens: &mut impl Iterator<Item = TokenTree>,
+        span: Span,
+    ) -> syn::Result<Ident> {
         let Some(TokenTree::Punct(punct)) = tokens.next() else {
-            return Err(Error::new(span, "expected `=> |accumulator|`"));
+            return Err(syn::Error::new(span, "expected `=> |accumulator|`"));
         };
         if punct.as_char() != '|' {
-            return Err(Error::new(span, "expected `=> |accumulator|`"));
+            return Err(syn::Error::new(span, "expected `=> |accumulator|`"));
         }
         let Some(TokenTree::Ident(mut ident)) = tokens.next() else {
-            return Err(Error::new(span, "expected `=> |accumulator|`"));
+            return Err(syn::Error::new(span, "expected `=> |accumulator|`"));
         };
         let Some(TokenTree::Punct(punct)) = tokens.next() else {
-            return Err(Error::new(span, "expected `=> |accumulator|`"));
+            return Err(syn::Error::new(span, "expected `=> |accumulator|`"));
         };
         if punct.as_char() != '|' {
-            return Err(Error::new(span, "expected `=> |accumulator|`"));
+            return Err(syn::Error::new(span, "expected `=> |accumulator|`"));
         }
         if ident == "_" {
             ident = Ident::new("_typle", ident.span());
@@ -1522,7 +1525,7 @@ impl<'a> TypleContext<'a> {
         &self,
         tokens: &mut impl Iterator<Item = TokenTree>,
         span: Span,
-    ) -> Result<(Option<Ident>, Range<usize>)> {
+    ) -> syn::Result<(Option<Ident>, Range<usize>)> {
         let mut collect = TokenStream::new();
         let mut pattern = None;
         let mut equals = None;
@@ -1569,13 +1572,13 @@ impl<'a> TypleContext<'a> {
             collect.extend([TokenTree::Punct(punct)]);
         }
         if collect.is_empty() {
-            return Err(Error::new(span, "expected range"));
+            return Err(syn::Error::new(span, "expected range"));
         }
         let mut expr = syn::parse2::<Expr>(collect)?;
         let mut state = BlockState::default();
         self.replace_expr(&mut expr, &mut state)?;
         let Some((start, end)) = evaluate_range(&expr) else {
-            return Err(Error::new(expr.span(), "expected range"));
+            return Err(syn::Error::new(expr.span(), "expected range"));
         };
         let start = match start {
             Bound::Included(Err(span)) | Bound::Excluded(Err(span)) => {
@@ -1622,7 +1625,7 @@ impl<'a> TypleContext<'a> {
     }
 
     // This can return <QSelf>:: or <QSelf> which needs to be cleaned up by the caller.
-    fn replace_qself_path(&self, qself: &mut Option<QSelf>, path: &mut Path) -> Result<()> {
+    fn replace_qself_path(&self, qself: &mut Option<QSelf>, path: &mut Path) -> syn::Result<()> {
         if let Some(qself) = qself {
             self.replace_type(&mut qself.ty)?;
         } else if let Some(ident) = path.segments.first().map(|segment| &segment.ident) {
@@ -1637,7 +1640,7 @@ impl<'a> TypleContext<'a> {
                             paren_token: token::Paren::default(),
                             elems: (0..self.typle_len.unwrap_or(self.typle_macro.max_len))
                                 .map(|i| self.get_type(typle, i, first.span()))
-                                .collect::<Result<_>>()?,
+                                .collect::<syn::Result<_>>()?,
                         }));
                         *qself = Some(QSelf {
                             lt_token: token::Lt::default(),
@@ -1723,7 +1726,7 @@ impl<'a> TypleContext<'a> {
         Ok(())
     }
 
-    fn replace_path_arguments(&self, path: &mut Path) -> Result<()> {
+    fn replace_path_arguments(&self, path: &mut Path) -> syn::Result<()> {
         for mut path_segment in std::mem::take(&mut path.segments) {
             match &mut path_segment.arguments {
                 PathArguments::None => {}
@@ -1746,7 +1749,7 @@ impl<'a> TypleContext<'a> {
                     args.inputs = std::mem::take(&mut args.inputs)
                         .into_iter()
                         .flat_map(|ty| self.replace_type_in_list(ty))
-                        .collect::<Result<_>>()?;
+                        .collect::<syn::Result<_>>()?;
                     if let ReturnType::Type(_, ty) = &mut args.output {
                         self.replace_type(ty)?;
                     }
@@ -1757,7 +1760,7 @@ impl<'a> TypleContext<'a> {
         Ok(())
     }
 
-    fn replace_signature(&self, sig: &mut Signature) -> Result<()> {
+    fn replace_signature(&self, sig: &mut Signature) -> syn::Result<()> {
         self.replace_generics(&mut sig.generics)?;
         for input in &mut sig.inputs {
             if let FnArg::Typed(pat_type) = input {
@@ -1773,7 +1776,7 @@ impl<'a> TypleContext<'a> {
         Ok(())
     }
 
-    fn evaluate_if(&self, ts: TokenStream) -> Result<Option<TokenStream>> {
+    fn evaluate_if(&self, ts: TokenStream) -> syn::Result<Option<TokenStream>> {
         let mut tokens = ts.into_iter();
         match tokens.next() {
             Some(TokenTree::Ident(ident)) if ident == "if" => {
@@ -1831,7 +1834,10 @@ impl<'a> TypleContext<'a> {
     }
 
     // Return Some(usize) if the angled bracketed generic arguments is a `typle_ident!` macro.
-    fn typle_ident(&self, args: &mut syn::AngleBracketedGenericArguments) -> Result<Option<usize>> {
+    fn typle_ident(
+        &self,
+        args: &mut syn::AngleBracketedGenericArguments,
+    ) -> syn::Result<Option<usize>> {
         if args.args.len() == 1 {
             if let Some(GenericArgument::Type(Type::Macro(syn::TypeMacro { mac }))) =
                 args.args.first_mut()
@@ -1860,7 +1866,7 @@ impl<'a> TypleContext<'a> {
         &self,
         path: &syn::ExprPath,
         state: &mut BlockState,
-    ) -> Result<Option<Lit>> {
+    ) -> syn::Result<Option<Lit>> {
         if path.qself.is_some() {
             // no support for `<T as Tuple>::LEN`
             return Ok(None);
@@ -1950,6 +1956,41 @@ impl<'a> TypleContext<'a> {
         }
         Ok(None)
     }
+
+    fn expand_typle_macro<T, F>(&self, token_stream: TokenStream, f: F) -> Replacement<T>
+    where
+        T: 'static,
+        F: Fn(&TypleContext, TokenStream) -> syn::Result<T> + 'static,
+    {
+        let default_span = token_stream.span();
+        let mut tokens = token_stream.into_iter();
+        let (pattern, range) = match self.parse_pattern_range(&mut tokens, default_span) {
+            Ok(t) => t,
+            Err(e) => {
+                return Replacement::Error(e);
+            }
+        };
+        if range.is_empty() {
+            return Replacement::Empty;
+        }
+        let token_stream = tokens.collect::<TokenStream>();
+        let mut context = self.clone();
+        if let Some(ident) = pattern.clone() {
+            context.constants.insert(ident, 0);
+        }
+        return Replacement::Iterator(Box::new(range.zip_clone(token_stream).flat_map(
+            move |(index, token_stream)| {
+                if let Some(ident) = &pattern {
+                    *context.constants.get_mut(ident).unwrap() = index;
+                }
+                match context.evaluate_if(token_stream) {
+                    Ok(Some(token_stream)) => Some(f(&context, token_stream)),
+                    Ok(None) => None,
+                    Err(e) => Some(Err(e)),
+                }
+            },
+        )));
+    }
 }
 
 #[inline]
@@ -1964,7 +2005,7 @@ pub fn ident_to_path(ident: Ident) -> Path {
     }
 }
 
-fn expr_to_pat(expr: Expr) -> Result<Pat> {
+fn expr_to_pat(expr: Expr) -> syn::Result<Pat> {
     let default_span = expr.span();
     match expr {
         Expr::Block(expr) => {
@@ -1974,18 +2015,21 @@ fn expr_to_pat(expr: Expr) -> Result<Pat> {
                 return Ok(Pat::Verbatim(TokenStream::new()));
             };
             if iter.next().is_some() {
-                return Err(Error::new(
+                return Err(syn::Error::new(
                     default_span,
                     "typle requires a block with a single pattern",
                 ));
             }
             match stmt {
-                Stmt::Local(local) => {
-                    Err(Error::new(local.span(), "let statement not supported here"))
-                }
-                Stmt::Item(item) => Err(Error::new(item.span(), "item not supported here")),
+                Stmt::Local(local) => Err(syn::Error::new(
+                    local.span(),
+                    "let statement not supported here",
+                )),
+                Stmt::Item(item) => Err(syn::Error::new(item.span(), "item not supported here")),
                 Stmt::Expr(expr, None) => expr_to_pat(expr),
-                Stmt::Expr(_, Some(semi)) => Err(Error::new(semi.span(), "unexpected semicolon")),
+                Stmt::Expr(_, Some(semi)) => {
+                    Err(syn::Error::new(semi.span(), "unexpected semicolon"))
+                }
                 Stmt::Macro(m) => match m.mac.path.get_ident() {
                     Some(ident) if ident == "typle_pat" => Pat::parse_single.parse2(m.mac.tokens),
                     _ => Ok(Pat::Macro(syn::PatMacro {
@@ -2024,17 +2068,17 @@ fn expr_to_pat(expr: Expr) -> Result<Pat> {
                 .elems
                 .into_iter()
                 .map(expr_to_pat)
-                .collect::<Result<_>>()?,
+                .collect::<syn::Result<_>>()?,
         })),
         Expr::Verbatim(token_stream) => Ok(Pat::Verbatim(token_stream)),
-        _ => Err(Error::new(
+        _ => Err(syn::Error::new(
             default_span,
             "typle does not support this pattern",
         )),
     }
 }
 
-fn pat_to_expr(pat: Pat) -> Result<Expr> {
+fn pat_to_expr(pat: Pat) -> syn::Result<Expr> {
     match pat {
         Pat::Const(p) => Ok(Expr::Const(p)),
         Pat::Ident(p) => Ok(Expr::Path(syn::PatPath {
@@ -2051,9 +2095,9 @@ fn pat_to_expr(pat: Pat) -> Result<Expr> {
                 .elems
                 .into_iter()
                 .map(pat_to_expr)
-                .collect::<Result<_>>()?,
+                .collect::<syn::Result<_>>()?,
         })),
-        _ => Err(Error::new(pat.span(), "unsupported pattern")),
+        _ => Err(syn::Error::new(pat.span(), "unsupported pattern")),
     }
 }
 

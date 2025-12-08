@@ -1,8 +1,8 @@
 use super::*;
 
-impl<'a> TypleContext<'a> {
+impl TypleContext {
     // Replace `T`` with `(T0, T1,...)`` and `T<1>`` with `T1``
-    pub(super) fn replace_type(&self, ty: &mut Type) -> Result<()> {
+    pub(super) fn replace_type(&self, ty: &mut Type) -> syn::Result<()> {
         match ty {
             Type::Array(array) => {
                 self.replace_type(&mut array.elem)?;
@@ -21,7 +21,7 @@ impl<'a> TypleContext<'a> {
                             })
                         })
                     })
-                    .collect::<Result<_>>()?;
+                    .collect::<syn::Result<_>>()?;
                 if let ReturnType::Type(_, ty) = &mut bare_fn.output {
                     self.replace_type(ty)?;
                 }
@@ -39,13 +39,13 @@ impl<'a> TypleContext<'a> {
                     &mut paren.elem,
                     Type::Verbatim(TokenStream::new()),
                 )) {
-                    Replacement::Singleton(result) => {
-                        paren.elem = Box::new(result?);
+                    Replacement::Singleton(inner) => {
+                        paren.elem = Box::new(inner);
                     }
                     iter => {
                         *ty = Type::Tuple(syn::TypeTuple {
                             paren_token: paren.paren_token,
-                            elems: iter.collect::<Result<_>>()?,
+                            elems: iter.collect::<syn::Result<_>>()?,
                         });
                     }
                 }
@@ -73,67 +73,24 @@ impl<'a> TypleContext<'a> {
                 tuple.elems = std::mem::take(&mut tuple.elems)
                     .into_iter()
                     .flat_map(|ty| self.replace_type_in_list(ty))
-                    .collect::<Result<_>>()?;
+                    .collect::<syn::Result<_>>()?;
             }
             _ => {}
         }
         Ok(())
     }
 
-    pub(super) fn replace_type_in_list(
-        &'a self,
-        mut ty: Type,
-    ) -> Replacement<
-        Result<Type>,
-        impl Iterator<Item = Result<Type>> + 'a,
-        impl Iterator<Item = Result<Type>> + 'a,
-    > {
+    pub(super) fn replace_type_in_list(&self, mut ty: Type) -> Replacement<Type> {
         match &mut ty {
             Type::Macro(syn::TypeMacro { mac }) => {
                 if let Some(ident) = mac.path.get_ident() {
                     if ident == "typle" || ident == "typle_args" {
                         let token_stream = std::mem::take(&mut mac.tokens);
-                        let default_span = token_stream.span();
-                        let mut tokens = token_stream.into_iter();
-                        let (pattern, range) =
-                            match self.parse_pattern_range(&mut tokens, default_span) {
-                                Ok(t) => t,
-                                Err(e) => {
-                                    return Replacement::One(Err(e));
-                                }
-                            };
-                        if range.is_empty() {
-                            return Replacement::Empty;
-                        }
-                        let token_stream = tokens.collect::<TokenStream>();
-                        let mut context = self.clone();
-                        if let Some(ident) = pattern.clone() {
-                            context.constants.insert(ident, 0);
-                        }
-                        return Replacement::Iterator1(range.zip_clone(token_stream).flat_map({
-                            move |(index, token_stream)| {
-                                if let Some(ident) = &pattern {
-                                    *context.constants.get_mut(ident).unwrap() = index;
-                                }
-                                let token_stream = match context.evaluate_if(token_stream) {
-                                    Ok(Some(token_stream)) => token_stream,
-                                    Ok(None) => {
-                                        return None;
-                                    }
-                                    Err(e) => {
-                                        return Some(Err(e));
-                                    }
-                                };
-                                let mut ty = match syn::parse2::<Type>(token_stream) {
-                                    Ok(ty) => ty,
-                                    Err(e) => return Some(Err(e)),
-                                };
-                                match context.replace_type(&mut ty) {
-                                    Ok(()) => Some(Ok(ty)),
-                                    Err(e) => Some(Err(e)),
-                                }
-                            }
-                        }));
+                        return self.expand_typle_macro(token_stream, |context, token_stream| {
+                            let mut ty = syn::parse2::<Type>(token_stream)?;
+                            context.replace_type(&mut ty)?;
+                            Ok(ty)
+                        });
                     }
                 }
             }
@@ -154,16 +111,16 @@ impl<'a> TypleContext<'a> {
                             let mut state = BlockState::default();
                             match self.replace_expr(expr, &mut state) {
                                 Ok(_) => {}
-                                Err(e) => return Replacement::One(Err(e)),
+                                Err(e) => return Replacement::Error(e),
                             }
                             if let Some((start, end)) = evaluate_range(expr) {
                                 // T<{..}>
                                 let start = match start {
                                     Bound::Included(Err(span)) | Bound::Excluded(Err(span)) => {
-                                        return Replacement::One(Err(Error::new(
+                                        return Replacement::Error(syn::Error::new(
                                             span,
                                             "expected integer for start of range",
-                                        )));
+                                        ));
                                     }
                                     Bound::Included(Ok(start)) => start,
                                     Bound::Excluded(Ok(start)) => start.saturating_add(1),
@@ -171,27 +128,29 @@ impl<'a> TypleContext<'a> {
                                 };
                                 let end = match end {
                                     Bound::Included(Err(span)) | Bound::Excluded(Err(span)) => {
-                                        return Replacement::One(Err(Error::new(
+                                        return Replacement::Error(syn::Error::new(
                                             span,
                                             "expected integer for end of range",
-                                        )));
+                                        ));
                                     }
                                     Bound::Included(Ok(end)) => end.saturating_add(1),
                                     Bound::Excluded(Ok(end)) => end,
                                     Bound::Unbounded => match self.typle_len {
                                         Some(end) => end,
                                         None => {
-                                            return Replacement::One(Err(Error::new(
+                                            return Replacement::Error(syn::Error::new(
                                                 expr.span(),
                                                 "need an explicit range end",
-                                            )));
+                                            ));
                                         }
                                     },
                                 };
-                                return Replacement::Iterator2((start..end).map({
+                                return Replacement::Iterator(Box::new((start..end).map({
                                     let span = path.span();
-                                    move |i| self.get_type(typle, i, span)
-                                }));
+                                    let context = self.clone();
+                                    let typle = typle.clone();
+                                    move |i| context.get_type(&typle, i, span)
+                                })));
                             }
                         }
                     }
@@ -200,12 +159,12 @@ impl<'a> TypleContext<'a> {
             _ => {}
         }
         match self.replace_type(&mut ty) {
-            Ok(()) => Replacement::Singleton(Ok(ty)),
-            Err(e) => Replacement::Singleton(Err(e)),
+            Ok(()) => Replacement::Singleton(ty),
+            Err(e) => Replacement::Error(e),
         }
     }
 
-    fn replace_macro_type(&self, m: &mut syn::TypeMacro) -> Result<Option<Type>> {
+    fn replace_macro_type(&self, m: &mut syn::TypeMacro) -> syn::Result<Option<Type>> {
         // typle_for!(i in .. => Option<T<{i}>) -> (Option<T0>, Option<T1>)
         // typle_for!(i in .. => T::<{i}>::default()) -> (T0::default(), T1::default())
         // as opposed to
@@ -257,7 +216,7 @@ impl<'a> TypleContext<'a> {
         Ok(None)
     }
 
-    fn replace_typle_fold_type(&self, mac: &mut Macro, default_span: Span) -> Result<Type> {
+    fn replace_typle_fold_type(&self, mac: &mut Macro, default_span: Span) -> syn::Result<Type> {
         let token_stream = std::mem::take(&mut mac.tokens);
         let mut tokens = token_stream.into_iter();
         let mut init_type =
