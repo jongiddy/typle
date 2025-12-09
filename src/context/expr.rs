@@ -1,3 +1,5 @@
+use crate::context::shared::Replacement;
+
 use super::*;
 
 impl TypleContext {
