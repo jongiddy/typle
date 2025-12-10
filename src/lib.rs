@@ -58,7 +58,7 @@
 //!
 //! The `typle!` macro creates a new sequence of types or expressions. A
 //! `typle!` macro can only appear where a comma-separated sequence is valid
-//! (e.g. a tuple, array, or argument list).
+//! (e.g. a tuple, array, argument list, or where clause).
 //!
 //! The associated constant `LEN` provides the length of the tuple in each
 //! generated item. This value can be used in typle index expressions.
@@ -96,9 +96,10 @@
 //! - `T<_>: Copy` - all components of the tuple implement the `Copy` trait.
 //! - `T<0>: Copy` - the first component of the tuple implements the `Copy` trait.
 //! - `T<{1..=2}>: Copy` - the second and third components implement the `Copy` trait.
-//! - `typle_bound!` - the most general way to bound components, allowing
-//!   arbitrary expressions using the typle index variable on both sides of
-//!   the colon, as shown below:
+//! - `typle!(j in .. => I<{j}>: Iterator<Item=T<{j}>>): Tuple::Bounds` - the most
+//!    general way to bound components, allowing typle index expressions on both
+//!    sides of the colon. Note that the suffix `: Tuple::Bounds` is required after
+//!    the macro, where `Tuple` is the name of the typle trait.
 //!
 //! ```rust
 //! # use typle::typle;
@@ -111,7 +112,7 @@
 //!     t: T,  // t: (T<0>,...)
 //! ) -> (typle!(i in .. => <S<{i}> as Mul<T<{i}>>>::Output))  // (<S<0> as Mul<T<0>>>::Output,...)
 //! where
-//!     typle_bound!(i in .. => S<{i}>): Mul<T<{i}>>,  // S<0>: Mul<T<0>>,...
+//!     typle!(i in .. => S<{i}>: Mul<T<{i}>>): Tuple::Bounds,  // S<0>: Mul<T<0>>,...
 //! {
 //!     (typle!(i in .. => s[[i]] * t[[i]]))  // (s.0 * t.0,...)
 //! }
@@ -120,43 +121,6 @@
 //!     multiply((Duration::from_secs(5), 2), (4, 3)),
 //!     (Duration::from_secs(20), 6)
 //! )
-//! ```
-//!
-//! The associated constant `LAST` is always equal to `LEN - 1`. This is convenient for cases where
-//! the final component should be treated differently, such as avoiding an additional clone. Using
-//! `LAST` for a zero-length tuple causes a compilation error.
-//!
-//! ```
-//! # use typle::typle;
-//! # #[derive(Clone)]
-//! # struct Context {}
-//! trait HandleStuff {
-//!     type Context;
-//!     type Output;
-//!
-//!     fn handle_stuff(&self, context: Self::Context) -> Self::Output;
-//! }
-//!
-//! struct MultipleHandlers<T> {
-//!     handlers: T,
-//! }
-//!
-//! #[typle(Tuple for 1..=12)]
-//! impl<T: Tuple, Ctx: Clone> HandleStuff for MultipleHandlers<T>
-//! where
-//!     T<_>: HandleStuff<Context = Ctx>,
-//! {
-//!     type Context = Ctx;
-//!     type Output = (typle!(i in .. => T<{i}>::Output));
-//!
-//!     fn handle_stuff(&self, context: Self::Context) -> Self::Output {
-//!         (
-//!             typle!(i in ..T::LAST => self.handlers[[i]].handle_stuff(context.clone())),
-//!             // Avoid expensive clone for the last handler.
-//!             self.handlers[[T::LAST]].handle_stuff(context),
-//!         )
-//!     }
-//! }
 //! ```
 //!
 //! # Aggregation
@@ -176,8 +140,8 @@
 //!
 //! # Conditionals
 //!
-//! The `typle!` and `typle_bound!` macros accept an `if` statement with an optional
-//! `else` clause. If there is no `else` clause the macro filters out components that do not match
+//! The `typle!` macro accepts an `if` statement with an optional `else` clause.
+//! If there is no `else` clause the macro filters out components that do not match
 //! the condition.
 //!
 //! The `typle_attr_if` attribute allows conditional inclusion of attributes. It works similarly to
@@ -187,17 +151,58 @@
 //! ```
 //! # use typle::typle;
 //! #[typle(Tuple for 0..=12)]
-//! fn even_string_odd<T: Tuple>(
+//! fn even_to_string<T: Tuple>(
 //!     t: T,
 //! ) -> (typle!(i in .. => if i % 2 == 0 { String } else { T<{i}> }))
 //! where
-//!     typle_bound!(i in .. => if i % 2 == 0 { T<{i}> }): ToString,
+//!     typle!(i in .. => if i % 2 == 0 { T<{i}>: ToString }): Tuple::Bounds,
 //! {
 //!     #[typle_attr_if(T::LEN == 0, allow(clippy::unused_unit))]
 //!     (typle!(i in .. => if i % 2 == 0 { t[[i]].to_string() } else { t[[i]] }))
 //! }
 //!
-//! assert_eq!(even_string_odd((0, 1, 2, 3)), ("0".to_owned(), 1, "2".to_owned(), 3));
+//! // `Vec` does not implement `ToString` but, with an odd position, it doesn't need to
+//! assert_eq!(even_to_string((0, vec![1], 2, 3)), ("0".to_owned(), vec![1], "2".to_owned(), 3));
+//! ```
+//!
+//! If there is no range in the `typle!` macro, the body is evaluated once. This can be
+//! useful in positions where an `if` expression is not permitted.
+//!
+//! The associated constant `LAST` is always equal to `LEN - 1`. This is convenient for cases where
+//! the final component should be treated differently, such as avoiding an additional clone. Using
+//! `LAST` for a zero-length tuple causes a compilation error.
+//!
+//! ```
+//! # use typle::typle;
+//! trait HandleStuff {
+//!     type Input;
+//!     type Output;
+//!
+//!     fn handle_stuff(&self, input: Self::Input) -> Self::Output;
+//! }
+//!
+//! struct MultipleHandlers<T> {
+//!     handlers: T,
+//! }
+//!
+//! #[typle(Tuple for 1..=12)]
+//! impl<T: Tuple, I> HandleStuff for MultipleHandlers<T>
+//! where
+//!     T<_>: HandleStuff<Input = I>,
+//!     // Only require the Clone bound if there are two or more handlers
+//!     typle!(=> if T::LEN > 1 { I: Clone }): Tuple::Bounds,
+//! {
+//!     type Input = I;
+//!     type Output = (typle!(i in .. => T<{i}>::Output));
+//!
+//!     fn handle_stuff(&self, input: Self::Input) -> Self::Output {
+//!         (
+//!             typle!(i in ..T::LAST => self.handlers[[i]].handle_stuff(input.clone())),
+//!             // Avoid expensive clone for the last handler.
+//!             self.handlers[[T::LAST]].handle_stuff(input),
+//!         )
+//!     }
+//! }
 //! ```
 //!
 //! # Iteration

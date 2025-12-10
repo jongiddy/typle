@@ -44,61 +44,34 @@ A common use of `typle` is to implement a trait for tuples of multiple lengths.
 Compared to using declarative macros, the `typle` code looks more Rust-like and
 provides access to individual components and their position.
 
-For example the `Hash` implementation for tuples simply hashes each component of
-the tuple in order.
-
-Using `typle` this can be written as:
-
 ```rust
+trait HandleStuff {
+    type Input;
+    type Output;
+
+    fn handle_stuff(&self, input: Self::Input) -> Self::Output;
+}
+
+struct MultipleHandlers<T> {
+    handlers: T,
+}
+
 #[typle(Tuple for 1..=12)]
-impl<T> Hash for T
+impl<T: Tuple, I: Clone> HandleStuff for MultipleHandlers<T>
 where
-    T: Tuple,  // `T` must be a tuple with 1-12 components.
-    T<_>: Hash,  // All components must implement `Hash`.
-    T<{T::LAST}>: ?Sized,  // The last component may be unsized.
+    T<_>: HandleStuff<Input = I>,
 {
-    #[inline]
-    fn hash<S: Hasher>(&self, state: &mut S) {
-        for typle_index!(i) in 0..T::LEN {
-            self[[i]].hash(state);
-        }
+    type Input = I;
+    type Output = (typle!(i in .. => T<{i}>::Output));
+
+    fn handle_stuff(&self, input: Self::Input) -> Self::Output {
+        (
+            typle!(i in ..T::LAST => self.handlers[[i]].handle_stuff(input.clone())),
+            // Avoid expensive clone for the last handler.
+            self.handlers[[T::LAST]].handle_stuff(input),
+        )
     }
 }
-```
-
-Compare this to the current implementation in the standard library:
-
-```rust
-macro_rules! impl_hash_tuple {
-    ( $($name:ident)+) => (
-        impl<$($name: Hash),+> Hash for ($($name,)+) where last_type!($($name,)+): ?Sized {
-            #[allow(non_snake_case)]
-            #[inline]
-            fn hash<S: Hasher>(&self, state: &mut S) {
-                let ($(ref $name,)+) = *self;
-                $($name.hash(state);)+
-            }
-        }
-    );
-}
-
-macro_rules! last_type {
-    ($a:ident,) => { $a };
-    ($a:ident, $($rest_a:ident,)+) => { last_type!($($rest_a,)+) };
-}
-
-impl_hash_tuple! { T }
-impl_hash_tuple! { T B }
-impl_hash_tuple! { T B C }
-impl_hash_tuple! { T B C D }
-impl_hash_tuple! { T B C D E }
-impl_hash_tuple! { T B C D E F }
-impl_hash_tuple! { T B C D E F G }
-impl_hash_tuple! { T B C D E F G H }
-impl_hash_tuple! { T B C D E F G H I }
-impl_hash_tuple! { T B C D E F G H I J }
-impl_hash_tuple! { T B C D E F G H I J K }
-impl_hash_tuple! { T B C D E F G H I J K L }
 ```
 
 See the [crate documentation](https://docs.rs/typle/) for more examples.

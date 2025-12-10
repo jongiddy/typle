@@ -28,12 +28,12 @@ where
 {
 }
 
-// typle_bound! allows the component index to be used in the trait bound
+// typle! allows the component index to be used in the trait bound
 #[typle(Tuple for 1..=2)]
 impl<T, F> TraitD for TupleD<T<{ ..T::MAX }>>
 where
     T: Tuple,
-    typle_bound!(i in .. => T<{i}>): Mul<T<{ T::LEN - i - 1 }>>,
+    typle!(i in .. => T<{i}>: Mul<T<{ T::LEN - i - 1 }>>): Tuple::Bounds,
     T<{ T::LEN - 1 }>: AsRef<str>,
     F: Fn(T) -> T,
 {

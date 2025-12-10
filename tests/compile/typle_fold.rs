@@ -20,12 +20,12 @@ pub trait UsefulTrait {
 impl<T: Tuple> UsefulTrait for T
 where
     T<_>: UsefulTrait + std::fmt::Display,
-    typle_bound!(i in 1.. => T<{i}>::UsefulType):IsUseful<
+    typle!(i in 1.. => T<{i}>::UsefulType: IsUseful<
         typle_fold!(
             T<0>::UsefulType;
             j in 1..i => |Inner| <T<{j}>::UsefulType as IsUseful<Inner>>::State
         ),
-    >,
+    >): Tuple::Bounds,
 {
     type UsefulType = typle_fold!(
         T<0>::UsefulType;

@@ -1,3 +1,8 @@
+# 0.12
+
+## Backwards-incompatible changes
+- `typle_bounds!` has been replaced by support for `typle!` macro in where clauses.
+
 # 0.11
 
 ## Backwards-incompatible changes

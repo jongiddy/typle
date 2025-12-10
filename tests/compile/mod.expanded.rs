@@ -2716,6 +2716,56 @@ pub mod typle_args {
             ::core::panicking::panic("not yet implemented")
         }
     }
+    trait HandleStuff {
+        type Input;
+        type Output;
+        fn handle_stuff(&self, input: Self::Input) -> Self::Output;
+    }
+    struct MultipleHandlers<T> {
+        handlers: T,
+    }
+    impl<T0, I> HandleStuff for MultipleHandlers<(T0,)>
+    where
+        T0: HandleStuff<Input = I>,
+    {
+        type Input = I;
+        type Output = (<T0>::Output,);
+        fn handle_stuff(&self, input: Self::Input) -> Self::Output {
+            (self.handlers.0.handle_stuff(input),)
+        }
+    }
+    impl<T0, T1, I> HandleStuff for MultipleHandlers<(T0, T1)>
+    where
+        T0: HandleStuff<Input = I>,
+        T1: HandleStuff<Input = I>,
+        I: Clone,
+    {
+        type Input = I;
+        type Output = (<T0>::Output, <T1>::Output);
+        fn handle_stuff(&self, input: Self::Input) -> Self::Output {
+            (
+                self.handlers.0.handle_stuff(input.clone()),
+                self.handlers.1.handle_stuff(input),
+            )
+        }
+    }
+    impl<T0, T1, T2, I> HandleStuff for MultipleHandlers<(T0, T1, T2)>
+    where
+        T0: HandleStuff<Input = I>,
+        T1: HandleStuff<Input = I>,
+        T2: HandleStuff<Input = I>,
+        I: Clone,
+    {
+        type Input = I;
+        type Output = (<T0>::Output, <T1>::Output, <T2>::Output);
+        fn handle_stuff(&self, input: Self::Input) -> Self::Output {
+            (
+                self.handlers.0.handle_stuff(input.clone()),
+                self.handlers.1.handle_stuff(input.clone()),
+                self.handlers.2.handle_stuff(input),
+            )
+        }
+    }
 }
 pub mod typle_fold {
     #![allow(dead_code)]

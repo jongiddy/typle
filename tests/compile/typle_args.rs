@@ -24,7 +24,7 @@ fn append_even<T: Tuple>(t: T, a: u32) -> (typle!(i in .. => if i % 2 == 0 {T<{i
 #[typle(Tuple for 0..=3)]
 fn even_string_odd<T: Tuple>(t: T) -> (typle!(i in .. => if i % 2 == 0 {String} else {T<{i}>}))
 where
-    typle_bound!(i in .. => if i % 2 == 0 {T<{i}>}): ToString,
+    typle!(i in .. => if i % 2 == 0 {T<{i}>: ToString}): Tuple::Bounds,
 {
     #[typle_attr_if(T::LEN == 0, allow(clippy::unused_unit))]
     (typle!(i in .. => if i % 2 == 0 {t[[i]].to_string()} else {t[[i]]}))
@@ -72,5 +72,34 @@ where
         param_value: ExclusiveSystemParamItem<F>,
     ) -> Self::Out {
         todo!()
+    }
+}
+
+trait HandleStuff {
+    type Input;
+    type Output;
+
+    fn handle_stuff(&self, input: Self::Input) -> Self::Output;
+}
+
+struct MultipleHandlers<T> {
+    handlers: T,
+}
+
+#[typle(Tuple for 1..=3)]
+impl<T: Tuple, I> HandleStuff for MultipleHandlers<T>
+where
+    T<_>: HandleStuff<Input = I>,
+    typle!(=> if T::LEN > 1 { I: Clone }): Tuple::Bounds,
+{
+    type Input = I;
+    type Output = (typle!(i in .. => T<{i}>::Output));
+
+    fn handle_stuff(&self, input: Self::Input) -> Self::Output {
+        (
+            typle!(i in ..T::LAST => self.handlers[[i]].handle_stuff(input.clone())),
+            // Avoid expensive clone for the last handler.
+            self.handlers[[T::LAST]].handle_stuff(input),
+        )
     }
 }

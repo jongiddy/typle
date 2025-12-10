@@ -23,7 +23,7 @@ use syn::{
 use zip_clone::ZipClone as _;
 
 use crate::constant::{evaluate_bool, evaluate_range, evaluate_usize};
-use crate::context::shared::abort;
+use crate::context::shared::{abort, Replacement};
 use crate::syn_ext::GeneralFunction;
 use crate::TypleMacro;
 
@@ -463,55 +463,46 @@ impl TypleContext {
                         }
                         Type::Macro(syn::TypeMacro { mac }) => {
                             if let Some(ident) = mac.path.get_ident() {
-                                if ident == "typle_bound" {
-                                    let token_stream = std::mem::take(&mut mac.tokens);
-                                    let mut tokens = token_stream.into_iter();
-                                    let (pattern, range) =
-                                        self.parse_pattern_range(&mut tokens)?;
-                                    if range.is_empty() {
-                                        continue;
-                                    }
-                                    let token_stream = tokens.collect::<TokenStream>();
-                                    let mut context = self.clone();
-                                    if let Some(ident) = pattern.clone() {
-                                        context.constants.insert(ident, 0);
-                                    }
-                                    for (index, token_stream) in range.zip_clone(token_stream) {
-                                        if let Some(ident) = &pattern {
-                                            *context.constants.get_mut(ident).unwrap() = index;
-                                        }
-                                        let Some(token_stream) =
-                                            context.evaluate_if(token_stream)?
-                                        else {
-                                            continue;
-                                        };
-                                        let mut bounded_ty = syn::parse2::<Type>(token_stream)?;
-                                        context.replace_type(&mut bounded_ty)?;
-                                        let bounds = predicate_type
-                                            .bounds
-                                            .iter()
-                                            .map(|bound| {
-                                                let mut bound = bound.clone();
-                                                if let TypeParamBound::Trait(trait_bound) =
-                                                    &mut bound
-                                                {
-                                                    context.replace_path_arguments(
-                                                        &mut trait_bound.path,
-                                                    )?;
+                                if ident == "typle" {
+                                    let bounds = &predicate_type.bounds;
+                                    if let (
+                                        Some(TypeParamBound::Trait(syn::TraitBound {
+                                            paren_token: None,
+                                            modifier: syn::TraitBoundModifier::None,
+                                            lifetimes: None,
+                                            path:
+                                                Path {
+                                                    leading_colon: None,
+                                                    segments,
+                                                },
+                                        })),
+                                        None,
+                                    ) = (bounds.get(0), bounds.get(1))
+                                    {
+                                        if let (
+                                            Some(syn::PathSegment {
+                                                ident: ident1,
+                                                arguments: PathArguments::None,
+                                            }),
+                                            Some(syn::PathSegment {
+                                                ident: ident2,
+                                                arguments: PathArguments::None,
+                                            }),
+                                            None,
+                                        ) = (segments.get(0), segments.get(1), segments.get(2))
+                                        {
+                                            if *ident1 == self.typle_macro.ident && ident2 == "Bounds"
+                                            {
+                                                let token_stream = std::mem::take(&mut mac.tokens);
+                                                let predicates =
+                                                    self.expand_predicates(token_stream);
+                                                for predicate in predicates {
+                                                    where_clause.predicates.push(predicate?);
                                                 }
-                                                Ok(bound)
-                                            })
-                                            .collect::<syn::Result<_>>()?;
-                                        where_clause.predicates.push(WherePredicate::Type(
-                                            syn::PredicateType {
-                                                lifetimes: None,
-                                                bounded_ty,
-                                                colon_token: token::Colon::default(),
-                                                bounds,
-                                            },
-                                        ));
+                                                continue;
+                                            }
+                                        }
                                     }
-                                    continue;
                                 }
                             }
                         }
@@ -521,12 +512,13 @@ impl TypleContext {
                     for bound in &mut predicate_type.bounds {
                         // substitute any appearances of typles in the constraints
                         // (e.g. T<_>: Extract<Output = S<0>::Output>)
-                        if let TypeParamBound::Trait(trait_bound) = bound {
-                            self.replace_path_arguments(&mut trait_bound.path)?;
-                        }
+                        self.replace_bound(bound)?;
                     }
                 }
                 where_clause.predicates.push(predicate);
+            }
+            if where_clause.predicates.is_empty() {
+                generics.where_clause = None;
             }
         }
         for generic_param in std::mem::take(&mut generics.params) {
@@ -553,6 +545,58 @@ impl TypleContext {
             }
         }
         Ok(())
+    }
+
+    fn replace_bound(&self, bound: &mut TypeParamBound) -> syn::Result<()> {
+        if let TypeParamBound::Trait(trait_bound) = bound {
+            self.replace_path_arguments(&mut trait_bound.path)?;
+        }
+        Ok(())
+    }
+
+    fn expand_predicates(&self, token_stream: TokenStream) -> Replacement<WherePredicate> {
+        self.expand_typle_macro(token_stream, |context, token_stream| {
+            // Divide the token_stream at the first single :
+            let mut bounded = Vec::new();
+            let mut bound = Vec::new();
+            let mut first_colon = None;
+            for tt in token_stream {
+                if bound.is_empty() {
+                    match tt {
+                        TokenTree::Punct(punct) if punct.as_char() == ':' => {
+                            if let Some(colon) = first_colon.take() {
+                                // ignore double-colon
+                                bounded.push(TokenTree::Punct(colon));
+                                bounded.push(TokenTree::Punct(punct));
+                            } else {
+                                // might be a single or double colon
+                                first_colon = Some(punct);
+                            }
+                        }
+                        tt => {
+                            if first_colon.take().is_some() {
+                                // first token of the bound
+                                bound.push(tt);
+                            } else {
+                                bounded.push(tt);
+                            }
+                        }
+                    }
+                } else {
+                    bound.push(tt);
+                }
+            }
+            let mut bounded_ty = syn::parse2::<Type>(bounded.into_iter().collect())?;
+            context.replace_type(&mut bounded_ty)?;
+            let mut bound = syn::parse2::<TypeParamBound>(bound.into_iter().collect())?;
+            context.replace_bound(&mut bound)?;
+            Ok(WherePredicate::Type(syn::PredicateType {
+                lifetimes: None,
+                bounded_ty,
+                colon_token: token::Colon::default(),
+                bounds: std::iter::once(bound).collect(),
+            }))
+        })
     }
 
     fn replace_generic_arguments(
