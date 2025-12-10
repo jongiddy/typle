@@ -46,32 +46,86 @@ provides access to individual components and their position.
 
 ```rust
 trait HandleStuff {
-    type Input;
     type Output;
 
-    fn handle_stuff(&self, input: Self::Input) -> Self::Output;
+    fn handle_stuff(&self, input: Input) -> Self::Output;
 }
 
 struct MultipleHandlers<T> {
     handlers: T,
 }
 
-#[typle(Tuple for 1..=12)]
-impl<T: Tuple, I: Clone> HandleStuff for MultipleHandlers<T>
+#[typle(Tuple for 0..=3)]
+impl<T> HandleStuff for MultipleHandlers<T>
 where
-    T<_>: HandleStuff<Input = I>,
+    T: Tuple,           // `T`` is a tuple with 0 to 12 components.
+    T<_>: HandleStuff,  // All components implement `HandleStuff`.
 {
-    type Input = I;
     type Output = (typle!(i in .. => T<{i}>::Output));
 
-    fn handle_stuff(&self, input: Self::Input) -> Self::Output {
-        (
-            typle!(i in ..T::LAST => self.handlers[[i]].handle_stuff(input.clone())),
-            // Avoid expensive clone for the last handler.
-            self.handlers[[T::LAST]].handle_stuff(input),
-        )
+    // Return a tuple of output from each handler applied to the same input.
+    fn handle_stuff(&self, input: Input) -> Self::Output {
+        if typle_const!(T::LEN == 0) {
+            ()
+        } else {
+            (
+                typle!(i in ..T::LAST => self.handlers[[i]].handle_stuff(input.clone())),
+                // Avoid expensive clone for the last handler.
+                self.handlers[[T::LAST]].handle_stuff(input),
+            )
+        }
     }
 }
 ```
 
+This generates the implementations
+```rust
+impl HandleStuff for MultipleHandlers<()> {
+    type Output = ();
+    fn handle_stuff(&self, input: Input) -> Self::Output {
+        { () }
+    }
+}
+impl<T0> HandleStuff for MultipleHandlers<(T0,)>
+where
+    T0: HandleStuff,
+{
+    type Output = (<T0>::Output,);
+    fn handle_stuff(&self, input: Input) -> Self::Output {
+        { (self.handlers.0.handle_stuff(input),) }
+    }
+}
+impl<T0, T1> HandleStuff for MultipleHandlers<(T0, T1)>
+where
+    T0: HandleStuff,
+    T1: HandleStuff,
+{
+    type Output = (<T0>::Output, <T1>::Output);
+    fn handle_stuff(&self, input: Input) -> Self::Output {
+        {
+            (
+                self.handlers.0.handle_stuff(input.clone()),
+                self.handlers.1.handle_stuff(input),
+            )
+        }
+    }
+}
+impl<T0, T1, T2> HandleStuff for MultipleHandlers<(T0, T1, T2)>
+where
+    T0: HandleStuff,
+    T1: HandleStuff,
+    T2: HandleStuff,
+{
+    type Output = (<T0>::Output, <T1>::Output, <T2>::Output);
+    fn handle_stuff(&self, input: Input) -> Self::Output {
+        {
+            (
+                self.handlers.0.handle_stuff(input.clone()),
+                self.handlers.1.handle_stuff(input.clone()),
+                self.handlers.2.handle_stuff(input),
+            )
+        }
+    }
+}
+```
 See the [crate documentation](https://docs.rs/typle/) for more examples.
