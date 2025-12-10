@@ -1,3 +1,4 @@
+//! # `#[typle(...)]`
 //! The `typle` attribute macro generates code for multiple tuple lengths. This code:
 //!
 //! ```rust
@@ -45,16 +46,18 @@
 //! /// Split off the first component of a tuple.
 //! #[typle(Tuple for 1..=12)]
 //! fn split_first<T: Tuple>(
-//!     t: T  // t: (T<0>, T<1>, T<2>,...)
-//! ) -> (T<0>, (T<{1..}>))  // (T<0>, (T<1>, T<2>,...))
+//!     t: T                    // t: (T<0>, T<1>, T<2>,...)
+//! ) -> (T<0>, (T<{1..}>))     // -> (T<0>, (T<1>, T<2>,...))
 //! {
-//!     (t[[0]], (t[[1..]]))  // (t.0, (t.1, t.2,...))
+//!     (t[[0]], (t[[1..]]))    // (t.0, (t.1, t.2,...))
 //! }
 //!
 //! assert_eq!(split_first(('1', 2, 3.0)), ('1', (2, 3.0)));
 //! assert_eq!(split_first((2, 3.0)), (2, (3.0,)));
 //! assert_eq!(split_first((3.0,)), (3.0, ()));
 //! ```
+//!
+//! # `typle!(...)`
 //!
 //! The `typle!` macro creates a new sequence of types or expressions. A
 //! `typle!` macro can only appear where a comma-separated sequence is valid
@@ -88,6 +91,8 @@
 //!
 //! assert_eq!(append((1, 2, 3), 4), (1, 2, 3, 4));
 //! ```
+//!
+//! # Constraints
 //!
 //! Specify constraints on the tuple components using one of the following
 //! forms. Except for the first form, these constraints can only appear in the
@@ -150,7 +155,8 @@
 //!
 //! ```
 //! # use typle::typle;
-//! #[typle(Tuple for 0..=12)]
+//! #[cfg_attr(not(feature = "big-tuple"), typle(Tuple for 0..=12))]
+//! #[cfg_attr(feature = "big-tuple", typle(Tuple for 0..=24))]
 //! fn even_to_string<T: Tuple>(
 //!     t: T,
 //! ) -> (typle!(i in .. => if i % 2 == 0 { String } else { T<{i}> }))
@@ -165,45 +171,55 @@
 //! assert_eq!(even_to_string((0, vec![1], 2, 3)), ("0".to_owned(), vec![1], "2".to_owned(), 3));
 //! ```
 //!
-//! If there is no range in the `typle!` macro, the body is evaluated once. This can be
-//! useful in positions where an `if` expression is not permitted.
-//!
 //! The associated constant `LAST` is always equal to `LEN - 1`. This is convenient for cases where
-//! the final component should be treated differently, such as avoiding an additional clone. Using
-//! `LAST` for a zero-length tuple causes a compilation error.
+//! the final component should be treated differently, such as avoiding an additional clone. `LAST`
+//! is not defined when `LEN == 0` and will cause a compilation error.
+//!
+//! The `typle_const!` macro supports const-if on a boolean typle index expression. const-if allows
+//! conditional branches that do not compile, as long as the branch are `false` at compile-time. The
+//! following code compiles for `T::LEN == 0` because `T::LAST` appears in an `else` branch that is
+//! not compiled when `T::LEN == 0`.
 //!
 //! ```
 //! # use typle::typle;
+//! # #[derive(Clone)]
+//! # struct Input {}
 //! trait HandleStuff {
-//!     type Input;
 //!     type Output;
 //!
-//!     fn handle_stuff(&self, input: Self::Input) -> Self::Output;
+//!     fn handle_stuff(&self, input: Input) -> Self::Output;
 //! }
 //!
 //! struct MultipleHandlers<T> {
 //!     handlers: T,
 //! }
 //!
-//! #[typle(Tuple for 1..=12)]
-//! impl<T: Tuple, I> HandleStuff for MultipleHandlers<T>
+//! #[typle(Tuple for 0..=12)]
+//! impl<T> HandleStuff for MultipleHandlers<T>
 //! where
-//!     T<_>: HandleStuff<Input = I>,
-//!     // Only require the Clone bound if there are two or more handlers
-//!     typle!(=> if T::LEN > 1 { I: Clone }): Tuple::Bounds,
+//!     T: Tuple,
+//!     T<_>: HandleStuff,
 //! {
-//!     type Input = I;
 //!     type Output = (typle!(i in .. => T<{i}>::Output));
 //!
-//!     fn handle_stuff(&self, input: Self::Input) -> Self::Output {
-//!         (
-//!             typle!(i in ..T::LAST => self.handlers[[i]].handle_stuff(input.clone())),
-//!             // Avoid expensive clone for the last handler.
-//!             self.handlers[[T::LAST]].handle_stuff(input),
-//!         )
+//!     // Return a tuple of output from each handler applied to the same input.
+//!     fn handle_stuff(&self, input: Input) -> Self::Output {
+//!         if typle_const!(T::LEN == 0) {
+//!             ()
+//!         } else {
+//!             (
+//!                 typle!(i in ..T::LAST => self.handlers[[i]].handle_stuff(input.clone())),
+//!                 // Avoid expensive clone for the last handler.
+//!                 self.handlers[[T::LAST]].handle_stuff(input),
+//!             )
+//!         }
 //!     }
 //! }
 //! ```
+//!
+//! Without `typle_const!` this code will fail to compile. When there is no compilation error
+//! `typle_const!` is not needed. With a constant condition the compiler will compile the false
+//! branch but will optimize it out.
 //!
 //! # Iteration
 //!
@@ -297,7 +313,7 @@
 //! assert_eq!(('f',).wrapping_substring_at(12), "ff");
 //! ```
 //!
-//! # enums
+//! # `enum`
 //!
 //! Applying `typle` to an `enum` implements the `enum` once for the maximum length only.
 //!
@@ -358,12 +374,6 @@
 //! The `typle_ident!` macro concatenates a number to an identifier. For
 //! example `S::<typle_ident!(3)>` becomes the identifier `S3`. This is mainly
 //! used to refer to enum variants.
-//!
-//! The `typle_const!` macro supports const-if on a boolean typle index
-//! expression. const-if allows branches that do not compile, as long as they
-//! are `false` at compile-time. For example, this code compiles for `T::LEN == 4`
-//! even though the variant `TupleSequenceState::S4` does not exist because the
-//! branch that refers to it is not compiled when `(i == T::LAST)`.
 //!
 //! ```rust
 //! # use typle::typle;

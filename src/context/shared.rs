@@ -343,7 +343,7 @@ impl TypleContext {
                         if ident1 == &self.typle_macro.ident || self.typles.contains_key(ident1) {
                             // Tuple::LEN or T::LEN
                             let Some(typle_len) = self.typle_len else {
-                                abort!(ident2, "LEN not available outside fn or impl");
+                                abort!(ident2, "LEN not defined outside fn or impl");
                             };
                             return Ok(Some(Lit::Int(syn::LitInt::new(
                                 &typle_len.to_string(),
@@ -358,10 +358,10 @@ impl TypleContext {
                         if ident1 == &self.typle_macro.ident || self.typles.contains_key(ident1) {
                             // Tuple::LAST or T::LAST
                             let Some(typle_len) = self.typle_len else {
-                                abort!(ident2, "LAST not available outside fn or impl");
+                                abort!(ident2, "LAST not defined outside fn or impl");
                             };
                             if typle_len == 0 {
-                                abort!(ident2, "LAST not available when LEN == 0");
+                                abort!(ident2, "LAST not defined when LEN == 0");
                             }
                             return Ok(Some(Lit::Int(syn::LitInt::new(
                                 &(typle_len - 1).to_string(),

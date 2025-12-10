@@ -2716,54 +2716,66 @@ pub mod typle_args {
             ::core::panicking::panic("not yet implemented")
         }
     }
+    struct Input {}
+    #[automatically_derived]
+    impl ::core::clone::Clone for Input {
+        #[inline]
+        fn clone(&self) -> Input {
+            Input {}
+        }
+    }
     trait HandleStuff {
-        type Input;
         type Output;
-        fn handle_stuff(&self, input: Self::Input) -> Self::Output;
+        fn handle_stuff(&self, input: Input) -> Self::Output;
     }
     struct MultipleHandlers<T> {
         handlers: T,
     }
-    impl<T0, I> HandleStuff for MultipleHandlers<(T0,)>
+    impl HandleStuff for MultipleHandlers<()> {
+        type Output = ();
+        fn handle_stuff(&self, input: Input) -> Self::Output {
+            { () }
+        }
+    }
+    impl<T0> HandleStuff for MultipleHandlers<(T0,)>
     where
-        T0: HandleStuff<Input = I>,
+        T0: HandleStuff,
     {
-        type Input = I;
         type Output = (<T0>::Output,);
-        fn handle_stuff(&self, input: Self::Input) -> Self::Output {
-            (self.handlers.0.handle_stuff(input),)
+        fn handle_stuff(&self, input: Input) -> Self::Output {
+            { (self.handlers.0.handle_stuff(input),) }
         }
     }
-    impl<T0, T1, I> HandleStuff for MultipleHandlers<(T0, T1)>
+    impl<T0, T1> HandleStuff for MultipleHandlers<(T0, T1)>
     where
-        T0: HandleStuff<Input = I>,
-        T1: HandleStuff<Input = I>,
-        I: Clone,
+        T0: HandleStuff,
+        T1: HandleStuff,
     {
-        type Input = I;
         type Output = (<T0>::Output, <T1>::Output);
-        fn handle_stuff(&self, input: Self::Input) -> Self::Output {
-            (
-                self.handlers.0.handle_stuff(input.clone()),
-                self.handlers.1.handle_stuff(input),
-            )
+        fn handle_stuff(&self, input: Input) -> Self::Output {
+            {
+                (
+                    self.handlers.0.handle_stuff(input.clone()),
+                    self.handlers.1.handle_stuff(input),
+                )
+            }
         }
     }
-    impl<T0, T1, T2, I> HandleStuff for MultipleHandlers<(T0, T1, T2)>
+    impl<T0, T1, T2> HandleStuff for MultipleHandlers<(T0, T1, T2)>
     where
-        T0: HandleStuff<Input = I>,
-        T1: HandleStuff<Input = I>,
-        T2: HandleStuff<Input = I>,
-        I: Clone,
+        T0: HandleStuff,
+        T1: HandleStuff,
+        T2: HandleStuff,
     {
-        type Input = I;
         type Output = (<T0>::Output, <T1>::Output, <T2>::Output);
-        fn handle_stuff(&self, input: Self::Input) -> Self::Output {
-            (
-                self.handlers.0.handle_stuff(input.clone()),
-                self.handlers.1.handle_stuff(input.clone()),
-                self.handlers.2.handle_stuff(input),
-            )
+        fn handle_stuff(&self, input: Input) -> Self::Output {
+            {
+                (
+                    self.handlers.0.handle_stuff(input.clone()),
+                    self.handlers.1.handle_stuff(input.clone()),
+                    self.handlers.2.handle_stuff(input),
+                )
+            }
         }
     }
 }
