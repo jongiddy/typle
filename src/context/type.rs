@@ -179,9 +179,8 @@ impl TypleContext {
                     elems: Punctuated::new(),
                 };
                 let token_stream = std::mem::take(&mut m.mac.tokens);
-                let default_span = token_stream.span();
                 let mut tokens = token_stream.into_iter();
-                let (pattern, range) = self.parse_pattern_range(&mut tokens, default_span)?;
+                let (pattern, range) = self.parse_pattern_range(&mut tokens)?;
                 if range.is_empty() {
                     return Ok(Some(Type::Tuple(tuple)));
                 }
@@ -224,7 +223,7 @@ impl TypleContext {
         let mut init_type =
             syn::parse2::<Type>(Self::extract_to_semicolon(&mut tokens, default_span)?)?;
         self.replace_type(&mut init_type)?;
-        let (pattern, mut range) = self.parse_pattern_range(&mut tokens, default_span)?;
+        let (pattern, mut range) = self.parse_pattern_range(&mut tokens)?;
         if range.is_empty() {
             return Ok(init_type);
         }

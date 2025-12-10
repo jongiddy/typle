@@ -465,10 +465,9 @@ impl TypleContext {
                             if let Some(ident) = mac.path.get_ident() {
                                 if ident == "typle_bound" {
                                     let token_stream = std::mem::take(&mut mac.tokens);
-                                    let default_span = token_stream.span();
                                     let mut tokens = token_stream.into_iter();
                                     let (pattern, range) =
-                                        self.parse_pattern_range(&mut tokens, default_span)?;
+                                        self.parse_pattern_range(&mut tokens)?;
                                     if range.is_empty() {
                                         continue;
                                     }
@@ -847,10 +846,9 @@ impl TypleContext {
                             if let Some(ident) = r#macro.mac.path.get_ident() {
                                 if ident == "typle_variant" {
                                     let token_stream = std::mem::take(&mut r#macro.mac.tokens);
-                                    let default_span = token_stream.span();
                                     let mut tokens = token_stream.into_iter();
                                     let (pattern, range) =
-                                        context.parse_pattern_range(&mut tokens, default_span)?;
+                                        context.parse_pattern_range(&mut tokens)?;
                                     if range.is_empty() {
                                         continue;
                                     }
@@ -1056,9 +1054,8 @@ impl TypleContext {
         state: &'a mut BlockState,
     ) -> syn::Result<impl Iterator<Item = syn::Result<Expr>> + 'a> {
         let token_stream = std::mem::take(&mut mac.tokens);
-        let default_span = token_stream.span();
         let mut tokens = token_stream.into_iter();
-        let (pattern, range) = self.parse_pattern_range(&mut tokens, default_span)?;
+        let (pattern, range) = self.parse_pattern_range(&mut tokens)?;
         let token_stream = tokens.collect::<TokenStream>();
         let mut context = self.clone();
         if let Some(ident) = &pattern {
@@ -1110,7 +1107,7 @@ impl TypleContext {
         let mut init_expr =
             syn::parse2::<Expr>(Self::extract_to_semicolon(&mut tokens, default_span)?)?;
         self.replace_expr(&mut init_expr, &mut inner_state)?;
-        let (pattern, range) = self.parse_pattern_range(&mut tokens, default_span)?;
+        let (pattern, range) = self.parse_pattern_range(&mut tokens)?;
         if range.is_empty() {
             return Ok(Expr::Paren(syn::ExprParen {
                 attrs,
@@ -1234,7 +1231,6 @@ impl TypleContext {
                 let token_stream = std::mem::take(&mut mac.tokens);
                 let expr = self.anyall(
                     token_stream,
-                    default_span,
                     state,
                     BinOp::And(token::AndAnd::default()),
                     true,
@@ -1244,7 +1240,6 @@ impl TypleContext {
                 let token_stream = std::mem::take(&mut mac.tokens);
                 let expr = self.anyall(
                     token_stream,
-                    default_span,
                     state,
                     BinOp::Or(token::OrOr::default()),
                     false,
@@ -1259,13 +1254,12 @@ impl TypleContext {
     fn anyall(
         &self,
         token_stream: TokenStream,
-        default_span: Span,
         state: &mut BlockState,
         op: BinOp,
         default: bool,
     ) -> syn::Result<Expr> {
         let mut tokens = token_stream.into_iter();
-        let (pattern, mut range) = self.parse_pattern_range(&mut tokens, default_span)?;
+        let (pattern, mut range) = self.parse_pattern_range(&mut tokens)?;
         let expr = syn::parse2::<Expr>(tokens.collect())?;
         let all = match range.next() {
             Some(index) => {
