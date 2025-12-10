@@ -145,9 +145,8 @@ impl TypleContext {
                     elems: Punctuated::new(),
                 };
                 let token_stream = std::mem::take(&mut m.mac.tokens);
-                let default_span = token_stream.span();
                 let mut tokens = token_stream.into_iter();
-                let (pattern, range) = self.parse_pattern_range(&mut tokens, default_span)?;
+                let (pattern, range) = self.parse_pattern_range(&mut tokens)?;
                 if range.is_empty() {
                     return Ok(Some(Pat::Tuple(tuple)));
                 }

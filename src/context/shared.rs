@@ -40,7 +40,6 @@ impl TypleContext {
     pub(super) fn parse_pattern_range(
         &self,
         tokens: &mut impl Iterator<Item = TokenTree>,
-        span: Span,
     ) -> syn::Result<(Option<Ident>, Range<usize>)> {
         let mut collect = TokenStream::new();
         let mut pattern = None;
@@ -54,9 +53,7 @@ impl TypleContext {
                     let mut tokens = std::mem::take(&mut collect).into_iter();
                     match tokens.next() {
                         Some(TokenTree::Ident(ident)) => {
-                            if ident != "_" {
-                                pattern = Some(ident);
-                            }
+                            pattern = Some(ident);
                             if let Some(tt) = tokens.next() {
                                 abort!(tt, "unexpected token");
                             }
@@ -88,7 +85,8 @@ impl TypleContext {
             collect.extend([TokenTree::Punct(punct)]);
         }
         if collect.is_empty() {
-            return Err(syn::Error::new(span, "expected range"));
+            // single iteration replacement: typle!(=> if T::LEN > 1 {C: Clone})
+            return Ok((None, 0..1));
         }
         let mut expr = syn::parse2::<Expr>(collect)?;
         let mut state = BlockState::default();
@@ -141,7 +139,11 @@ impl TypleContext {
     }
 
     // This can return <QSelf>:: or <QSelf> which needs to be cleaned up by the caller.
-    pub(super) fn replace_qself_path(&self, qself: &mut Option<QSelf>, path: &mut Path) -> syn::Result<()> {
+    pub(super) fn replace_qself_path(
+        &self,
+        qself: &mut Option<QSelf>,
+        path: &mut Path,
+    ) -> syn::Result<()> {
         if let Some(qself) = qself {
             self.replace_type(&mut qself.ty)?;
         } else if let Some(ident) = path.segments.first().map(|segment| &segment.ident) {
@@ -403,9 +405,8 @@ impl TypleContext {
         T: 'static,
         F: Fn(&TypleContext, TokenStream) -> syn::Result<T> + 'static,
     {
-        let default_span = token_stream.span();
         let mut tokens = token_stream.into_iter();
-        let (pattern, range) = match self.parse_pattern_range(&mut tokens, default_span) {
+        let (pattern, range) = match self.parse_pattern_range(&mut tokens) {
             Ok(t) => t,
             Err(e) => {
                 return Replacement::Error(e);
