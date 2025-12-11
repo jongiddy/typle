@@ -1,4 +1,4 @@
-use crate::context::shared::Replacement;
+use crate::context::shared::Replacements;
 
 use super::*;
 
@@ -21,7 +21,7 @@ impl TypleContext {
                     &mut paren.pat,
                     Pat::Verbatim(TokenStream::new()),
                 )) {
-                    Replacement::Singleton(inner) => {
+                    Replacements::Singleton(Ok(inner)) => {
                         paren.pat = Box::new(inner);
                     }
                     iter => {
@@ -111,7 +111,10 @@ impl TypleContext {
         Ok(())
     }
 
-    pub(super) fn replace_pat_in_list(&self, mut pat: Pat) -> Replacement<Pat> {
+    pub(super) fn replace_pat_in_list(
+        &self,
+        mut pat: Pat,
+    ) -> Replacements<impl Iterator<Item = syn::Result<Pat>>> {
         let mut state = BlockState::default();
         match &mut pat {
             Pat::Macro(syn::PatMacro { mac, .. }) => {
@@ -130,8 +133,8 @@ impl TypleContext {
             _ => {}
         }
         match self.replace_pat(&mut pat, &mut state) {
-            Ok(()) => Replacement::Singleton(pat),
-            Err(e) => Replacement::Error(e),
+            Ok(()) => Replacements::Singleton(Ok(pat)),
+            Err(e) => Replacements::Singleton(Err(e)),
         }
     }
 

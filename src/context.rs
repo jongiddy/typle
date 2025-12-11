@@ -23,7 +23,7 @@ use syn::{
 use zip_clone::ZipClone as _;
 
 use crate::constant::{evaluate_bool, evaluate_range, evaluate_usize};
-use crate::context::shared::{abort, Replacement};
+use crate::context::shared::{abort, Replacements};
 use crate::syn_ext::GeneralFunction;
 use crate::TypleMacro;
 
@@ -184,7 +184,7 @@ impl TypleContext {
                 let path = &trait_bound.path;
                 if path.leading_colon.is_none() && path.segments.len() == 1 {
                     if let Some(segment) = path.segments.first() {
-                        if segment.ident == self.typle_macro.ident {
+                        if segment.ident == self.typle_macro.trait_ident {
                             match &segment.arguments {
                                 PathArguments::None => {
                                     if result.is_some() {
@@ -491,7 +491,8 @@ impl TypleContext {
                                             None,
                                         ) = (segments.get(0), segments.get(1), segments.get(2))
                                         {
-                                            if *ident1 == self.typle_macro.ident && ident2 == "Bounds"
+                                            if *ident1 == self.typle_macro.trait_ident
+                                                && ident2 == "Bounds"
                                             {
                                                 let token_stream = std::mem::take(&mut mac.tokens);
                                                 let predicates =
@@ -554,7 +555,10 @@ impl TypleContext {
         Ok(())
     }
 
-    fn expand_predicates(&self, token_stream: TokenStream) -> Replacement<WherePredicate> {
+    fn expand_predicates(
+        &self,
+        token_stream: TokenStream,
+    ) -> Replacements<impl Iterator<Item = syn::Result<WherePredicate>>> {
         self.expand_typle_macro(token_stream, |context, token_stream| {
             // Divide the token_stream at the first single :
             let mut bounded = Vec::new();
@@ -808,7 +812,7 @@ impl TypleContext {
             }),
             ReturnType::Type(_, t) => *t,
         };
-        let typle_trait_name = &self.typle_macro.ident;
+        let typle_trait_name = &self.typle_macro.trait_ident;
 
         // A method body is moved to a trait implementation on a dfferent type.
         // Any instances of `Self` in the method body are converted to the

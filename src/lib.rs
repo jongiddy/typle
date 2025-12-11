@@ -651,7 +651,7 @@ pub fn typle(
 }
 
 struct TypleMacro {
-    ident: Ident,
+    trait_ident: Ident,
     min_len: usize,
     max_len: usize,
     never_type: Type,
@@ -743,7 +743,7 @@ impl TryFrom<TokenStream> for TypleMacro {
             never_type = syn::parse2::<Type>(type_stream)?;
         }
         Ok(TypleMacro {
-            ident: trait_ident,
+            trait_ident,
             min_len: min,
             max_len: max,
             never_type,
