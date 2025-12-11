@@ -8,33 +8,59 @@ macro_rules! abort {
 
 pub(super) use abort;
 
-pub(super) enum Replacement<T> {
-    /// A single value, not from a typle expansion
-    Singleton(T),
-    /// An empty typle expansion
+pub(super) enum Replacements<I>
+where
+    I: Iterator,
+{
     Empty,
-    /// A typle expansion
-    Iterator(Box<dyn Iterator<Item = syn::Result<T>>>),
-    /// An error outside of the iterator
-    Error(syn::Error),
+    Singleton(I::Item),
+    Iterator(I),
 }
 
-impl<T> Iterator for Replacement<T> {
-    type Item = syn::Result<T>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        match std::mem::replace(self, Replacement::Empty) {
-            Replacement::Singleton(t) => Some(Ok(t)),
-            Replacement::Empty => None,
-            Replacement::Iterator(mut iterator) => {
-                let item = iterator.next();
-                *self = Replacement::Iterator(iterator);
-                item
-            }
-            Replacement::Error(t) => Some(Err(t)),
+impl<I> Replacements<I>
+where
+    I: Iterator,
+{
+    pub(super) fn map_iterator<F, J>(self, f: F) -> Replacements<J>
+    where
+        J: Iterator<Item = I::Item>,
+        F: Fn(I) -> J,
+    {
+        match self {
+            Replacements::Empty => Replacements::Empty,
+            Replacements::Singleton(item) => Replacements::Singleton(item),
+            Replacements::Iterator(iter) => Replacements::Iterator(f(iter)),
         }
     }
 }
+impl<I> Iterator for Replacements<I>
+where
+    I: Iterator,
+{
+    type Item = I::Item;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match std::mem::replace(self, Replacements::Empty) {
+            Replacements::Empty => None,
+            Replacements::Singleton(t) => Some(t),
+            Replacements::Iterator(mut iterator) => {
+                let item = iterator.next();
+                *self = Replacements::Iterator(iterator);
+                item
+            }
+        }
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        match self {
+            Replacements::Empty => (0, Some(0)),
+            Replacements::Singleton(_) => (1, Some(1)),
+            Replacements::Iterator(iterator) => iterator.size_hint(),
+        }
+    }
+}
+
+impl<I> ExactSizeIterator for Replacements<I> where I: ExactSizeIterator {}
 
 impl TypleContext {
     pub(super) fn parse_pattern_range(
@@ -101,7 +127,7 @@ impl TypleContext {
                         suspicious_ident,
                         format!(
                             "range start invalid, possibly missing `{}: {}` bound",
-                            suspicious_ident, self.typle_macro.ident
+                            suspicious_ident, self.typle_macro.trait_ident
                         )
                     );
                 } else {
@@ -119,7 +145,7 @@ impl TypleContext {
                         suspicious_ident,
                         format!(
                             "range end invalid, possibly missing `{}: {}` bound",
-                            suspicious_ident, self.typle_macro.ident
+                            suspicious_ident, self.typle_macro.trait_ident
                         )
                     );
                 } else {
@@ -340,7 +366,9 @@ impl TypleContext {
                     }
                     // Path T::U
                     if ident2 == "LEN" {
-                        if ident1 == &self.typle_macro.ident || self.typles.contains_key(ident1) {
+                        if ident1 == &self.typle_macro.trait_ident
+                            || self.typles.contains_key(ident1)
+                        {
                             // Tuple::LEN or T::LEN
                             let Some(typle_len) = self.typle_len else {
                                 abort!(ident2, "LEN not defined outside fn or impl");
@@ -355,7 +383,9 @@ impl TypleContext {
                             state.suspicious_ident = Some(ident1.clone());
                         }
                     } else if ident2 == "LAST" {
-                        if ident1 == &self.typle_macro.ident || self.typles.contains_key(ident1) {
+                        if ident1 == &self.typle_macro.trait_ident
+                            || self.typles.contains_key(ident1)
+                        {
                             // Tuple::LAST or T::LAST
                             let Some(typle_len) = self.typle_len else {
                                 abort!(ident2, "LAST not defined outside fn or impl");
@@ -371,7 +401,9 @@ impl TypleContext {
                             state.suspicious_ident = Some(ident1.clone());
                         }
                     } else if ident2 == "MAX" {
-                        if ident1 == &self.typle_macro.ident || self.typles.contains_key(ident1) {
+                        if ident1 == &self.typle_macro.trait_ident
+                            || self.typles.contains_key(ident1)
+                        {
                             // Tuple::MAX or <T as Tuple>::MAX
                             return Ok(Some(Lit::Int(syn::LitInt::new(
                                 &self.typle_macro.max_len.to_string(),
@@ -381,7 +413,9 @@ impl TypleContext {
                             state.suspicious_ident = Some(ident1.clone());
                         }
                     } else if ident2 == "MIN" {
-                        if ident1 == &self.typle_macro.ident || self.typles.contains_key(ident1) {
+                        if ident1 == &self.typle_macro.trait_ident
+                            || self.typles.contains_key(ident1)
+                        {
                             // Tuple::MIN or <T as Tuple>::MIN
                             return Ok(Some(Lit::Int(syn::LitInt::new(
                                 &self.typle_macro.min_len.to_string(),
@@ -400,7 +434,11 @@ impl TypleContext {
         Ok(None)
     }
 
-    pub(super) fn expand_typle_macro<T, F>(&self, token_stream: TokenStream, f: F) -> Replacement<T>
+    pub(super) fn expand_typle_macro<T, F>(
+        &self,
+        token_stream: TokenStream,
+        f: F,
+    ) -> Replacements<impl Iterator<Item = syn::Result<T>>>
     where
         T: 'static,
         F: Fn(&TypleContext, TokenStream) -> syn::Result<T> + 'static,
@@ -409,18 +447,18 @@ impl TypleContext {
         let (pattern, range) = match self.parse_pattern_range(&mut tokens) {
             Ok(t) => t,
             Err(e) => {
-                return Replacement::Error(e);
+                return Replacements::Singleton(Err(e));
             }
         };
         if range.is_empty() {
-            return Replacement::Empty;
+            return Replacements::Empty;
         }
         let token_stream = tokens.collect::<TokenStream>();
         let mut context = self.clone();
         if let Some(ident) = pattern.clone() {
             context.constants.insert(ident, 0);
         }
-        return Replacement::Iterator(Box::new(range.zip_clone(token_stream).flat_map(
+        return Replacements::Iterator(range.zip_clone(token_stream).flat_map(
             move |(index, token_stream)| {
                 if let Some(ident) = &pattern {
                     *context.constants.get_mut(ident).unwrap() = index;
@@ -431,6 +469,6 @@ impl TypleContext {
                     Err(e) => Some(Err(e)),
                 }
             },
-        )));
+        ));
     }
 }

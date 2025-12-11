@@ -58,7 +58,7 @@ struct MultipleHandlers<T> {
 #[typle(Tuple for 0..=3)]
 impl<T> HandleStuff for MultipleHandlers<T>
 where
-    T: Tuple,           // `T`` is a tuple with 0 to 12 components.
+    T: Tuple,           // `T`` is a tuple with 0 to 3 components.
     T<_>: HandleStuff,  // All components implement `HandleStuff`.
 {
     type Output = (typle!(i in .. => T<{i}>::Output));
