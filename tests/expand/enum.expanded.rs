@@ -9,8 +9,8 @@ where
     T0: Process<Output = u64>,
     T1: Process<Output = u64>,
 {
-    S0(Option<<T0>::State>, [u64; 0]),
-    S1(Option<<T1>::State>, [u64; 1]),
+    S0(Option<T0::State>, [u64; 0]),
+    S1(Option<T1::State>, [u64; 1]),
     U0 { u: [u32; 0] },
     U1 { u: [u32; 1] },
     V0,

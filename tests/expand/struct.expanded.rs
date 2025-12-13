@@ -3,7 +3,7 @@ type TupleSequenceOutput<T0, T1>
 where
     T0: Extract,
     T1: Extract,
-= (Option<<T0>::Output>, Option<<T1>::Output>);
+= (Option<T0::Output>, Option<T1::Output>);
 struct SeqIntoIter<T0, T1>
 where
     T0: Into<ByteStream>,

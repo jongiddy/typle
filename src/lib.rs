@@ -128,21 +128,6 @@
 //! )
 //! ```
 //!
-//! # Aggregation
-//!
-//! The [`typle_fold!`] macro reduces a tuple to a single value.
-//!
-//! ```rust
-//! # use typle::typle;
-//! #[typle(Tuple for 0..=12)]
-//! fn sum<T: Tuple<u32>>(t: T) -> u32 {
-//!     typle_fold!(0; i in .. => |total| total + t[[i]])
-//! }
-//!
-//! assert_eq!(sum(()), 0);
-//! assert_eq!(sum((1, 4, 9, 16)), 30);
-//! ```
-//!
 //! # Conditionals
 //!
 //! The `typle!` macro accepts an `if` statement with an optional `else` clause.
@@ -171,13 +156,12 @@
 //! assert_eq!(even_to_string((0, vec![1], 2, 3)), ("0".to_owned(), vec![1], "2".to_owned(), 3));
 //! ```
 //!
-//! The associated constant `LAST` is always equal to `LEN - 1`. This is convenient for cases where
-//! the final component should be treated differently, such as avoiding an additional clone. `LAST`
-//! is not defined when `LEN == 0` and will cause a compilation error.
-//!
 //! The `typle_const!` macro supports const-if on a boolean typle index expression. const-if allows
-//! conditional branches that do not compile, as long as the branch are `false` at compile-time. The
-//! following code compiles for `T::LEN == 0` because `T::LAST` appears in an `else` branch that is
+//! conditional branches that do not compile, as long as the invalid branch is `false` at compile time.
+//!
+//! The associated constant `LAST` is always equal to `LEN - 1`. `LAST` is not defined when
+//! `LEN == 0` and will cause a compilation error. The following code uses `T::LAST` but compiles
+//! successfully for `T::LEN == 0` because `T::LAST` only appears in an `else` branch that is
 //! not compiled when `T::LEN == 0`.
 //!
 //! ```
@@ -217,10 +201,6 @@
 //! }
 //! ```
 //!
-//! Without `typle_const!` this code will fail to compile. When there is no compilation error
-//! `typle_const!` is not needed. With a constant condition the compiler will compile the false
-//! branch but will optimize it out.
-//!
 //! # Iteration
 //!
 //! Use the `typle_index!` macro in a `for` loop to iterate over a range bounded
@@ -254,6 +234,21 @@
 //!
 //! let m = MyStruct::from((3, 9, 11));
 //! assert_eq!(m.interleave(), [14, 9]);
+//! ```
+//!
+//! # Aggregation
+//!
+//! The [`typle_fold!`] macro reduces a tuple to a single value.
+//!
+//! ```rust
+//! # use typle::typle;
+//! #[typle(Tuple for 0..=12)]
+//! fn sum<T: Tuple<u32>>(t: T) -> u32 {
+//!     typle_fold!(0; i in .. => |total| total + t[[i]])
+//! }
+//!
+//! assert_eq!(sum(()), 0);
+//! assert_eq!(sum((1, 4, 9, 16)), 30);
 //! ```
 //!
 //! # Selection
@@ -357,10 +352,10 @@
 //!     T2: Extract,
 //!     T3: Extract,
 //! {
-//!     S0((), Option<<T0>::State>),
-//!     S1((<T0>::Output,), Option<<T1>::State>),
-//!     S2((<T0>::Output, <T1>::Output), Option<<T2>::State>),
-//!     S3((<T0>::Output, <T1>::Output, <T2>::Output), Option<<T3>::State>),
+//!     S0((), Option<T0::State>),
+//!     S1((T0::Output,), Option<T1::State>),
+//!     S2((T0::Output, T1::Output), Option<T2::State>),
+//!     S3((T0::Output, T1::Output, T2::Output), Option<T3::State>),
 //! }
 //! ```
 //!
@@ -457,10 +452,10 @@
 //! #     T2: Extract,
 //! #     T3: Extract,
 //! # {
-//! #     S0((), Option<<T0>::State>),
-//! #     S1((<T0>::Output,), Option<<T1>::State>),
-//! #     S2((<T0>::Output, <T1>::Output), Option<<T2>::State>),
-//! #     S3((<T0>::Output, <T1>::Output, <T2>::Output), Option<<T3>::State>),
+//! #     S0((), Option<T0::State>),
+//! #     S1((T0::Output,), Option<T1::State>),
+//! #     S2((T0::Output, T1::Output), Option<T2::State>),
+//! #     S3((T0::Output, T1::Output, T2::Output), Option<T3::State>),
 //! # }
 //! # impl Extract for std::convert::Infallible {
 //! #     type State = std::convert::Infallible;
@@ -527,7 +522,7 @@
 //!
 //! - The typle trait bound (`Tuple` in the examples) can only be applied to an
 //!   unqualified type identifier, not to non-path types or associated types.
-//! - `typle` does not work when the tuple types are only associated types
+//! - The `#[typle]` macro does not work when the tuple types are only associated types
 //!   because [associated types cannot distinguish implementations](https://github.com/rust-lang/rust/issues/20400).
 //!   See [this file](https://github.com/jongiddy/typle/blob/main/tests/compile/unzip.rs)
 //!   for workarounds.
@@ -542,15 +537,43 @@
 //!     T: Tuple,
 //! {}
 //! ```
+//! - A `typle!` macro that contains a bound can only provide one bound. It is not
+//!   possible to use `+` to provide multiple bounds.
+//! ```rust
+//! # use typle::typle;
+//! # use std::{ops::{Add, Mul}, time::Duration};
+//! #[typle(Tuple for 0..=3)]
+//! fn sum_and_product<S: Tuple, T: Tuple>(
+//!     s: S,
+//!     t: T,
+//! ) -> (typle![i in ..T::LEN * 2 => if i % 2 == 0 {
+//!         <S<{i / 2}> as Add<T<{i / 2}>>>::Output
+//!     } else {
+//!         <S<{i / 2}> as Mul<T<{i / 2}>>>::Output
+//!     }])
+//! where
+//!     S<_>: Copy,
+//!     T<_>: Copy,
+//!     // Cannot use `typle!(i in .. => S<{i}>: Add<T<{i}>> + Mul<T<{i}>>)`
+//!     // but can add bounds in separate macros.
+//!     typle!(i in .. => S<{i}>: Add<T<{i}>>): Tuple::Bounds,
+//!     typle!(i in .. => S<{i}>: Mul<T<{i}>>): Tuple::Bounds,
+//! {
+//!     (typle![i in ..T::LEN * 2 => if i % 2 == 0 {
+//!         s[[i / 2]] + t[[i / 2]]
+//!     } else {
+//!         s[[i / 2]] * t[[i / 2]]
+//!     }])
+//! }
+//! ```
 //! - Standalone `async` and `unsafe` functions are not supported.
 //! - Standalone functions require explicit lifetimes on references:
 //! ```rust
 //! # use std::hash::{Hash, Hasher};
 //! # use typle::typle;
 //! #[typle(Tuple for 1..=3)]
-//! pub fn hash<'a, T, S: Hasher>(tuple: &'a T, state: &'a mut S)
+//! pub fn hash<'a, T: Tuple, S: Hasher>(tuple: &'a T, state: &'a mut S)
 //! where
-//!     T: Tuple,
 //!     T<_>: Hash,
 //!     T<{T::LAST}>: ?Sized,
 //! {
@@ -571,18 +594,24 @@
 //!     }
 //! }
 //! ```
-//! - Typle index variables cannot be shadowed:
+//! - Typle index variables can be shadowed by inner typle index variables
+//! but cannot be shadowed by standard variables:
 //! ```rust
 //! # use typle::typle;
 //! # #[typle(Tuple for 1..=1)]
 //! # fn test<T>(t: T) where T: Tuple {
 //! let mut v = vec![];
+//!
 //! for typle_index!(i) in 2..=3 {
-//!     let i = 1;
-//!     v.push(i);
+//!     for typle_index!(i) in 4..=5 {
+//!         let i = 1;  // this `i` is ignored
+//!         v.push(i);  // this `i` comes from `4..=5`
+//!     }
+//!     v.push(i);  // this `i` comes from `2..=3`
 //! }
-//! assert_eq!(v, [2, 3]);
+//! assert_eq!(v, [4, 5, 2, 4, 5, 3]);
 //! # }
+//! # test((1,));
 //! ```
 //! - Due to interaction of `typle` with other macros, passing some types and
 //!   expressions to a macro may produce unexpected results. To help work around
@@ -591,14 +620,20 @@
 //!
 //! ```rust
 //! # use typle::typle;
-//! # #[typle(Tuple for 3..=3)]
-//! # fn test1<T: Tuple>(t: T) {
-//! assert_eq!(
-//!     stringify!([T, T::LEN, typle_ty!(T), typle_expr!(T::LEN)]),
-//!     "[T, T :: LEN, (T0, T1, T2), 3]"
-//! );
-//! # }
-//! # test1((1, 2, 3));
+//! #[typle(Tuple for 3..=3)]
+//! fn test_macro<T: Tuple>(t: T)
+//! where
+//!     T<_>: PartialEq<usize> + std::fmt::Debug,
+//! {
+//!     assert_eq!(
+//!         stringify!([T, T::LEN, typle_ty!(T), typle_expr!(T::LEN)]),
+//!         "[T, T :: LEN, (T0, T1, T2), 3]"
+//!     );
+//!     for typle_index!(i) in 0..T::LEN {
+//!         assert_eq!(typle_expr!(t[[i]]), typle_expr!(i));
+//!     }
+//! }
+//! test_macro((0, 1, 2));
 //! ```
 //!
 
