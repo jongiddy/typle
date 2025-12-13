@@ -5,7 +5,7 @@ use crate::context::shared::Replacements;
 use super::*;
 
 impl TypleContext {
-    // Replace `T`` with `(T0, T1,...)`` and `T<1>`` with `T1``
+    // Replace `T` with `(T0, T1,...)` and `T<1>` with `T1`
     pub(super) fn replace_type(&self, ty: &mut Type) -> syn::Result<()> {
         match ty {
             Type::Array(array) => {

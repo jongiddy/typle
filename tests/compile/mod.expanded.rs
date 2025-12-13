@@ -158,10 +158,10 @@ pub mod doc_typle {
             T2: Extract,
             T3: Extract,
         {
-            S0((), Option<<T0>::State>),
-            S1((<T0>::Output,), Option<<T1>::State>),
-            S2((<T0>::Output, <T1>::Output), Option<<T2>::State>),
-            S3((<T0>::Output, <T1>::Output, <T2>::Output), Option<<T3>::State>),
+            S0((), Option<T0::State>),
+            S1((T0::Output,), Option<T1::State>),
+            S2((T0::Output, T1::Output), Option<T2::State>),
+            S3((T0::Output, T1::Output, T2::Output), Option<T3::State>),
         }
         pub struct TupleSequence<T> {
             tuple: T,
@@ -2395,7 +2395,7 @@ pub mod type_alias {
         T0: Process,
         T1: Process,
         T2: Process,
-    = (Option<<T0>::Output>, Option<<T1>::Output>, Option<<T2>::Output>);
+    = (Option<T0::Output>, Option<T1::Output>, Option<T2::Output>);
 }
 pub mod typle_args {
     #![allow(unused)]
@@ -2741,7 +2741,7 @@ pub mod typle_args {
     where
         T0: HandleStuff,
     {
-        type Output = (<T0>::Output,);
+        type Output = (T0::Output,);
         fn handle_stuff(&self, input: Input) -> Self::Output {
             { (self.handlers.0.handle_stuff(input),) }
         }
@@ -2751,7 +2751,7 @@ pub mod typle_args {
         T0: HandleStuff,
         T1: HandleStuff,
     {
-        type Output = (<T0>::Output, <T1>::Output);
+        type Output = (T0::Output, T1::Output);
         fn handle_stuff(&self, input: Input) -> Self::Output {
             {
                 (
@@ -2767,7 +2767,7 @@ pub mod typle_args {
         T1: HandleStuff,
         T2: HandleStuff,
     {
-        type Output = (<T0>::Output, <T1>::Output, <T2>::Output);
+        type Output = (T0::Output, T1::Output, T2::Output);
         fn handle_stuff(&self, input: Input) -> Self::Output {
             {
                 (
@@ -2796,10 +2796,10 @@ pub mod typle_fold {
     where
         T0: UsefulTrait + std::fmt::Display,
     {
-        type UsefulType = <T0>::UsefulType;
+        type UsefulType = T0::UsefulType;
         const SIZE: usize = (loop {
             let total = 0;
-            let total = total + <T0>::SIZE;
+            let total = total + T0::SIZE;
             break total;
         });
         fn display(&self) -> String {
@@ -2810,13 +2810,13 @@ pub mod typle_fold {
     where
         T0: UsefulTrait + std::fmt::Display,
         T1: UsefulTrait + std::fmt::Display,
-        <T1>::UsefulType: IsUseful<<T0>::UsefulType>,
+        T1::UsefulType: IsUseful<T0::UsefulType>,
     {
-        type UsefulType = <<T1>::UsefulType as IsUseful<<T0>::UsefulType>>::State;
+        type UsefulType = <T1::UsefulType as IsUseful<T0::UsefulType>>::State;
         const SIZE: usize = (loop {
             let total = 0;
-            let total = total + <T0>::SIZE;
-            let total = total + <T1>::SIZE;
+            let total = total + T0::SIZE;
+            let total = total + T1::SIZE;
             break total;
         });
         fn display(&self) -> String {
@@ -2832,19 +2832,17 @@ pub mod typle_fold {
         T0: UsefulTrait + std::fmt::Display,
         T1: UsefulTrait + std::fmt::Display,
         T2: UsefulTrait + std::fmt::Display,
-        <T1>::UsefulType: IsUseful<<T0>::UsefulType>,
-        <T2>::UsefulType: IsUseful<
-            <<T1>::UsefulType as IsUseful<<T0>::UsefulType>>::State,
-        >,
+        T1::UsefulType: IsUseful<T0::UsefulType>,
+        T2::UsefulType: IsUseful<<T1::UsefulType as IsUseful<T0::UsefulType>>::State>,
     {
-        type UsefulType = <<T2>::UsefulType as IsUseful<
-            <<T1>::UsefulType as IsUseful<<T0>::UsefulType>>::State,
+        type UsefulType = <T2::UsefulType as IsUseful<
+            <T1::UsefulType as IsUseful<T0::UsefulType>>::State,
         >>::State;
         const SIZE: usize = (loop {
             let total = 0;
-            let total = total + <T0>::SIZE;
-            let total = total + <T1>::SIZE;
-            let total = total + <T2>::SIZE;
+            let total = total + T0::SIZE;
+            let total = total + T1::SIZE;
+            let total = total + T2::SIZE;
             break total;
         });
         fn display(&self) -> String {

@@ -41,7 +41,7 @@ where
 {
     fn g() {
         let f: TupleD<T0, !> = TupleD::<T0, !>::new();
-        <T0>::output_to_bytestream();
+        T0::output_to_bytestream();
     }
 }
 impl<T0, T1, F> TraitD for TupleD<T0, T1>
@@ -53,6 +53,6 @@ where
 {
     fn g() {
         let f: TupleD<T0, T1> = TupleD::<T0, T1>::new();
-        <T0>::output_to_bytestream();
+        T0::output_to_bytestream();
     }
 }

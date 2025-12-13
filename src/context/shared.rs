@@ -164,7 +164,6 @@ impl TypleContext {
         Ok((pattern, start..end))
     }
 
-    // This can return <QSelf>:: or <QSelf> which needs to be cleaned up by the caller.
     pub(super) fn replace_qself_path(
         &self,
         qself: &mut Option<QSelf>,
@@ -197,8 +196,8 @@ impl TypleContext {
                         path.segments = segments.collect();
                     }
                     PathArguments::AngleBracketed(args) => {
-                        // T::<0>::default() -> <T0>::default()
-                        // T::<0> -> <T0>
+                        // T::<0>::default() -> T0::default()
+                        // T::<0> -> T0
                         if args.args.len() != 1 {
                             abort!(first, "expected one type parameter");
                         }
@@ -211,17 +210,32 @@ impl TypleContext {
                                 let Some(value) = evaluate_usize(expr) else {
                                     abort!(expr, "unsupported tuple type index");
                                 };
-                                // T<{4}>::State -> <T4>::State
-                                // T<{4}> -> <T4>::
-                                *qself = Some(QSelf {
-                                    lt_token: token::Lt::default(),
-                                    ty: Box::new(self.get_type(typle, value, first.span())?),
-                                    position: 0,
-                                    as_token: None,
-                                    gt_token: token::Gt::default(),
-                                });
-                                path.leading_colon = Some(token::PathSep::default());
-                                path.segments = segments.collect();
+                                // T<{4}>::State -> T4::State
+                                // T<{4}> -> T4
+                                match self.get_type(typle, value, first.span())? {
+                                    Type::Path(syn::TypePath {
+                                        qself: first_qself,
+                                        path: first_path,
+                                    }) => {
+                                        *qself = first_qself;
+                                        path.segments = first_path
+                                            .segments
+                                            .into_iter()
+                                            .chain(segments)
+                                            .collect();
+                                    }
+                                    ty => {
+                                        *qself = Some(QSelf {
+                                            lt_token: token::Lt::default(),
+                                            ty: Box::new(ty),
+                                            position: 0,
+                                            as_token: None,
+                                            gt_token: token::Gt::default(),
+                                        });
+                                        path.leading_colon = Some(token::PathSep::default());
+                                        path.segments = segments.collect();
+                                    }
+                                }
                             }
                             _ => {
                                 abort!(args, "Require const parameter (wrap {} around expression)");
