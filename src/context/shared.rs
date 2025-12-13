@@ -214,11 +214,11 @@ impl TypleContext {
                                 // T<{4}> -> T4
                                 match self.get_type(typle, value, first.span())? {
                                     Type::Path(syn::TypePath {
-                                        qself: first_qself,
-                                        path: first_path,
+                                        qself: None,
+                                        path: component_path,
                                     }) => {
-                                        *qself = first_qself;
-                                        path.segments = first_path
+                                        path.leading_colon = component_path.leading_colon;
+                                        path.segments = component_path
                                             .segments
                                             .into_iter()
                                             .chain(segments)
