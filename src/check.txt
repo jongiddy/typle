@@ -1,0 +1,40 @@
+current scope
+   --> /home/jon/github/jongiddy/typle/src/context.rs:482:49
+    |
+482 | ...                   ) = (bounds.get(0), bounds.get(1))
+    |                                   ^^^ method not found in `&syn::punctuated::Punctuated<TypeParamBound, syn::token::Plus>`
+
+
+error[E0599]: no method named `get` found for reference `&syn::punctuated::Punctuated<TypeParamBound, syn::token::Plus>` in the current scope
+   --> /home/jon/github/jongiddy/typle/src/context.rs:482:64
+    |
+482 | ...                   ) = (bounds.get(0), bounds.get(1))
+    |                                                  ^^^ method not found in `&syn::punctuated::Punctuated<TypeParamBound, syn::token::Plus>`
+
+
+error[E0599]: no method named `get` found for struct `syn::punctuated::Punctuated<T, P>` in the current scope
+   --> /home/jon/github/jongiddy/typle/src/context.rs:494:55
+    |
+494 | ...                   ) = (segments.get(0), segments.get(1), segments.get(2))
+    |                                     ^^^ method not found in `syn::punctuated::Punctuated<PathSegment, PathSep>`
+
+
+error[E0599]: no method named `get` found for struct `syn::punctuated::Punctuated<T, P>` in the current scope
+   --> /home/jon/github/jongiddy/typle/src/context.rs:494:72
+    |
+494 | ...                   ) = (segments.get(0), segments.get(1), segments.get(2))
+    |                                                      ^^^ method not found in `syn::punctuated::Punctuated<PathSegment, PathSep>`
+
+
+error[E0599]: no method named `get` found for struct `syn::punctuated::Punctuated<T, P>` in the current scope
+   --> /home/jon/github/jongiddy/typle/src/context.rs:494:89
+    |
+494 | ...                   ) = (segments.get(0), segments.get(1), segments.get(2))
+    |                                                                       ^^^ method not found in `syn::punctuated::Punctuated<PathSegment, PathSep>`
+
+
+error[E0614]: type `proc_macro2::Ident` cannot be dereferenced
+   --> /home/jon/github/jongiddy/typle/src/context.rs:496:48
+    |
+496 | ...                   if *ident1 == self.typle_macro.trait_ident
+    |                          ^^^^^^^ can't be dereferenced
