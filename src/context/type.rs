@@ -91,13 +91,22 @@ impl TypleContext {
         match &mut ty {
             Type::Macro(syn::TypeMacro { mac }) => {
                 if let Some(ident) = mac.path.get_ident() {
-                    if ident == "typle" || ident == "typle_args" {
+                    if ident == "typle" {
                         let token_stream = std::mem::take(&mut mac.tokens);
                         return self
                             .expand_typle_macro(token_stream, |context, token_stream| {
-                                let mut ty = syn::parse2::<Type>(token_stream)?;
-                                context.replace_type(&mut ty)?;
-                                Ok(ty)
+                                Ok(Replacements::Iterator(
+                                    Punctuated::<syn::Type, token::Comma>::parse_terminated
+                                        .parse2(token_stream)?
+                                        .into_iter()
+                                        .map(|mut ty| {
+                                            context.replace_type(&mut ty)?;
+                                            Ok(ty)
+                                        })
+                                        // collect and into_iter due to context lifetime
+                                        .collect::<Vec<_>>()
+                                        .into_iter(),
+                                ))
                             })
                             .map_iterator(Either::Left);
                     }

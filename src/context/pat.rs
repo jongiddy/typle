@@ -119,13 +119,13 @@ impl TypleContext {
         match &mut pat {
             Pat::Macro(syn::PatMacro { mac, .. }) => {
                 if let Some(ident) = mac.path.get_ident() {
-                    if ident == "typle" || ident == "typle_args" {
+                    if ident == "typle" {
                         let token_stream = std::mem::take(&mut mac.tokens);
                         return self.expand_typle_macro(token_stream, |context, token_stream| {
                             let mut pat = Pat::parse_single.parse2(token_stream)?;
                             let mut state = BlockState::default();
                             context.replace_pat(&mut pat, &mut state)?;
-                            Ok(pat)
+                            Ok(Replacements::<std::iter::Empty<_>>::Singleton(Ok(pat)))
                         });
                     }
                 }

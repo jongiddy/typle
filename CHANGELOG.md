@@ -2,6 +2,7 @@
 
 ## Backwards-incompatible changes
 - `typle_bounds!` has been replaced by support for `typle!` macro in where clauses.
+- `typle_args` as a synonym for `typle!` has been removed.
 
 # 0.11
 

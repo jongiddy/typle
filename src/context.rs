@@ -594,14 +594,22 @@ impl TypleContext {
             }
             let mut bounded_ty = syn::parse2::<Type>(bounded.into_iter().collect())?;
             context.replace_type(&mut bounded_ty)?;
-            let mut bound = syn::parse2::<TypeParamBound>(bound.into_iter().collect())?;
-            context.replace_bound(&mut bound)?;
-            Ok(WherePredicate::Type(syn::PredicateType {
-                lifetimes: None,
-                bounded_ty,
-                colon_token: token::Colon::default(),
-                bounds: std::iter::once(bound).collect(),
-            }))
+            let bounds = Punctuated::<TypeParamBound, token::Plus>::parse_terminated
+                .parse2(bound.into_iter().collect())?
+                .into_iter()
+                .map(|mut bound| {
+                    context.replace_bound(&mut bound)?;
+                    Ok(bound)
+                })
+                .collect::<syn::Result<_>>()?;
+            Ok(Replacements::<std::iter::Empty<_>>::Singleton(Ok(
+                WherePredicate::Type(syn::PredicateType {
+                    lifetimes: None,
+                    bounded_ty,
+                    colon_token: token::Colon::default(),
+                    bounds,
+                }),
+            )))
         })
     }
 

@@ -10,9 +10,13 @@ For example, to define a function to zip a pair of tuples into a tuple of pairs:
 pub fn zip<A: Tuple, B: Tuple>(
     a: A,
     b: B,
-) -> (typle![i in .. => (A<{i}>, B<{i}>)])
+) -> (typle! {
+    i in .. => (A<{i}>, B<{i}>)
+})
 {
-    (typle!{i in .. => (a[[i]], b[[i]])})
+    (typle! {
+        i in .. => (a[[i]], b[[i]])
+    })
 }
 ```
 
@@ -61,7 +65,7 @@ where
     T: Tuple,           // `T`` is a tuple with 0 to 3 components.
     T<_>: HandleStuff,  // All components implement `HandleStuff`.
 {
-    type Output = (typle!(i in .. => T<{i}>::Output));
+    type Output = (typle! {i in .. => T<{i}>::Output});
 
     // Return a tuple of output from each handler applied to the same input.
     fn handle_stuff(&self, input: Input) -> Self::Output {
@@ -69,7 +73,9 @@ where
             ()
         } else {
             (
-                typle!(i in ..T::LAST => self.handlers[[i]].handle_stuff(input.clone())),
+                typle! {
+                    i in ..T::LAST => self.handlers[[i]].handle_stuff(input.clone())
+                },
                 // Avoid expensive clone for the last handler.
                 self.handlers[[T::LAST]].handle_stuff(input),
             )
@@ -90,7 +96,7 @@ impl<T0> HandleStuff for MultipleHandlers<(T0,)>
 where
     T0: HandleStuff,
 {
-    type Output = (<T0>::Output,);
+    type Output = (T0::Output,);
     fn handle_stuff(&self, input: Input) -> Self::Output {
         { (self.handlers.0.handle_stuff(input),) }
     }
@@ -100,7 +106,7 @@ where
     T0: HandleStuff,
     T1: HandleStuff,
 {
-    type Output = (<T0>::Output, <T1>::Output);
+    type Output = (T0::Output, T1::Output);
     fn handle_stuff(&self, input: Input) -> Self::Output {
         {
             (
@@ -116,7 +122,7 @@ where
     T1: HandleStuff,
     T2: HandleStuff,
 {
-    type Output = (<T0>::Output, <T1>::Output, <T2>::Output);
+    type Output = (T0::Output, T1::Output, T2::Output);
     fn handle_stuff(&self, input: Input) -> Self::Output {
         {
             (
