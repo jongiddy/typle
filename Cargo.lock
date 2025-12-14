@@ -214,7 +214,7 @@ checksum = "fcc842091f2def52017664b53082ecbbeb5c7731092bad69d2c63050401dfd64"
 
 [[package]]
 name = "typle"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "either",
  "macrotest",
