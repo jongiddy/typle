@@ -1,3 +1,9 @@
+//! Note, for best results using `typle` with rust-analyzer, ensure that proc macro attributes are enabled:
+//! ```json
+//! rust-analyzer.procMacro.enable: true,
+//! rust-analyzer.procMacro.attributes.enable: true
+//! ```
+//!
 //! # `#[typle(...)]`
 //! The `typle` attribute macro generates code for multiple tuple lengths. This code:
 //!
@@ -57,32 +63,12 @@
 //! assert_eq!(split_first((3.0,)), (3.0, ()));
 //! ```
 //!
-//! # `typle!(...)`
-//!
-//! The `typle!` macro creates a new sequence of types or expressions. A
-//! `typle!` macro can only appear where a comma-separated sequence is valid
-//! (e.g. a tuple, array, argument list, or where clause).
-//!
 //! The associated constant `LEN` provides the length of the tuple in each
 //! generated item. This value can be used in typle index expressions.
-//!
-//! ```
-//! # use typle::typle;
-//! #[typle(Tuple for 0..=12)]
-//! fn reverse<T: Tuple>(t: T) -> (typle!(i in 1..=T::LEN => T<{T::LEN - i}>)) {
-//!     (typle!(i in 1..=T::LEN => t[[T::LEN - i]]))
-//! }
-//!
-//! assert_eq!(reverse((Some(3), "four", 5)), (5, "four", Some(3)));
-//! ```
-//!
-//! For types, `T<{start..end}>` is a shorthand for `typle!(i in start..end => T<{i}>)`.
-//! For expressions, `t[[start..end]]` is a shorthand for `typle!(i in start..end => t[[i]])`.
-//!
 //! The default bounds for a macro range are `0..Tuple::LEN`, that is, for all
 //! components of the tuple.
 //!
-//! ```
+//! ```rust
 //! # use typle::typle;
 //! #[typle(Tuple for 0..12)]
 //! fn append<T: Tuple, A>(t: T, a: A) -> (T<{..}>, A) {
@@ -92,15 +78,47 @@
 //! assert_eq!(append((1, 2, 3), 4), (1, 2, 3, 4));
 //! ```
 //!
+//! # `typle!`
+//!
+//! The `typle!` macro creates a new sequence of types or expressions. A
+//! `typle!` macro can only appear where a comma-separated sequence is valid
+//! (e.g. a tuple, array, argument list, or where clause).
+//!
+//! ```rust
+//! # use typle::typle;
+//! #[typle(Tuple for 0..=12)]
+//! fn reverse<T: Tuple>(t: T) -> (typle! {i in 1..=T::LEN => T<{T::LEN - i}>}) {
+//!     (typle! {i in 1..=T::LEN => t[[T::LEN - i]]})
+//! }
+//!
+//! assert_eq!(reverse((Some(3), "four", 5)), (5, "four", Some(3)));
+//! ```
+//!
+//! Each iteration can add multiple components to the new structure.
+//! ```rust
+//! # use typle::typle;
+//! #[typle(Tuple for 0..=12)]
+//! fn duplicate_components<T: Tuple>(
+//!     t: T,
+//! ) -> (typle! {i in .. => T<{i}>, T<{i}>})
+//! where
+//!     T<_>: Clone,
+//! {
+//!     (typle! {i in .. => t[[i]].clone(), t[[i]]})
+//! }
+//!
+//! assert_eq!(duplicate_components(("one", 2, 3.0)), ("one", "one", 2, 2, 3.0, 3.0));
+//! ```
+//!
 //! # Constraints
 //!
 //! Specify constraints on the tuple components using one of the following
 //! forms. Except for the first form, these constraints can only appear in the
 //! `where` clause.
 //! - `T: Tuple<C>` - all components of the tuple have type `C`.
-//! - `T<_>: Copy` - all components of the tuple implement the `Copy` trait.
-//! - `T<0>: Copy` - the first component of the tuple implements the `Copy` trait.
-//! - `T<{1..=2}>: Copy` - the second and third components implement the `Copy` trait.
+//! - `T<_>: Clone` - all components of the tuple implement the `Clone` trait.
+//! - `T<0>: Clone` - the first component of the tuple implements the `Clone` trait.
+//! - `T<{1..=2}>: Clone` - the second and third components implement the `Clone` trait.
 //! - `typle!(j in .. => I<{j}>: Iterator<Item=T<{j}>>): Tuple::Bounds` - the most
 //!    general way to bound components, allowing typle index expressions on both
 //!    sides of the colon. Note that the suffix `: Tuple::Bounds` is required after
@@ -115,11 +133,11 @@
 //! fn multiply<S: Tuple, T: Tuple>(
 //!     s: S,  // s: (S<0>,...)
 //!     t: T,  // t: (T<0>,...)
-//! ) -> (typle!(i in .. => <S<{i}> as Mul<T<{i}>>>::Output))  // (<S<0> as Mul<T<0>>>::Output,...)
+//! ) -> (typle! {i in .. => <S<{i}> as Mul<T<{i}>>>::Output})  // (<S<0> as Mul<T<0>>>::Output,...)
 //! where
-//!     typle!(i in .. => S<{i}>: Mul<T<{i}>>): Tuple::Bounds,  // S<0>: Mul<T<0>>,...
+//!     typle! {i in .. => S<{i}>: Mul<T<{i}>>}: Tuple::Bounds,  // S<0>: Mul<T<0>>,...
 //! {
-//!     (typle!(i in .. => s[[i]] * t[[i]]))  // (s.0 * t.0,...)
+//!     (typle! {i in .. => s[[i]] * t[[i]]})  // (s.0 * t.0,...)
 //! }
 //!
 //! assert_eq!(
@@ -138,7 +156,7 @@
 //! [`cfg_attr`](https://doc.rust-lang.org/reference/conditional-compilation.html#the-cfg_attr-attribute)
 //! except that the first argument is a boolean typle index expression.
 //!
-//! ```
+//! ```rust
 //! # use typle::typle;
 //! #[cfg_attr(not(feature = "big-tuple"), typle(Tuple for 0..=12))]
 //! #[cfg_attr(feature = "big-tuple", typle(Tuple for 0..=24))]
@@ -164,7 +182,7 @@
 //! successfully for `T::LEN == 0` because `T::LAST` only appears in an `else` branch that is
 //! not compiled when `T::LEN == 0`.
 //!
-//! ```
+//! ```rust
 //! # use typle::typle;
 //! # #[derive(Clone)]
 //! # struct Input {}
@@ -184,7 +202,7 @@
 //!     T: Tuple,
 //!     T<_>: HandleStuff,
 //! {
-//!     type Output = (typle!(i in .. => T<{i}>::Output));
+//!     type Output = (typle! {i in .. => T<{i}>::Output});
 //!
 //!     // Return a tuple of output from each handler applied to the same input.
 //!     fn handle_stuff(&self, input: Input) -> Self::Output {
@@ -192,7 +210,9 @@
 //!             ()
 //!         } else {
 //!             (
-//!                 typle!(i in ..T::LAST => self.handlers[[i]].handle_stuff(input.clone())),
+//!                 typle! {
+//!                     i in ..T::LAST => self.handlers[[i]].handle_stuff(input.clone())
+//!                 },
 //!                 // Avoid expensive clone for the last handler.
 //!                 self.handlers[[T::LAST]].handle_stuff(input),
 //!             )
@@ -244,7 +264,7 @@
 //! # use typle::typle;
 //! #[typle(Tuple for 0..=12)]
 //! fn sum<T: Tuple<u32>>(t: T) -> u32 {
-//!     typle_fold!(0; i in .. => |total| total + t[[i]])
+//!     typle_fold! {0; i in .. => |total| total + t[[i]]}
 //! }
 //!
 //! assert_eq!(sum(()), 0);
@@ -331,8 +351,13 @@
 //!     T<_>: Extract,
 //! {
 //!     // The output of all previous components plus the state of the current component.
-//!     S = typle_variant!(i in ..T::MAX =>
-//!         (typle!(j in ..i => T::<{j}>::Output), Option<T<{i}>::State>)
+//!     S = typle_variant!(
+//!         curr in ..T::MAX => (
+//!             typle! {
+//!                 prev in ..curr => T::<{prev}>::Output
+//!             }
+//!         ),
+//!         Option<T<{curr}>::State>
 //!     ),
 //! }
 //! ```
@@ -414,7 +439,7 @@
 //!     // the state of the current component.
 //!     type State = TupleSequenceState<T<{ ..T::MAX }>>;
 //!     // The final output is a tuple of outputs from all components.
-//!     type Output = (typle!(i in .. => <T<{i}> as Extract>::Output));
+//!     type Output = (typle! {i in .. => <T<{i}> as Extract>::Output});
 //!
 //!     fn extract(&self, state: Option<Self::State>) -> Self::Output {
 //!         // When LEN == 1 the code never changes `state`
@@ -536,35 +561,6 @@
 //!     I: Iterator<Item = Result<T, E>>, // T only appears as associated type of Self
 //!     T: Tuple,
 //! {}
-//! ```
-//! - A `typle!` macro that contains a bound can only provide one bound. It is not
-//!   possible to use `+` to provide multiple bounds.
-//! ```rust
-//! # use typle::typle;
-//! # use std::{ops::{Add, Mul}, time::Duration};
-//! #[typle(Tuple for 0..=3)]
-//! fn sum_and_product<S: Tuple, T: Tuple>(
-//!     s: S,
-//!     t: T,
-//! ) -> (typle![i in ..T::LEN * 2 => if i % 2 == 0 {
-//!         <S<{i / 2}> as Add<T<{i / 2}>>>::Output
-//!     } else {
-//!         <S<{i / 2}> as Mul<T<{i / 2}>>>::Output
-//!     }])
-//! where
-//!     S<_>: Copy,
-//!     T<_>: Copy,
-//!     // Cannot use `typle!(i in .. => S<{i}>: Add<T<{i}>> + Mul<T<{i}>>)`
-//!     // but can add bounds in separate macros.
-//!     typle!(i in .. => S<{i}>: Add<T<{i}>>): Tuple::Bounds,
-//!     typle!(i in .. => S<{i}>: Mul<T<{i}>>): Tuple::Bounds,
-//! {
-//!     (typle![i in ..T::LEN * 2 => if i % 2 == 0 {
-//!         s[[i / 2]] + t[[i / 2]]
-//!     } else {
-//!         s[[i / 2]] * t[[i / 2]]
-//!     }])
-//! }
 //! ```
 //! - Standalone `async` and `unsafe` functions are not supported.
 //! - Standalone functions require explicit lifetimes on references:

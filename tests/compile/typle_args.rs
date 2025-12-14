@@ -94,7 +94,7 @@ where
     T: Tuple,          // `T`` is a tuple with 0 to 3 components.
     T<_>: HandleStuff, // All components implement `HandleStuff`.
 {
-    type Output = (typle!(i in .. => T<{i}>::Output));
+    type Output = (typle! {i in .. => T<{i}>::Output});
 
     // Return a tuple of output from each handler applied to the same input.
     fn handle_stuff(&self, input: Input) -> Self::Output {
@@ -102,7 +102,9 @@ where
             ()
         } else {
             (
-                typle!(i in ..T::LAST => self.handlers[[i]].handle_stuff(input.clone())),
+                typle! {
+                    i in ..T::LAST => self.handlers[[i]].handle_stuff(input.clone())
+                },
                 // Avoid expensive clone for the last handler.
                 self.handlers[[T::LAST]].handle_stuff(input),
             )

@@ -318,15 +318,11 @@ impl TypleContext {
                     // t[[0]]
                     let mut iter = array.elems.iter_mut().fuse();
                     let (Some(field), None) = (iter.next(), iter.next()) else {
-                        abort!(index.index, "unsupported tuple index1");
+                        abort!(index.index, "unsupported tuple index");
                     };
                     self.replace_expr(field, state)?;
-                    let deb = field.clone();
                     let Some(i) = evaluate_usize(field) else {
-                        abort!(
-                            index.index,
-                            format!("unsupported tuple index {:?} {:?}", self.constants, deb)
-                        );
+                        abort!(index.index, format!("unsupported tuple index"));
                     };
                     *expr = Expr::Field(syn::ExprField {
                         attrs: std::mem::take(&mut index.attrs),
@@ -575,14 +571,23 @@ impl TypleContext {
         match &mut expr {
             Expr::Macro(syn::ExprMacro { mac, .. }) => {
                 if let Some(ident) = mac.path.get_ident() {
-                    if ident == "typle" || ident == "typle_args" {
+                    if ident == "typle" {
                         let token_stream = std::mem::take(&mut mac.tokens);
                         return self
                             .expand_typle_macro(token_stream, |context, token_stream| {
-                                let mut expr = syn::parse2::<Expr>(token_stream)?;
-                                let mut state = BlockState::default();
-                                context.replace_expr(&mut expr, &mut state)?;
-                                Ok(expr)
+                                Ok(Replacements::Iterator(
+                                    Punctuated::<syn::Expr, token::Comma>::parse_terminated
+                                        .parse2(token_stream)?
+                                        .into_iter()
+                                        .map(|mut expr| {
+                                            let mut state = BlockState::default();
+                                            context.replace_expr(&mut expr, &mut state)?;
+                                            Ok(expr)
+                                        })
+                                        // collect and into_iter due to context lifetime
+                                        .collect::<Vec<_>>()
+                                        .into_iter(),
+                                ))
                             })
                             .map_iterator(Either::Left);
                     }

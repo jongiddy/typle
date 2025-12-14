@@ -7,6 +7,7 @@ pub mod issue1;
 pub mod macros;
 pub mod method;
 pub mod pattern;
+pub mod spread;
 pub mod type_alias;
 pub mod typle_args;
 pub mod typle_fold;

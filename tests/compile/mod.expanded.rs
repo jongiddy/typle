@@ -2380,6 +2380,139 @@ pub mod pattern {
         <(T, u32) as _typle_fn_multiply_by>::apply((t, m))
     }
 }
+pub mod spread {
+    use std::ops::{Add, Mul};
+    use typle::typle;
+    #[allow(non_camel_case_types)]
+    trait _typle_fn_duplicate_components {
+        type Return;
+        fn apply(self) -> Self::Return;
+    }
+    impl _typle_fn_duplicate_components for ((),) {
+        type Return = ();
+        fn apply(self) -> Self::Return {
+            #[allow(unused_variables)]
+            let (t,) = self;
+            { () }
+        }
+    }
+    impl<T0> _typle_fn_duplicate_components for ((T0,),)
+    where
+        T0: Clone,
+    {
+        type Return = (T0, T0);
+        fn apply(self) -> Self::Return {
+            let (t,) = self;
+            { (t.0.clone(), t.0) }
+        }
+    }
+    impl<T0, T1> _typle_fn_duplicate_components for ((T0, T1),)
+    where
+        T0: Clone,
+        T1: Clone,
+    {
+        type Return = (T0, T0, T1, T1);
+        fn apply(self) -> Self::Return {
+            let (t,) = self;
+            { (t.0.clone(), t.0, t.1.clone(), t.1) }
+        }
+    }
+    impl<T0, T1, T2> _typle_fn_duplicate_components for ((T0, T1, T2),)
+    where
+        T0: Clone,
+        T1: Clone,
+        T2: Clone,
+    {
+        type Return = (T0, T0, T1, T1, T2, T2);
+        fn apply(self) -> Self::Return {
+            let (t,) = self;
+            { (t.0.clone(), t.0, t.1.clone(), t.1, t.2.clone(), t.2) }
+        }
+    }
+    fn duplicate_components<T>(t: T) -> <(T,) as _typle_fn_duplicate_components>::Return
+    where
+        (T,): _typle_fn_duplicate_components,
+    {
+        <(T,) as _typle_fn_duplicate_components>::apply((t,))
+    }
+    #[allow(non_camel_case_types)]
+    trait _typle_fn_sum_and_product {
+        type Return;
+        fn apply(self) -> Self::Return;
+    }
+    impl _typle_fn_sum_and_product for ((), ()) {
+        type Return = ();
+        fn apply(self) -> Self::Return {
+            #[allow(unused_variables)]
+            let (s, t) = self;
+            { () }
+        }
+    }
+    impl<S0, T0> _typle_fn_sum_and_product for ((S0,), (T0,))
+    where
+        S0: Copy,
+        T0: Copy,
+        S0: Add<T0> + Mul<T0>,
+    {
+        type Return = (<S0 as Add<T0>>::Output, <S0 as Mul<T0>>::Output);
+        fn apply(self) -> Self::Return {
+            let (s, t) = self;
+            { (s.0 + t.0, s.0 * t.0) }
+        }
+    }
+    impl<S0, S1, T0, T1> _typle_fn_sum_and_product for ((S0, S1), (T0, T1))
+    where
+        S0: Copy,
+        S1: Copy,
+        T0: Copy,
+        T1: Copy,
+        S0: Add<T0> + Mul<T0>,
+        S1: Add<T1> + Mul<T1>,
+    {
+        type Return = (
+            <S0 as Add<T0>>::Output,
+            <S0 as Mul<T0>>::Output,
+            <S1 as Add<T1>>::Output,
+            <S1 as Mul<T1>>::Output,
+        );
+        fn apply(self) -> Self::Return {
+            let (s, t) = self;
+            { (s.0 + t.0, s.0 * t.0, s.1 + t.1, s.1 * t.1) }
+        }
+    }
+    impl<S0, S1, S2, T0, T1, T2> _typle_fn_sum_and_product
+    for ((S0, S1, S2), (T0, T1, T2))
+    where
+        S0: Copy,
+        S1: Copy,
+        S2: Copy,
+        T0: Copy,
+        T1: Copy,
+        T2: Copy,
+        S0: Add<T0> + Mul<T0>,
+        S1: Add<T1> + Mul<T1>,
+        S2: Add<T2> + Mul<T2>,
+    {
+        type Return = (
+            <S0 as Add<T0>>::Output,
+            <S0 as Mul<T0>>::Output,
+            <S1 as Add<T1>>::Output,
+            <S1 as Mul<T1>>::Output,
+            <S2 as Add<T2>>::Output,
+            <S2 as Mul<T2>>::Output,
+        );
+        fn apply(self) -> Self::Return {
+            let (s, t) = self;
+            { (s.0 + t.0, s.0 * t.0, s.1 + t.1, s.1 * t.1, s.2 + t.2, s.2 * t.2) }
+        }
+    }
+    fn sum_and_product<S, T>(s: S, t: T) -> <(S, T) as _typle_fn_sum_and_product>::Return
+    where
+        (S, T): _typle_fn_sum_and_product,
+    {
+        <(S, T) as _typle_fn_sum_and_product>::apply((s, t))
+    }
+}
 pub mod type_alias {
     #![allow(type_alias_bounds, unused)]
     use typle::typle;

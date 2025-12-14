@@ -448,14 +448,15 @@ impl TypleContext {
         Ok(None)
     }
 
-    pub(super) fn expand_typle_macro<T, F>(
+    pub(super) fn expand_typle_macro<T, F, I>(
         &self,
         token_stream: TokenStream,
         f: F,
     ) -> Replacements<impl Iterator<Item = syn::Result<T>>>
     where
         T: 'static,
-        F: Fn(&TypleContext, TokenStream) -> syn::Result<T> + 'static,
+        F: Fn(&TypleContext, TokenStream) -> syn::Result<Replacements<I>>,
+        I: Iterator<Item = syn::Result<T>>,
     {
         let mut tokens = token_stream.into_iter();
         let (pattern, range) = match self.parse_pattern_range(&mut tokens) {
@@ -472,17 +473,20 @@ impl TypleContext {
         if let Some(ident) = pattern.clone() {
             context.constants.insert(ident, 0);
         }
-        return Replacements::Iterator(range.zip_clone(token_stream).flat_map(
+        Replacements::Iterator(range.zip_clone(token_stream).flat_map(
             move |(index, token_stream)| {
                 if let Some(ident) = &pattern {
                     *context.constants.get_mut(ident).unwrap() = index;
                 }
                 match context.evaluate_if(token_stream) {
-                    Ok(Some(token_stream)) => Some(f(&context, token_stream)),
-                    Ok(None) => None,
-                    Err(e) => Some(Err(e)),
+                    Ok(Some(token_stream)) => match f(&context, token_stream) {
+                        Ok(iter) => iter,
+                        Err(err) => Replacements::Singleton(Err(err)),
+                    },
+                    Ok(None) => Replacements::Empty,
+                    Err(err) => Replacements::Singleton(Err(err)),
                 }
             },
-        ));
+        ))
     }
 }
