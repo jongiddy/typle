@@ -262,7 +262,7 @@ impl TypleContext {
                         let ty_segment = ty_path.segments.first().unwrap();
                         let segment = path.segments.first_mut().unwrap();
                         *segment = ty_segment.clone();
-                        *qself = ty_qself.clone();
+                        qself.clone_from(ty_qself);
                         path.leading_colon = ty_path.leading_colon;
                     }
                     _ => {

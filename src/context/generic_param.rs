@@ -80,7 +80,7 @@ fn handle_type(
                                 bounds: Punctuated::new(),
                                 eq_token: None,
                                 default: None,
-                            }))
+                            }));
                         }
                         GenericParam::Const(_) => {
                             output.push(param.clone());
@@ -95,7 +95,7 @@ fn handle_type(
         Type::Reference(type_reference) => {
             if let Some(lifetime) = &type_reference.lifetime {
                 if let Some(param) = param_map.lifetimes.remove(&lifetime.ident) {
-                    output.push(GenericParam::Lifetime(param.clone()))
+                    output.push(GenericParam::Lifetime(param.clone()));
                 }
             }
             handle_type(&type_reference.elem, param_map, output);

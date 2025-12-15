@@ -110,7 +110,7 @@ impl TypleContext {
                             };
                             if let Some(tt) = tokens.next() {
                                 abort!(tt, "unexpected token in typle_index");
-                            };
+                            }
                             let Some((start, end)) = evaluate_range(&for_loop.expr) else {
                                 abort!(for_loop.expr, "expected range");
                             };

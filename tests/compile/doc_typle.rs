@@ -62,12 +62,8 @@ mod tuple {
         T: Tuple,
         T<_>: Extract,
     {
-        S = typle_variant!(
-            curr in ..T::MAX => (
-                typle! {
-                    prev in ..curr => T::<{prev}>::Output
-                }
-            ),
+        S = typle_variant!(curr in ..T::MAX =>
+            (typle! {prev in ..curr => T::<{prev}>::Output}),
             Option<T<{curr}>::State>
         ),
     }

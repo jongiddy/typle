@@ -120,9 +120,9 @@
 //! - `T<0>: Clone` - the first component of the tuple implements the `Clone` trait.
 //! - `T<{1..=2}>: Clone` - the second and third components implement the `Clone` trait.
 //! - `typle!(j in .. => I<{j}>: Iterator<Item=T<{j}>>): Tuple::Bounds` - the most
-//!    general way to bound components, allowing typle index expressions on both
-//!    sides of the colon. Note that the suffix `: Tuple::Bounds` is required after
-//!    the macro, where `Tuple` is the name of the typle trait.
+//!   general way to bound components, allowing typle index expressions on both
+//!   sides of the colon. Note that the suffix `: Tuple::Bounds` is required after
+//!   the macro, where `Tuple` is the name of the typle trait.
 //!
 //! ```rust
 //! # use typle::typle;
@@ -351,12 +351,8 @@
 //!     T<_>: Extract,
 //! {
 //!     // The output of all previous components plus the state of the current component.
-//!     S = typle_variant!(
-//!         curr in ..T::MAX => (
-//!             typle! {
-//!                 prev in ..curr => T::<{prev}>::Output
-//!             }
-//!         ),
+//!     S = typle_variant!(curr in ..T::MAX =>
+//!         (typle! {prev in ..curr => T::<{prev}>::Output}),
 //!         Option<T<{curr}>::State>
 //!     ),
 //! }
@@ -408,8 +404,9 @@
 //! #     T: Tuple,
 //! #     T<_>: Extract,
 //! # {
-//! #     S = typle_variant!(i in ..T::MAX =>
-//! #         (typle!(j in ..i => T::<{j}>::Output)), Option<T<{i}>::State>
+//! #     S = typle_variant!(curr in ..T::MAX =>
+//! #         (typle! {prev in ..curr => T::<{prev}>::Output}),
+//! #         Option<T<{curr}>::State>
 //! #     ),
 //! # }
 //! // Relevant traits may need to be implemented for the never type.
@@ -591,7 +588,7 @@
 //! }
 //! ```
 //! - Typle index variables can be shadowed by inner typle index variables
-//! but cannot be shadowed by standard variables:
+//!   but cannot be shadowed by standard variables:
 //! ```rust
 //! # use typle::typle;
 //! # #[typle(Tuple for 1..=1)]
@@ -631,7 +628,6 @@
 //! }
 //! test_macro((0, 1, 2));
 //! ```
-//!
 
 mod constant;
 mod context;

@@ -127,9 +127,8 @@ impl TypleContext {
                             (iter.next(), iter.next())
                         {
                             let mut state = BlockState::default();
-                            match self.replace_expr(expr, &mut state) {
-                                Ok(_) => {}
-                                Err(e) => return Replacements::Singleton(Err(e)),
+                            if let Err(err) = self.replace_expr(expr, &mut state) {
+                                return Replacements::Singleton(Err(err));
                             }
                             if let Some((start, end)) = evaluate_range(expr) {
                                 // T<{..}>

@@ -77,30 +77,22 @@ pub fn evaluate_range(
             }
         }
         Expr::Range(range) => {
-            let start = range
-                .start
-                .as_ref()
-                .map(|start_expr| {
-                    Bound::Included(
-                        evaluate_usize(start_expr)
-                            .map(Ok)
-                            .unwrap_or_else(|| Err(start_expr.span())),
-                    )
-                })
-                .unwrap_or(Bound::Unbounded);
-            let end = range
-                .end
-                .as_ref()
-                .map(|end_expr| {
-                    let end = evaluate_usize(end_expr)
+            let start = range.start.as_ref().map_or(Bound::Unbounded, |start_expr| {
+                Bound::Included(
+                    evaluate_usize(start_expr)
                         .map(Ok)
-                        .unwrap_or_else(|| Err(end_expr.span()));
-                    match range.limits {
-                        syn::RangeLimits::HalfOpen(_) => Bound::Excluded(end),
-                        syn::RangeLimits::Closed(_) => Bound::Included(end),
-                    }
-                })
-                .unwrap_or(Bound::Unbounded);
+                        .unwrap_or_else(|| Err(start_expr.span())),
+                )
+            });
+            let end = range.end.as_ref().map_or(Bound::Unbounded, |end_expr| {
+                let end = evaluate_usize(end_expr)
+                    .map(Ok)
+                    .unwrap_or_else(|| Err(end_expr.span()));
+                match range.limits {
+                    syn::RangeLimits::HalfOpen(_) => Bound::Excluded(end),
+                    syn::RangeLimits::Closed(_) => Bound::Included(end),
+                }
+            });
             return Some((start, end));
         }
         _ => {}

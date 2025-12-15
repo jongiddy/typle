@@ -116,6 +116,7 @@ impl TypleContext {
         mut pat: Pat,
     ) -> Replacements<impl Iterator<Item = syn::Result<Pat>>> {
         let mut state = BlockState::default();
+        #[allow(clippy::single_match)]
         match &mut pat {
             Pat::Macro(syn::PatMacro { mac, .. }) => {
                 if let Some(ident) = mac.path.get_ident() {

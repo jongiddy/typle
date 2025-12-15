@@ -30,7 +30,7 @@ use crate::TypleMacro;
 #[derive(Clone)]
 pub enum Typle {
     // `Typle<C>`: the name C of the type for all components (concrete or generic)
-    Specific(Type),
+    Specific(Box<Type>),
     // `Typle`: the invented name for each component
     Generic(Rc<Vec<String>>),
 }
@@ -38,7 +38,7 @@ pub enum Typle {
 impl Typle {
     pub fn get(&self, i: usize, span: Span) -> Type {
         match self {
-            Typle::Specific(r#type) => r#type.clone(),
+            Typle::Specific(r#type) => (**r#type).clone(),
             Typle::Generic(v) => Type::Path(syn::TypePath {
                 qself: None,
                 path: ident_to_path(Ident::new(&v[i], span)),
@@ -222,7 +222,7 @@ impl TypleContext {
                                             )
                                         );
                                     }
-                                    result = Some(Typle::Specific(ty.clone()));
+                                    result = Some(Typle::Specific(Box::new(ty.clone())));
                                     continue;
                                 }
                                 PathArguments::Parenthesized(arguments) => {
