@@ -1106,52 +1106,6 @@ impl TypleContext {
         Ok(())
     }
 
-    fn replace_typle_for_expr<'a>(
-        &'a self,
-        mac: &mut Macro,
-        state: &'a mut BlockState,
-    ) -> syn::Result<impl Iterator<Item = syn::Result<Expr>> + 'a> {
-        let token_stream = std::mem::take(&mut mac.tokens);
-        let mut tokens = token_stream.into_iter();
-        let (pattern, range) = self.parse_pattern_range(&mut tokens)?;
-        let token_stream = tokens.collect::<TokenStream>();
-        let mut context = self.clone();
-        if let Some(ident) = &pattern {
-            context.constants.insert(ident.clone(), 0);
-        }
-        Ok(range
-            .zip_clone(token_stream)
-            .flat_map(move |(index, token_stream)| {
-                if let Some(ident) = &pattern {
-                    *context.constants.get_mut(ident).unwrap() = index;
-                }
-                let token_stream = match context.evaluate_if(token_stream) {
-                    Ok(Some(token_stream)) => token_stream,
-                    Ok(None) => {
-                        return None;
-                    }
-                    Err(e) => {
-                        return Some(Err(e));
-                    }
-                };
-                let mut expr = match syn::parse2::<Expr>(token_stream) {
-                    Ok(expr) => expr,
-                    Err(e) => return Some(Err(e)),
-                };
-                match context.replace_expr(&mut expr, state) {
-                    Ok(()) => {
-                        if let Expr::Verbatim(_token_stream) = expr {
-                            // Verbatim causes typle to omit the component from the tuple
-                            None
-                        } else {
-                            Some(Ok(expr))
-                        }
-                    }
-                    Err(error) => Some(Err(error)),
-                }
-            }))
-    }
-
     fn replace_typle_fold_expr(
         &self,
         mac: &mut Macro,
@@ -1262,25 +1216,19 @@ impl TypleContext {
         attrs: &mut Vec<Attribute>,
         state: &mut BlockState,
     ) -> syn::Result<Option<Expr>> {
-        // typle_for!(i in .. => Some<t[[i]]) -> (Some<t.0>, Some<t.1>)
-        // typle_for!(i in .. => t.to_string()) -> (t.0.to_string(), t.1.to_string())
-        // as opposed to
-        // Some(t) -> Some((t.0, t.1))
-        // t.to_string() -> (t.0, t.1).to_string()
         self.replace_attrs(attrs)?;
         if let Some(macro_name) = mac.path.get_ident() {
             let default_span = macro_name.span();
-            if macro_name == "typle_for" {
-                let expr = {
-                    let elems = self.replace_typle_for_expr(mac, state)?;
-                    let tuple = syn::ExprTuple {
-                        attrs: std::mem::take(attrs),
-                        paren_token: token::Paren::default(),
-                        elems: elems.collect::<syn::Result<_>>()?,
-                    };
-                    Expr::Tuple(tuple)
-                };
-                return Ok(Some(expr));
+            if macro_name == "typle" {
+                // This is outside a comma-separated sequence so only no-range form is accepted
+                // typle!(=> if T::LEN == 0 {} else {})
+                let token_stream = std::mem::take(&mut mac.tokens);
+                return self.expand_typle_macro_singleton(token_stream, |context, token_stream| {
+                    let mut expr = syn::parse2::<Expr>(token_stream)?;
+                    let mut state = BlockState::default();
+                    context.replace_expr(&mut expr, &mut state)?;
+                    Ok(Some(expr))
+                });
             } else if macro_name == "typle_fold" {
                 let expr =
                     self.replace_typle_fold_expr(mac, std::mem::take(attrs), state, default_span)?;

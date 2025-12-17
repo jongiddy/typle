@@ -284,8 +284,10 @@ impl TypleContext {
         Ok(())
     }
 
-    pub(super) fn evaluate_if(&self, ts: TokenStream) -> syn::Result<Option<TokenStream>> {
-        let mut tokens = ts.into_iter();
+    pub(super) fn evaluate_if(
+        &self,
+        mut tokens: impl Iterator<Item = TokenTree>,
+    ) -> syn::Result<Option<TokenStream>> {
         match tokens.next() {
             Some(TokenTree::Ident(ident)) if ident == "if" => {
                 let mut tokens = tokens.collect::<Vec<_>>();
@@ -302,9 +304,9 @@ impl TypleContext {
                                     self.replace_expr(&mut cond, &mut state)?;
                                     let b = evaluate_bool(&cond)?;
                                     self.evaluate_if(if b {
-                                        group0.stream()
+                                        group0.stream().into_iter()
                                     } else {
-                                        group1.stream()
+                                        group1.stream().into_iter()
                                     })
                                 }
                                 Some(tt) => {
@@ -321,7 +323,7 @@ impl TypleContext {
                             self.replace_expr(&mut cond, &mut state)?;
                             let b = evaluate_bool(&cond)?;
                             if b {
-                                self.evaluate_if(group1.stream())
+                                self.evaluate_if(group1.stream().into_iter())
                             } else {
                                 Ok(None)
                             }
@@ -385,7 +387,13 @@ impl TypleContext {
                         {
                             // Tuple::LEN or T::LEN
                             let Some(typle_len) = self.typle_len else {
-                                abort!(ident2, "LEN not defined outside fn or impl");
+                                abort!(
+                                    ident2,
+                                    format!(
+                                        "LEN only defined for fn or impl using {} bound",
+                                        self.typle_macro.trait_ident
+                                    )
+                                );
                             };
                             return Ok(Some(Lit::Int(syn::LitInt::new(
                                 &typle_len.to_string(),
@@ -402,7 +410,13 @@ impl TypleContext {
                         {
                             // Tuple::LAST or T::LAST
                             let Some(typle_len) = self.typle_len else {
-                                abort!(ident2, "LAST not defined outside fn or impl");
+                                abort!(
+                                    ident2,
+                                    format!(
+                                        "LAST only defined for fn or impl using {} bound",
+                                        self.typle_macro.trait_ident
+                                    )
+                                );
                             };
                             if typle_len == 0 {
                                 abort!(ident2, "LAST not defined when LEN == 0");
@@ -478,7 +492,7 @@ impl TypleContext {
                 if let Some(ident) = &pattern {
                     *context.constants.get_mut(ident).unwrap() = index;
                 }
-                match context.evaluate_if(token_stream) {
+                match context.evaluate_if(token_stream.into_iter()) {
                     Ok(Some(token_stream)) => match f(&context, token_stream) {
                         Ok(iter) => iter,
                         Err(err) => Replacements::Singleton(Err(err)),
@@ -488,5 +502,35 @@ impl TypleContext {
                 }
             },
         ))
+    }
+
+    pub(super) fn expand_typle_macro_singleton<T, F>(
+        &self,
+        token_stream: TokenStream,
+        f: F,
+    ) -> syn::Result<Option<T>>
+    where
+        T: 'static,
+        F: Fn(&TypleContext, TokenStream) -> syn::Result<Option<T>>,
+    {
+        let span = token_stream.span();
+        let mut tokens = token_stream.into_iter();
+        match tokens.next() {
+            Some(TokenTree::Punct(punct)) if punct.as_char() == '=' => match tokens.next() {
+                Some(TokenTree::Punct(punct)) if punct.as_char() == '>' => {
+                    match self.evaluate_if(tokens)? {
+                        Some(token_stream) => {
+                            return f(&self, token_stream);
+                        }
+                        None => {
+                            return Ok(None);
+                        }
+                    }
+                }
+                _ => {}
+            },
+            _ => {}
+        }
+        abort!(span, "Expected => at start of macro");
     }
 }

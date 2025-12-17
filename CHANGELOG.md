@@ -1,3 +1,11 @@
+# 0.13
+
+## Backwards-incompatible changes
+- Remove `typle_for!`. Use `typle!`.
+
+## Other changes
+- Allow `typle!` macro with no range in singleton position.
+
 # 0.12
 
 ## Backwards-incompatible changes
