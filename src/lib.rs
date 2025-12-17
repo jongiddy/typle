@@ -174,6 +174,35 @@
 //! assert_eq!(even_to_string((0, vec![1], 2, 3)), ("0".to_owned(), vec![1], "2".to_owned(), 3));
 //! ```
 //!
+//! The `typle!` macro can appear outside a comma-separated sequence if it has no range. This will
+//! replace the single value at the position. This can be used to add an `if` statement where
+//! expressions are otherwise invalid:
+//!
+//! ```rust
+//! # use typle::typle;
+//! # struct MyStruct<T> {
+//! #     t: T,
+//! # }
+//! trait Trait {
+//!     type Input;
+//!     type Output;
+//!     fn method(&self, input: Self::Input) -> Self::Output;
+//! }
+//!
+//! #[typle(Tuple for 0..=3)]
+//! impl<T: Tuple> Trait for MyStruct<T> {
+//!     type Input = typle!(=> if T::LEN == 0 { () } else { T<{0}> });
+//!     type Output = typle!(=> if T::LEN == 0 { () } else { T<{0}> });
+//!
+//!     fn method(
+//!         &self,
+//!         input: typle!(=> if T::LEN == 0 { () } else { T<{0}>}),
+//!     ) -> typle!(=> if T::LEN == 0 { () } else { T<{0}> }) {
+//!         typle!(=> if T::LEN == 0 { () } else { input })
+//!     }
+//! }
+//! ```
+//!
 //! The `typle_const!` macro supports const-if on a boolean typle index expression. const-if allows
 //! conditional branches that do not compile, as long as the invalid branch is `false` at compile time.
 //!

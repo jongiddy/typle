@@ -182,46 +182,21 @@ impl TypleContext {
     }
 
     fn replace_macro_type(&self, m: &mut syn::TypeMacro) -> syn::Result<Option<Type>> {
-        // typle_for!(i in .. => Option<T<{i}>) -> (Option<T0>, Option<T1>)
-        // typle_for!(i in .. => T::<{i}>::default()) -> (T0::default(), T1::default())
+        // (typle! {i in .. => Option<T<{i}>}) -> (Option<T0>, Option<T1>)
+        // (typle! {i in .. => T::<{i}>::default()}) -> (T0::default(), T1::default())
         // as opposed to
         // Option<T> -> Option<(T0, T1)>
         // T::default() -> <(T0, T1)>::default()
         if let Some(macro_name) = m.mac.path.get_ident() {
-            if macro_name == "typle_for" {
-                let mut tuple = syn::TypeTuple {
-                    paren_token: token::Paren::default(),
-                    elems: Punctuated::new(),
-                };
+            if macro_name == "typle" {
                 let token_stream = std::mem::take(&mut m.mac.tokens);
-                let mut tokens = token_stream.into_iter();
-                let (pattern, range) = self.parse_pattern_range(&mut tokens)?;
-                if range.is_empty() {
-                    return Ok(Some(Type::Tuple(tuple)));
-                }
-                let token_stream = tokens.collect::<TokenStream>();
-                let mut context = self.clone();
-                if let Some(ident) = &pattern {
-                    context.constants.insert(ident.clone(), 0);
-                }
-                for (index, token_stream) in range.zip_clone(token_stream) {
-                    if let Some(ident) = &pattern {
-                        *context.constants.get_mut(ident).unwrap() = index;
-                    }
-                    let token_stream = match context.evaluate_if(token_stream) {
-                        Ok(Some(token_stream)) => token_stream,
-                        Ok(None) => {
-                            continue;
-                        }
-                        Err(e) => {
-                            return Err(e);
-                        }
-                    };
+                // This is outside a comma-separated sequence so only no-range form is accepted
+                // typle!(=> if T::LEN == 0 {} else {})
+                return self.expand_typle_macro_singleton(token_stream, |context, token_stream| {
                     let mut ty = syn::parse2::<Type>(token_stream)?;
                     context.replace_type(&mut ty)?;
-                    tuple.elems.push(ty);
-                }
-                return Ok(Some(Type::Tuple(tuple)));
+                    Ok(Some(ty))
+                });
             } else if macro_name == "typle_fold" {
                 let default_span = macro_name.span();
                 let ty = self.replace_typle_fold_type(&mut m.mac, default_span)?;

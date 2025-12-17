@@ -1,3 +1,44 @@
+pub mod conditional {
+    #![allow(unused)]
+    use typle::typle;
+    trait Trait {
+        type Input;
+        type Output;
+        fn method(&self, input: Self::Input) -> Self::Output;
+    }
+    struct MyStruct<T> {
+        t: T,
+    }
+    impl Trait for MyStruct<()> {
+        type Input = ();
+        type Output = ();
+        fn method(&self, input: ()) -> () {
+            ()
+        }
+    }
+    #[rustfmt::skip]
+    impl<T0> Trait for MyStruct<(T0,)> {
+        type Input = T0;
+        type Output = T0;
+        fn method(&self, input: T0) -> T0 {
+            input
+        }
+    }
+    impl<T0, T1> Trait for MyStruct<(T0, T1)> {
+        type Input = T0;
+        type Output = T0;
+        fn method(&self, input: T0) -> T0 {
+            input
+        }
+    }
+    impl<T0, T1, T2> Trait for MyStruct<(T0, T1, T2)> {
+        type Input = T0;
+        type Output = T0;
+        fn method(&self, input: T0) -> T0 {
+            input
+        }
+    }
+}
 pub mod const_generic {
     #![allow(dead_code)]
     use typle::typle;
