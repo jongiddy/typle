@@ -106,3 +106,14 @@ mod tuple {
         }
     }
 }
+
+#[allow(unused)]
+#[typle(Tuple for 0..1)]
+fn singleton<T: Tuple>(t: T) {
+    // outside a sequence create a single `bool`
+    let result: bool = typle! {=> true};
+    // inside parentheses without a range create a parenthesized `bool`
+    let result: (bool) = (typle! {=> true});
+    // inside paretheses with a 1-element range create a `bool` 1-tuple
+    let result: (bool,) = (typle! {0..1 => true});
+}

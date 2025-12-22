@@ -904,9 +904,13 @@ impl TypleContext {
                             if let Some(ident) = r#macro.mac.path.get_ident() {
                                 if ident == "typle_variant" {
                                     let token_stream = std::mem::take(&mut r#macro.mac.tokens);
+                                    let default_span = token_stream.span();
                                     let mut tokens = token_stream.into_iter();
-                                    let (pattern, range) =
-                                        context.parse_pattern_range(&mut tokens)?;
+                                    let Some((pattern, range)) =
+                                        context.parse_pattern_range(&mut tokens)?
+                                    else {
+                                        abort!(default_span, "typle_variant! must have range")
+                                    };
                                     if range.is_empty() {
                                         continue;
                                     }

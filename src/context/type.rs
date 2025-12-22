@@ -213,7 +213,9 @@ impl TypleContext {
         let mut init_type =
             syn::parse2::<Type>(Self::extract_to_semicolon(&mut tokens, default_span)?)?;
         self.replace_type(&mut init_type)?;
-        let (pattern, mut range) = self.parse_pattern_range(&mut tokens)?;
+        let Some((pattern, mut range)) = self.parse_pattern_range(&mut tokens)? else {
+            abort!(default_span, "typle_fold! must have range")
+        };
         if range.is_empty() {
             return Ok(init_type);
         }
