@@ -18,7 +18,7 @@ where
         // Arbitrary expressions can be used for the indices and
         // the iterator variable can be left out if not needed
         let init: [Option<u32>; T::LEN] = [typle!(T::LEN * 2..T::LEN * 3 => None)];
-        // const-if can be used to filter components in `typle_for!`.
+        // const-if can be used to filter components in `typle!`.
         let c = (typle!(i in .. => if i == 0 {b[[i]]}));
     }
 }
