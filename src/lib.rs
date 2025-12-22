@@ -58,14 +58,17 @@
 //!     (t[[0]], (t[[1..]]))    // (t.0, (t.1, t.2,...))
 //! }
 //!
-//! assert_eq!(split_first(('1', 2, 3.0)), ('1', (2, 3.0)));
-//! assert_eq!(split_first((2, 3.0)), (2, (3.0,)));
-//! assert_eq!(split_first((3.0,)), (3.0, ()));
+//! let t = ('1', 2, 3.0);
+//! let (first, rest) = split_first(t);  // first = '1', rest = (2, 3.0)
+//! assert_eq!(first, '1');
+//! let (first, rest) = split_first(rest);  // first = 2, rest = (3.0,)
+//! assert_eq!(first, 2);
+//! let (first, rest) = split_first(rest);  // first = 3.0, rest = ()
+//! assert_eq!(first, 3.0);
+//! assert_eq!(rest, ());
 //! ```
 //!
-//! The associated constant `LEN` provides the length of the tuple in each
-//! generated item. This value can be used in typle index expressions.
-//! The default bounds for a macro range are `0..Tuple::LEN`, that is, for all
+//! The default bounds for a macro range are `0..Tuple::LEN`, encapsulating all
 //! components of the tuple.
 //!
 //! ```rust
@@ -80,9 +83,25 @@
 //!
 //! # `typle!`
 //!
-//! The `typle!` macro creates a new sequence of types or expressions. A
-//! `typle!` macro can only appear where a comma-separated sequence is valid
-//! (e.g. a tuple, array, argument list, or where clause).
+//! The `typle!` macro generally iterates over a range to create a new comma-separated sequence of
+//! elements. A `typle!` macro with a range can only appear where a comma-separated sequence is
+//! valid (e.g. a tuple, array, argument list, or where clause).
+//!
+//! The `typle!` macro can provide an optional typle index variable for each iteration to use in the
+//! macro expansion.
+//!
+//! ```rust
+//! # use typle::typle;
+//! #[typle(Tuple for 0..=12)]
+//! fn indices<T: Tuple>(t: T) -> (typle! {.. => usize}) {  // (usize, usize,...)
+//!     (typle! {i in .. => i})  // (0, 1,...)
+//! }
+//!
+//! assert_eq!(indices(('a', Some(true), "test", 9)), (0, 1, 2, 3));
+//! ```
+//!
+//! The associated constant `LEN` provides the length of the tuple in each
+//! generated item and can be used in typle index expressions.
 //!
 //! ```rust
 //! # use typle::typle;
@@ -94,7 +113,7 @@
 //! assert_eq!(reverse((Some(3), "four", 5)), (5, "four", Some(3)));
 //! ```
 //!
-//! Each iteration can add multiple components to the new structure.
+//! Each iteration can add multiple elements to the new sequence.
 //! ```rust
 //! # use typle::typle;
 //! #[typle(Tuple for 0..=12)]
@@ -110,10 +129,32 @@
 //! assert_eq!(duplicate_components(("one", 2, 3.0)), ("one", "one", 2, 2, 3.0, 3.0));
 //! ```
 //!
-//! # Constraints
+//! The `typle!` macro can be used without a range. In this case it must return
+//! a single value but can be used outside a comma-separated sequence. Remember that `typle!`
+//! with a range effectively adds a trailing comma to each element that may affect the created type.
 //!
-//! Specify constraints on the tuple components using one of the following
-//! forms. Except for the first form, these constraints can only appear in the
+//! ```rust
+//! # use typle::typle;
+//! # #[typle(Tuple for 0..1)]
+//! # fn singleton<T: Tuple>(t: T) {
+//! // outside a sequence create a single `bool`
+//! let result: bool = typle! {=> true};
+//! // typle! with a range outside a sequence is an error
+//! // let result = typle! {0..1 => true}; // ERROR
+//! // inside parentheses without a range create a parenthesized `bool`
+//! let result: (bool) = (typle! {=> true});
+//! // inside parentheses with a 1-element range create a `bool` 1-tuple
+//! let result: (bool,) = (typle! {0..1 => true});
+//! // inside brackets both forms create a `bool` array
+//! let result: [bool; 1] = [typle! {=> true}];
+//! let result: [bool; 1] = [typle! {0..1 => true}];
+//! # }
+//! ```
+//!
+//! # Bounds
+//!
+//! Specify bounds on the tuple components using one of the following
+//! forms. Except for the first form, these bounds can only appear in the
 //! `where` clause.
 //! - `T: Tuple<C>` - all components of the tuple have type `C`.
 //! - `T<_>: Clone` - all components of the tuple implement the `Clone` trait.
@@ -170,12 +211,11 @@
 //!     (typle!(i in .. => if i % 2 == 0 { t[[i]].to_string() } else { t[[i]] }))
 //! }
 //!
-//! // `Vec` does not implement `ToString` but, with an odd position, it doesn't need to
-//! assert_eq!(even_to_string((0, vec![1], 2, 3)), ("0".to_owned(), vec![1], "2".to_owned(), 3));
+//! // `Vec` does not implement `ToString` but, in an odd position, it doesn't need to
+//! assert_eq!(even_to_string((0, vec![1], 2, 3)), (0.to_string(), vec![1], 2.to_string(), 3));
 //! ```
 //!
-//! The `typle!` macro can appear outside a comma-separated sequence if it has no range. This will
-//! replace the single value at the position. This can be used to add an `if` statement where
+//! An un-ranged `typle!` macro can be used to add an `if` statement where
 //! expressions are otherwise invalid:
 //!
 //! ```rust
@@ -183,25 +223,30 @@
 //! # struct MyStruct<T> {
 //! #     t: T,
 //! # }
-//! trait Trait {
-//!     type Input;
-//!     type Output;
-//!     fn method(&self, input: Self::Input) -> Self::Output;
+//! trait ReplaceLast {
+//!     type Last;
+//!
+//!     // Replace the "last" value with a new value, returning the old value
+//!     fn replace_last(&mut self, new: Self::Last) -> Self::Last;
 //! }
 //!
 //! #[typle(Tuple for 0..=3)]
-//! impl<T: Tuple> Trait for MyStruct<T> {
-//!     type Input = typle!(=> if T::LEN == 0 { () } else { T<{0}> });
-//!     type Output = typle!(=> if T::LEN == 0 { () } else { T<{0}> });
+//! impl<T: Tuple> ReplaceLast for MyStruct<T> {
+//!     type Last = typle!(=> if T::LEN == 0 { () } else { T<{T::LAST}> });
 //!
-//!     fn method(
-//!         &self,
-//!         input: typle!(=> if T::LEN == 0 { () } else { T<{0}>}),
-//!     ) -> typle!(=> if T::LEN == 0 { () } else { T<{0}> }) {
-//!         typle!(=> if T::LEN == 0 { () } else { input })
+//!     fn replace_last(
+//!         &mut self,
+//!         new: typle!(=> if T::LEN == 0 { () } else { T<{T::LAST}>}),
+//!     ) -> typle!(=> if T::LEN == 0 { () } else { T<{T::LAST}> }) {
+//!         typle!(=> if T::LEN == 0 { () } else {
+//!             std::mem::replace(&mut self.t[[T::LAST]], new)
+//!         })
 //!     }
 //! }
 //! ```
+//!
+//! Note, real code like the above can avoid all these `if`s by using a specific `impl` for `()` and
+//! a simplified typle `impl` for `1..=3`.
 //!
 //! The `typle_const!` macro supports const-if on a boolean typle index expression. const-if allows
 //! conditional branches that do not compile, as long as the invalid branch is `false` at compile time.

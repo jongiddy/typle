@@ -374,6 +374,30 @@ pub mod doc_typle {
             }
         }
     }
+    #[allow(non_camel_case_types)]
+    trait _typle_fn_singleton {
+        type Return;
+        fn apply(self) -> Self::Return;
+    }
+    impl _typle_fn_singleton for ((),) {
+        type Return = ();
+        #[allow(unused)]
+        fn apply(self) -> Self::Return {
+            #[allow(unused_variables)]
+            let (t,) = self;
+            {
+                let result: bool = true;
+                let result: (bool) = (true);
+                let result: (bool,) = (true,);
+            }
+        }
+    }
+    fn singleton<T>(t: T) -> <(T,) as _typle_fn_singleton>::Return
+    where
+        (T,): _typle_fn_singleton,
+    {
+        <(T,) as _typle_fn_singleton>::apply((t,))
+    }
 }
 pub mod for_loop {
     #![allow(unreachable_code, unused)]

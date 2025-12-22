@@ -66,7 +66,7 @@ impl TypleContext {
     pub(super) fn parse_pattern_range(
         &self,
         tokens: &mut impl Iterator<Item = TokenTree>,
-    ) -> syn::Result<(Option<Ident>, Range<usize>)> {
+    ) -> syn::Result<Option<(Option<Ident>, Range<usize>)>> {
         let mut collect = TokenStream::new();
         let mut pattern = None;
         let mut equals = None;
@@ -112,7 +112,7 @@ impl TypleContext {
         }
         if collect.is_empty() {
             // single iteration replacement: typle!(=> if T::LEN > 1 {C: Clone})
-            return Ok((None, 0..1));
+            return Ok(None);
         }
         let mut expr = syn::parse2::<Expr>(collect)?;
         let mut state = BlockState::default();
@@ -161,7 +161,7 @@ impl TypleContext {
                 }
             },
         };
-        Ok((pattern, start..end))
+        Ok(Some((pattern, start..end)))
     }
 
     pub(super) fn replace_qself_path(
@@ -474,7 +474,29 @@ impl TypleContext {
     {
         let mut tokens = token_stream.into_iter();
         let (pattern, range) = match self.parse_pattern_range(&mut tokens) {
-            Ok(t) => t,
+            Ok(Some(t)) => t,
+            Ok(None) => match self.evaluate_if(tokens) {
+                Ok(Some(token_stream)) => {
+                    let span = token_stream.span();
+                    match f(&self, token_stream) {
+                        Ok(mut iter) => match iter.next() {
+                            Some(value) => {
+                                if iter.next().is_some() {
+                                    return Replacements::Singleton(Err(syn::Error::new(
+                                        span,
+                                        "Un-ranged typle! expansion can only produce one value",
+                                    )));
+                                }
+                                return Replacements::Singleton(value);
+                            }
+                            None => return Replacements::Empty,
+                        },
+                        Err(err) => return Replacements::Singleton(Err(err)),
+                    }
+                }
+                Ok(None) => return Replacements::Empty,
+                Err(err) => return Replacements::Singleton(Err(err)),
+            },
             Err(e) => {
                 return Replacements::Singleton(Err(e));
             }

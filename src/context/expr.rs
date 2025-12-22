@@ -696,7 +696,9 @@ impl TypleContext {
         let mut init_expr =
             syn::parse2::<Expr>(Self::extract_to_semicolon(&mut tokens, default_span)?)?;
         self.replace_expr(&mut init_expr, &mut inner_state)?;
-        let (pattern, range) = self.parse_pattern_range(&mut tokens)?;
+        let Some((pattern, range)) = self.parse_pattern_range(&mut tokens)? else {
+            abort!(default_span, "typle_fold! must have range")
+        };
         if range.is_empty() {
             return Ok(Expr::Paren(syn::ExprParen {
                 attrs,
@@ -841,8 +843,11 @@ impl TypleContext {
         op: BinOp,
         default: bool,
     ) -> syn::Result<Expr> {
+        let default_span = token_stream.span();
         let mut tokens = token_stream.into_iter();
-        let (pattern, mut range) = self.parse_pattern_range(&mut tokens)?;
+        let Some((pattern, mut range)) = self.parse_pattern_range(&mut tokens)? else {
+            abort!(default_span, "macro must have range")
+        };
         let expr = syn::parse2::<Expr>(tokens.collect())?;
         let all = match range.next() {
             Some(index) => {
