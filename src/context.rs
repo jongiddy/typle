@@ -200,7 +200,12 @@ impl TypleContext {
                                     }
                                     result = Some(Typle::Generic(Rc::new(
                                         (0..self.typle_len.unwrap_or(self.typle_macro.max_len))
-                                            .map(|i| format!("{}{}", &type_ident, i))
+                                            .map(|i| match self.typle_macro.suffixes.get(i) {
+                                                Some(suffix) => {
+                                                    format!("{}{}", &type_ident, suffix)
+                                                }
+                                                None => format!("{}{}", &type_ident, i),
+                                            })
                                             .collect(),
                                     )));
                                     continue;

@@ -35,14 +35,13 @@ fn heapify<T: Tuple>(params: T) -> (typle!(i in .. => Box<T<{i}>>)) {
     (typle!(i in .. => Box::new(params[[i]])))
 }
 
-#[rustfmt::skip]
-#[typle(Tuple for 0..=12)]
+#[allow(non_camel_case_types)]
+#[typle(Tuple for 0..=5, suffixes=["", "01", "x", "three"])]
 #[typle_attr_if(Tuple::LEN == 0, allow(unused_assignments))]
 pub fn zip<A: Tuple, B: Tuple>(
     first: A,
-    second: B
-) -> (typle!(i in ..Tuple::LEN => (A<{i}>, B<{i}>)))
-{
+    second: B,
+) -> (typle!(i in ..Tuple::LEN => (A<{i}>, B<{i}>))) {
     (typle!(i in ..Tuple::LEN => (first[[i]], second[[i]])))
 }
 
