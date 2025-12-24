@@ -88,26 +88,22 @@ struct MultipleHandlers<T> {
     handlers: T,
 }
 
-#[typle(Tuple for 0..=3)]
+#[typle(Tuple for 1..=3)]
 impl<T> HandleStuff for MultipleHandlers<T>
 where
-    T: Tuple,          // `T`` is a tuple with 0 to 3 components.
+    T: Tuple,          // `T` is a tuple with 1 to 3 components.
     T<_>: HandleStuff, // All components implement `HandleStuff`.
 {
+    // Return a tuple of output from each handler applied to the same input.
     type Output = (typle! {i in .. => T<{i}>::Output});
 
-    // Return a tuple of output from each handler applied to the same input.
     fn handle_stuff(&self, input: Input) -> Self::Output {
-        if typle_const!(T::LEN == 0) {
-            ()
-        } else {
-            (
-                typle! {
-                    i in ..T::LAST => self.handlers[[i]].handle_stuff(input.clone())
-                },
-                // Avoid expensive clone for the last handler.
-                self.handlers[[T::LAST]].handle_stuff(input),
-            )
-        }
+        (
+            typle! {
+                i in ..T::LAST => self.handlers[[i]].handle_stuff(input.clone())
+            },
+            // Avoid expensive clone for the last handler.
+            self.handlers[[T::LAST]].handle_stuff(input),
+        )
     }
 }

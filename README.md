@@ -7,17 +7,14 @@ For example, to define a function to zip a pair of tuples into a tuple of pairs:
 
 ```rust
 #[typle(Tuple for 0..=12)]
-pub fn zip<A: Tuple, B: Tuple>(
-    a: A,
-    b: B,
-) -> (typle! {
+pub fn zip<A: Tuple, B: Tuple>(a: A, b: B) -> (typle! {
     i in .. => (A<{i}>, B<{i}>)
-})
-{
+}) {
     (typle! {
         i in .. => (a[[i]], b[[i]])
     })
 }
+
 ```
 
 The types `A` and `B` are generic but are constrained to be tuples. The tuples
@@ -59,46 +56,36 @@ struct MultipleHandlers<T> {
     handlers: T,
 }
 
-#[typle(Tuple for 0..=3)]
+#[typle(Tuple for 1..=3)]
 impl<T> HandleStuff for MultipleHandlers<T>
 where
-    T: Tuple,           // `T` is a tuple with 0 to 3 components.
-    T<_>: HandleStuff,  // All components implement `HandleStuff`.
+    T: Tuple,          // `T` is a tuple with 1 to 3 components.
+    T<_>: HandleStuff, // All components implement `HandleStuff`.
 {
+    // Return a tuple of output from each handler applied to the same input.
     type Output = (typle! {i in .. => T<{i}>::Output});
 
-    // Return a tuple of output from each handler applied to the same input.
     fn handle_stuff(&self, input: Input) -> Self::Output {
-        if typle_const!(T::LEN == 0) {
-            ()
-        } else {
-            (
-                typle! {
-                    i in ..T::LAST => self.handlers[[i]].handle_stuff(input.clone())
-                },
-                // Avoid expensive clone for the last handler.
-                self.handlers[[T::LAST]].handle_stuff(input),
-            )
-        }
+        (
+            typle! {
+                i in ..T::LAST => self.handlers[[i]].handle_stuff(input.clone())
+            },
+            // Avoid expensive clone for the last handler.
+            self.handlers[[T::LAST]].handle_stuff(input),
+        )
     }
 }
 ```
 
 This generates the implementations
 ```rust
-impl HandleStuff for MultipleHandlers<()> {
-    type Output = ();
-    fn handle_stuff(&self, input: Input) -> Self::Output {
-        { () }
-    }
-}
 impl<T0> HandleStuff for MultipleHandlers<(T0,)>
 where
     T0: HandleStuff,
 {
     type Output = (T0::Output,);
     fn handle_stuff(&self, input: Input) -> Self::Output {
-        { (self.handlers.0.handle_stuff(input),) }
+        (self.handlers.0.handle_stuff(input),)
     }
 }
 impl<T0, T1> HandleStuff for MultipleHandlers<(T0, T1)>
@@ -108,12 +95,10 @@ where
 {
     type Output = (T0::Output, T1::Output);
     fn handle_stuff(&self, input: Input) -> Self::Output {
-        {
-            (
-                self.handlers.0.handle_stuff(input.clone()),
-                self.handlers.1.handle_stuff(input),
-            )
-        }
+        (
+            self.handlers.0.handle_stuff(input.clone()),
+            self.handlers.1.handle_stuff(input),
+        )
     }
 }
 impl<T0, T1, T2> HandleStuff for MultipleHandlers<(T0, T1, T2)>
@@ -124,13 +109,11 @@ where
 {
     type Output = (T0::Output, T1::Output, T2::Output);
     fn handle_stuff(&self, input: Input) -> Self::Output {
-        {
-            (
-                self.handlers.0.handle_stuff(input.clone()),
-                self.handlers.1.handle_stuff(input.clone()),
-                self.handlers.2.handle_stuff(input),
-            )
-        }
+        (
+            self.handlers.0.handle_stuff(input.clone()),
+            self.handlers.1.handle_stuff(input.clone()),
+            self.handlers.2.handle_stuff(input),
+        )
     }
 }
 ```

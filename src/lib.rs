@@ -190,7 +190,7 @@
 //! # Conditionals
 //!
 //! The `typle!` macro accepts an `if` statement with an optional `else` clause.
-//! If there is no `else` clause the macro filters out components that do not match
+//! If there is no `else` clause the macro filters out elements that do not match
 //! the condition.
 //!
 //! The `typle_attr_if` attribute allows conditional inclusion of attributes. It works similarly to
@@ -714,7 +714,7 @@ use context::TypleContext;
 use proc_macro2::{Ident, TokenStream, TokenTree};
 use quote::ToTokens;
 use syn::spanned::Spanned as _;
-use syn::{Error, Item, Type, TypeNever};
+use syn::{Error, Expr, Item, Type, TypeNever};
 
 #[doc(hidden)]
 #[proc_macro_attribute]
@@ -756,6 +756,7 @@ struct TypleMacro {
     min_len: usize,
     max_len: usize,
     never_type: Type,
+    suffixes: Vec<String>,
 }
 
 impl TryFrom<TokenStream> for TypleMacro {
@@ -767,6 +768,7 @@ impl TryFrom<TokenStream> for TypleMacro {
         let mut never_type = Type::Never(TypeNever {
             bang_token: syn::token::Not::default(),
         });
+        let mut suffixes = Vec::new();
         let mut args_iter = args.into_iter();
         // Tuple
         let Some(TokenTree::Ident(trait_ident)) = args_iter.next() else {
@@ -780,24 +782,27 @@ impl TryFrom<TokenStream> for TypleMacro {
             }
         }
 
-        let mut range_tokens = TokenStream::new();
-        let mut never_tokens = Vec::new();
-        let mut comma_seen = false;
-        for token in args_iter {
-            if comma_seen {
-                never_tokens.push(token);
-            } else {
-                if let TokenTree::Punct(punct) = &token {
-                    if punct.as_char() == ',' {
-                        comma_seen = true;
-                        continue;
-                    }
+        let mut sections = Vec::new();
+        let mut section = Vec::new();
+        for tt in args_iter {
+            match tt {
+                TokenTree::Punct(punct) if punct.as_char() == ',' => {
+                    sections.push(std::mem::take(&mut section));
                 }
-                range_tokens.extend([token]);
+                tt => {
+                    section.push(tt);
+                }
             }
         }
+        if !section.is_empty() {
+            sections.push(section);
+        }
+        let mut sections = sections.into_iter();
+        let Some(range_tokens) = sections.next() else {
+            return Err(Error::new(default_span, "expected range"));
+        };
         // 2..=12
-        let range = syn::parse2::<syn::ExprRange>(range_tokens)?;
+        let range = syn::parse2::<syn::ExprRange>(range_tokens.into_iter().collect())?;
         let min = range
             .start
             .as_ref()
@@ -822,32 +827,51 @@ impl TryFrom<TokenStream> for TypleMacro {
         if max < min {
             return Err(Error::new(range.span(), "range contains no values"));
         }
-        if !never_tokens.is_empty() {
-            // never=some::Type
-            let mut iter = never_tokens.into_iter();
-            let Some(TokenTree::Ident(ident)) = iter.next() else {
+        for section in sections {
+            let mut tokens = section.into_iter();
+            let Some(TokenTree::Ident(ident)) = tokens.next() else {
                 return Err(Error::new(default_span, "expected identifier after comma"));
             };
-            if ident != "never" {
-                return Err(Error::new(
-                    default_span,
-                    "expected identifier 'never' after comma",
-                ));
+            if ident == "never" {
+                let Some(TokenTree::Punct(punct)) = tokens.next() else {
+                    return Err(Error::new(default_span, "expected equals after never"));
+                };
+                if punct.as_char() != '=' {
+                    return Err(Error::new(default_span, "expected equals after never"));
+                }
+                never_type = syn::parse2::<Type>(tokens.collect())?;
+            } else if ident == "suffixes" {
+                let Some(TokenTree::Punct(punct)) = tokens.next() else {
+                    return Err(Error::new(default_span, "expected equals after never"));
+                };
+                if punct.as_char() != '=' {
+                    return Err(Error::new(default_span, "expected equals after never"));
+                }
+
+                let expr = syn::parse2::<Expr>(tokens.collect())?;
+                let Expr::Array(array) = expr else {
+                    return Err(Error::new(expr.span(), "expected array"));
+                };
+                for elem in array.elems {
+                    let Expr::Lit(syn::ExprLit {
+                        lit: syn::Lit::Str(suffix),
+                        ..
+                    }) = elem
+                    else {
+                        return Err(Error::new(elem.span(), "expected string"));
+                    };
+                    suffixes.push(suffix.value());
+                }
+            } else {
+                return Err(Error::new(ident.span(), "unexpected identifier"));
             }
-            let Some(TokenTree::Punct(punct)) = iter.next() else {
-                return Err(Error::new(default_span, "expected equals after never"));
-            };
-            if punct.as_char() != '=' {
-                return Err(Error::new(default_span, "expected equals after never"));
-            }
-            let type_stream = iter.collect();
-            never_type = syn::parse2::<Type>(type_stream)?;
         }
         Ok(TypleMacro {
             trait_ident,
             min_len: min,
             max_len: max,
             never_type,
+            suffixes,
         })
     }
 }
@@ -1005,7 +1029,7 @@ pub fn typle_fold(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
 
 /// Create variants in an enum.
 ///
-/// In an enum, the `typle_variant` macro allows the creation of variants for each component.
+/// In an enum, the `typle_variant` macro allows the creation of variants for each element.
 ///
 /// A variant is created for each index in the range provided.
 ///
