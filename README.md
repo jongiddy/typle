@@ -3,7 +3,11 @@
 The `typle` crate provides the ability to constrain generic arguments to be
 tuples and supports manipulation of the tuple components.
 
-For example, to define a function to zip a pair of tuples into a tuple of pairs:
+It allows you to write a single function or impl that "unrolls" into multiple
+concrete versions: one for `(T0,)`, one for `(T0, T1)`, and so on.
+
+With `typle` you can easily define a function to zip a pair of tuples
+into a tuple of pairs:
 
 ```rust
 #[typle(Tuple for 0..=12)]
@@ -14,17 +18,21 @@ pub fn zip<A: Tuple, B: Tuple>(a: A, b: B) -> (typle! {
         i in .. => (a[[i]], b[[i]])
     })
 }
-
 ```
 
-The types `A` and `B` are generic but are constrained to be tuples. The tuples
-can have 0 to 12 components of any (sized) type, but both tuples must have the
-same length.
+The `#[typle]` attribute macro introduces `Tuple` which acts like a trait within
+the annotated item. The types `A` and `B` are generic but are constrained by the
+`Tuple` bound to be tuples. The tuples can have 0 to 12 components of any
+(sized) type, but both tuples must have the same length.
 
-The `typle!` macro loops over an index returning a new tuple with the
+`A<{i}>` refers to the type of the tuple component at index `i`. `a[[i]]` refers
+to the value of the tuple component at index `i` (unrolls to `a.0`, `a.1`,...).
+
+The `typle!` macro loops over a range returning a new sequence with the
 specified components. For the function return type it creates a type tuple:
 `((A<0>, B<0>), (A<1>, B<1>),...)`. In the function body it creates a value tuple:
 `((a.0, b.0), (a.1, b.1),...)`.
+
 
 ```rust
 assert_eq!(
@@ -46,10 +54,10 @@ Compared to using declarative macros, the `typle` code looks more Rust-like and
 provides access to individual components and their position.
 
 ```rust
-trait HandleStuff {
+trait HandleStuff<I> {
     type Output;
 
-    fn handle_stuff(&self, input: Input) -> Self::Output;
+    fn handle_stuff(&self, input: I) -> Self::Output;
 }
 
 struct MultipleHandlers<T> {
@@ -57,18 +65,21 @@ struct MultipleHandlers<T> {
 }
 
 #[typle(Tuple for 1..=3)]
-impl<T> HandleStuff for MultipleHandlers<T>
+impl<I, T> HandleStuff<I> for MultipleHandlers<T>
 where
-    T: Tuple,          // `T` is a tuple with 1 to 3 components.
-    T<_>: HandleStuff, // All components implement `HandleStuff`.
+    T: Tuple,             // `T` is a tuple with 1 to 3 components.
+    T<_>: HandleStuff<I>, // All components implement `HandleStuff`.
+    // Conditionally add `Clone` bound to `I`:
+    typle!(=> if T::LEN > 1 { I: Clone }): Tuple::Bounds,
 {
-    // Return a tuple of output from each handler applied to the same input.
+    // Return a tuple of the output from each handler.
     type Output = (typle! {i in .. => T<{i}>::Output});
 
-    fn handle_stuff(&self, input: Input) -> Self::Output {
+    fn handle_stuff(&self, input: I) -> Self::Output {
         (
             typle! {
-                i in ..T::LAST => self.handlers[[i]].handle_stuff(input.clone())
+                i in ..T::LAST =>
+                    self.handlers[[i]].handle_stuff(input.clone())
             },
             // Avoid expensive clone for the last handler.
             self.handlers[[T::LAST]].handle_stuff(input),
@@ -79,36 +90,38 @@ where
 
 This generates the implementations
 ```rust
-impl<T0> HandleStuff for MultipleHandlers<(T0,)>
+impl<I, T0> HandleStuff<I> for MultipleHandlers<(T0,)>
 where
-    T0: HandleStuff,
+    T0: HandleStuff<I>,
 {
     type Output = (T0::Output,);
-    fn handle_stuff(&self, input: Input) -> Self::Output {
+    fn handle_stuff(&self, input: I) -> Self::Output {
         (self.handlers.0.handle_stuff(input),)
     }
 }
-impl<T0, T1> HandleStuff for MultipleHandlers<(T0, T1)>
+impl<I, T0, T1> HandleStuff<I> for MultipleHandlers<(T0, T1)>
 where
-    T0: HandleStuff,
-    T1: HandleStuff,
+    T0: HandleStuff<I>,
+    T1: HandleStuff<I>,
+    I: Clone,
 {
     type Output = (T0::Output, T1::Output);
-    fn handle_stuff(&self, input: Input) -> Self::Output {
+    fn handle_stuff(&self, input: I) -> Self::Output {
         (
             self.handlers.0.handle_stuff(input.clone()),
             self.handlers.1.handle_stuff(input),
         )
     }
 }
-impl<T0, T1, T2> HandleStuff for MultipleHandlers<(T0, T1, T2)>
+impl<I, T0, T1, T2> HandleStuff<I> for MultipleHandlers<(T0, T1, T2)>
 where
-    T0: HandleStuff,
-    T1: HandleStuff,
-    T2: HandleStuff,
+    T0: HandleStuff<I>,
+    T1: HandleStuff<I>,
+    T2: HandleStuff<I>,
+    I: Clone,
 {
     type Output = (T0::Output, T1::Output, T2::Output);
-    fn handle_stuff(&self, input: Input) -> Self::Output {
+    fn handle_stuff(&self, input: I) -> Self::Output {
         (
             self.handlers.0.handle_stuff(input.clone()),
             self.handlers.1.handle_stuff(input.clone()),

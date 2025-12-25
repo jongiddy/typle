@@ -75,13 +75,10 @@ where
     }
 }
 
-#[derive(Clone)]
-struct Input {}
-
-trait HandleStuff {
+trait HandleStuff<I> {
     type Output;
 
-    fn handle_stuff(&self, input: Input) -> Self::Output;
+    fn handle_stuff(&self, input: I) -> Self::Output;
 }
 
 struct MultipleHandlers<T> {
@@ -89,18 +86,21 @@ struct MultipleHandlers<T> {
 }
 
 #[typle(Tuple for 1..=3)]
-impl<T> HandleStuff for MultipleHandlers<T>
+impl<I, T> HandleStuff<I> for MultipleHandlers<T>
 where
-    T: Tuple,          // `T` is a tuple with 1 to 3 components.
-    T<_>: HandleStuff, // All components implement `HandleStuff`.
+    T: Tuple,             // `T` is a tuple with 1 to 3 components.
+    T<_>: HandleStuff<I>, // All components implement `HandleStuff`.
+    // Conditionally add `Clone` bound to `I`:
+    typle!(=> if T::LEN > 1 { I: Clone }): Tuple::Bounds,
 {
-    // Return a tuple of output from each handler applied to the same input.
+    // Return a tuple of the output from each handler.
     type Output = (typle! {i in .. => T<{i}>::Output});
 
-    fn handle_stuff(&self, input: Input) -> Self::Output {
+    fn handle_stuff(&self, input: I) -> Self::Output {
         (
             typle! {
-                i in ..T::LAST => self.handlers[[i]].handle_stuff(input.clone())
+                i in ..T::LAST =>
+                    self.handlers[[i]].handle_stuff(input.clone())
             },
             // Avoid expensive clone for the last handler.
             self.handlers[[T::LAST]].handle_stuff(input),
